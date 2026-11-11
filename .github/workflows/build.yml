@@ -1,11 +1,14 @@
 name: Build
 
-# Builds the mod on every push and pull request. The jar is attached to the run as an artifact
-# ("Actions" tab -> run -> Artifacts -> HookVisuals).
+# Builds the mod on every push and pull request. Every push to main also publishes a GitHub
+# Release with the jar - the HookVisuals Loader downloads the newest release automatically.
 on:
   push:
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -35,3 +38,16 @@ jobs:
             build/libs/*.jar
             !build/libs/*-sources.jar
           if-no-files-found: error
+
+      - name: Publish release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JAR=$(ls build/libs/*.jar | grep -v -- '-sources.jar' | head -n1)
+          VERSION=$(grep '^mod_version' gradle.properties | cut -d= -f2 | tr -d '[:space:]')
+          TAG="v${VERSION}-build.${{ github.run_number }}"
+          cp "$JAR" "HookVisuals-${VERSION}.jar"
+          gh release create "$TAG" "HookVisuals-${VERSION}.jar" \
+            --title "HookVisuals ${VERSION} (build ${{ github.run_number }})" \
+            --notes "Automatic build of ${GITHUB_SHA::7}." --latest
