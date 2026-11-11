@@ -1,0 +1,14 @@
+Hook Visuals - third-party notices
+
+The following Hook modules are adapted from Anubis Client
+(https://github.com/4ldenz/Anubis-client), copyright its authors,
+licensed under the GNU General Public License v3.0 (see GPL-3.0.txt):
+
+  3D Character, Custom Skys, Block Overlay, Hand Aura,
+  Prime Chunk Finder, Anti Vanish
+  (and their supporting classes, shaders and character models)
+
+Changes: integrated into Hook's module, settings, event and GUI systems,
+renamed and rebranded, ImGui and Fabric API dependencies replaced.
+
+Montserrat font: see assets/hook/fonts/OFL-Montserrat.txt

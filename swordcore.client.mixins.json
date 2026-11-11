@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "thetruetrident.swordcore.mixin.client",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "AttackInvoker",
+    "AttackDispatchMixin",
+    "FreeHittingMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

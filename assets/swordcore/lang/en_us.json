@@ -1,0 +1,12 @@
+{
+  "key.swordcore.open_config": "HookVisuals Settings",
+  "key.swordcore.smart_sword": "Smart Sword (hold)",
+  "key.swordcore.cycle_jump_following": "Cycle Jump Following",
+  "key.swordcore.cycle_neutral_mode": "Cycle Neutral Mode",
+  "key.swordcore.toggle_s_tapping": "Toggle S Tapping",
+  "key.swordcore.toggle_free_hitting": "Toggle Free Hitting",
+  "key.swordcore.toggle_swordcore": "Toggle HookVisuals Combat",
+  "key.swordcore.increase_resist_range": "+ Movement Resist Range",
+  "key.swordcore.decrease_resist_range": "- Movement Resist Range",
+  "category.swordcore": "HookVisuals"
+}

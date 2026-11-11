@@ -1,0 +1,20 @@
+accessWidener	v2	intermediary
+accessible	field	net/minecraft/class_1921	field_64013	Lnet/minecraft/class_12247;
+accessible	field	net/minecraft/class_12247	field_63987	Ljava/util/Map;
+accessible	class	net/minecraft/class_12247$class_12338
+accessible	field	net/minecraft/class_10444	field_55339	I
+accessible	field	net/minecraft/class_10444	field_55340	[Lnet/minecraft/class_10444$class_10446;
+accessible	field	net/minecraft/class_10444$class_10446	field_56967	Lnet/minecraft/class_804;
+accessible	field	net/minecraft/class_1796	field_8024	Ljava/util/Map;
+accessible	field	net/minecraft/class_1796	field_8025	I
+accessible	class	net/minecraft/class_1796$class_1797
+accessible	field	net/minecraft/class_1796$class_1797	comp_3083	I
+accessible	field	net/minecraft/class_1796$class_1797	comp_3084	I
+accessible	method	net/minecraft/class_8113$class_8123	method_48915	()Lnet/minecraft/class_2561;
+accessible	class	net/minecraft/class_10860
+accessible	field	net/minecraft/class_10860	field_57847	Lcom/mojang/blaze3d/pipeline/RenderPipeline;
+accessible	field	net/minecraft/class_10860	field_57849	Lnet/minecraft/class_5944;
+accessible	field	net/minecraft/class_757	field_59965	Lnet/minecraft/class_11228;
+accessible	field	net/minecraft/class_757	field_59966	Lnet/minecraft/class_11246;
+accessible	field	net/minecraft/class_757	field_60793	Lnet/minecraft/class_758;
+accessible	field	net/minecraft/class_757	field_60106	Lnet/minecraft/class_11279;

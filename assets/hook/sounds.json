@@ -1,0 +1,18 @@
+{
+  "chunk_flag": {
+    "sounds": [
+      {
+        "name": "hook:chunk_flag",
+        "stream": false
+      }
+    ]
+  },
+  "lucky_flag": {
+    "sounds": [
+      {
+        "name": "hook:lucky_flag",
+        "stream": false
+      }
+    ]
+  }
+}

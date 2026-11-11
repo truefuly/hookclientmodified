@@ -1,0 +1,43 @@
+plugins { id 'net.fabricmc.fabric-loom' version "${loom_version}" }
+
+group = 'hook'
+version = project.mod_version
+
+repositories { mavenCentral() }
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:intermediary:${project.minecraft_version}"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+    compileOnly files('libs/versefall-runtime.jar')
+    compileOnly files('libs/swordcore-runtime.jar')
+}
+
+sourceSets.main.java.srcDirs = ['.']
+sourceSets.main.resources.srcDirs = ['.']
+sourceSets.main.java.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**')
+sourceSets.main.resources.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', '**/*.java')
+sourceSets.main.resources.exclude('libs/**')
+
+java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar() }
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+jar {
+    from('.') {
+        include 'fabric.mod.json', 'client.mixins.json', 'spotify_mod.mixins.json', 'swordcore.client.mixins.json', 'spotify_mod.accesswidener', 'hook-refmap.json', 'assets/**', 'licenses/**', 'icon.png', 'META-INF/**'
+    }
+    from(zipTree(file('libs/versefall-runtime.jar'))) {
+        exclude 'fabric.mod.json', 'spotify_mod.mixins.json', 'spotify_mod.accesswidener', 'META-INF/**'
+        exclude 'com/spotifyclient/media/LocalMediaSource.class'
+    }
+    from(zipTree(file('libs/swordcore-runtime.jar'))) {
+        exclude 'fabric.mod.json', 'swordcore.client.mixins.json', 'META-INF/**'
+        exclude 'assets/swordcore/lang/en_us.json'
+    }
+    exclude 'build/**', '.gradle/**', 'gradle/**'
+    exclude 'third_party/**'
+}

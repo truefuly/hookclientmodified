@@ -1,0 +1,1 @@
+Swordcore 12.1 source in this folder was decompiled from the locally supplied non-premium JAR for inspection and integration. The original package declares Copyright © 2026 thetruetrident, All Rights Reserved. The build uses the matching binary dependency in libs/swordcore-runtime.jar.

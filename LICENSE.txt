@@ -1,0 +1,21 @@
+Hook Visuals
+Copyright (c) 2026 Hook. All Rights Reserved.
+
+This software and its source code are the property of the copyright holder.
+
+You MAY NOT, without prior written permission of the copyright holder:
+  - copy, redistribute, publish, sell, or sublicense this software or its source;
+  - reverse engineer, decompile, or create derivative works from it;
+  - remove or alter this notice or any authorship/branding.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+Acknowledgement: the base GUI/HUD framework is derived from the Krypton client
+(discontinued and released as open source by its original authors). All modules,
+features, and modifications beyond that base are the original work of the
+copyright holder above.
