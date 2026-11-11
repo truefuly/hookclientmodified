@@ -46,6 +46,7 @@ final class UiImageCache {
         return SOURCES.computeIfAbsent(var0, var0x -> {
             String var1 = switch (var0x) {
                 case "logo" -> "/assets/hook/textures/gui/hook_mark.png";
+                case "hk_mark" -> "/assets/hook/textures/gui/hk_mark.png";
                 case "sky_borealis" -> "/assets/hook/textures/sky/previews/borealis.png";
                 case "sky_nebula" -> "/assets/hook/textures/sky/previews/nebula.png";
                 case "sky_hook" -> "/assets/hook/textures/sky/previews/hook.png";

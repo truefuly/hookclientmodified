@@ -83,7 +83,12 @@
     "ItemFxFloatingMixin",
     "FreecamInputMixin",
     "CartcorePitchMixin",
-    "CartcoreBowMixin"
+    "CartcoreBowMixin",
+    "MenuSpriteMixin",
+    "MenuBackgroundMixin",
+    "MenuLogoMixin",
+    "MenuSplashMixin",
+    "MenuListMixin"
   ],
   "injectors": {
     "defaultRequire": 1
