@@ -413,6 +413,24 @@ public final class SettingsManager {
         this.writeCurrent();
     }
 
+    private int lastSavedHash;
+
+    /** Autosave: writes the settings only when something changed since the last check. */
+    public synchronized void saveIfChanged() {
+        try {
+            String json = JSON.toJson((JsonElement)this.capture());
+            int hash = json.hashCode();
+            if (hash == this.lastSavedHash) return;
+            boolean first = this.lastSavedHash == 0;
+            this.lastSavedHash = hash;
+            if (first) return; // first call only remembers the loaded state
+            ConfigLibrary.writeAtomic(this.settingsPath, json);
+        }
+        catch (Exception var2) {
+            System.err.println("Hook: autosave failed: " + var2.getMessage());
+        }
+    }
+
     public synchronized void shutdown() {
         try {
             this.writeCurrent();

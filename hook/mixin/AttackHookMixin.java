@@ -15,5 +15,11 @@ public abstract class AttackHookMixin {
     @Inject(method = "method_2918(Lnet/minecraft/class_1657;Lnet/minecraft/class_1297;)V", at = @At("HEAD"), remap = false)
     private void hook$attack(class_1657 player, class_1297 target, CallbackInfo ci) {
         HitGlowModule.onAttack(target);
+        hook.feature.ShieldBreakerModule.beforeAttack(target);
+    }
+
+    @Inject(method = "method_2918(Lnet/minecraft/class_1657;Lnet/minecraft/class_1297;)V", at = @At("RETURN"), remap = false)
+    private void hook$attackEnd(class_1657 player, class_1297 target, CallbackInfo ci) {
+        hook.feature.ShieldBreakerModule.afterAttack();
     }
 }

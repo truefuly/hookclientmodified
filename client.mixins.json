@@ -88,6 +88,8 @@
     "MenuBackgroundMixin",
     "MenuSplashMixin",
     "ItemUseCooldownAccessor",
+    "VanillaHudMixin",
+    "VanillaHudCaptureMixin",
     "ResourcePackBlockMixin",
     "HitGlowMixins",
     "AttackHookMixin"

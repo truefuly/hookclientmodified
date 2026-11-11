@@ -47,21 +47,53 @@ extends Module {
     private final BindSetting activateKey = new BindSetting(EncryptedString.of("Activate Key"), 1, false).setDescription(EncryptedString.of("Key that does the crystalling"));
     private final NumberSetting placeDelay = new NumberSetting(EncryptedString.of("Place Delay"), 0.0, 20.0, 0.0, 1.0);
     private final NumberSetting breakDelay = new NumberSetting(EncryptedString.of("Break Delay"), 0.0, 20.0, 0.0, 1.0);
+    private final hook.module.setting.BooleanSetting smartPlace = new hook.module.setting.BooleanSetting(EncryptedString.of("Smart Place"), true).setDescription(EncryptedString.of("Never places twice on the same block before the server shows the crystal (ping-aware, like Crystal Optimizer)"));
     private int placeDelayCounter;
     private int breakDelayCounter;
     public boolean isActive;
+    private final java.util.Map<Long, Long> pendingBases = new java.util.HashMap<>();
 
     public AutoCrystalModule() {
         super(EncryptedString.of("Auto Crystal"), EncryptedString.of("Places and breaks end crystals for you while you hold the key"), -1, Category.COMBAT);
-        Setting[] var10001 = new Setting[]{this.activateKey, this.placeDelay, this.breakDelay};
+        Setting[] var10001 = new Setting[]{this.activateKey, this.placeDelay, this.breakDelay, this.smartPlace};
         this.addSettings(var10001);
     }
 
     @Override
     public void onEnable() {
         this.resetCounters();
+        this.pendingBases.clear();
         this.isActive = false;
         super.onEnable();
+    }
+
+    private int ping() {
+        if (this.mc.method_1562() == null || this.mc.field_1724 == null) {
+            return 0;
+        }
+        net.minecraft.class_640 info = this.mc.method_1562().method_2871(this.mc.field_1724.method_5667());
+        return info == null ? 0 : info.method_2959();
+    }
+
+    /** A base stays blocked after a placement until a crystal shows up on it or the ping-aware timeout ends. */
+    private boolean baseBlocked(class_2338 base) {
+        if (!this.smartPlace.getValue()) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        this.pendingBases.entrySet().removeIf(e -> now - e.getValue() > 5000L);
+        Long sent = this.pendingBases.get(base.method_10063());
+        if (sent == null) {
+            return false;
+        }
+        class_2338 up = base.method_10084();
+        class_238 space = new class_238(up.method_10263(), up.method_10264(), up.method_10260(), up.method_10263() + 1.0, up.method_10264() + 2.0, up.method_10260() + 1.0);
+        if (!this.mc.field_1687.method_8390(class_1511.class, space, e -> true).isEmpty()) {
+            this.pendingBases.remove(base.method_10063());
+            return false;
+        }
+        long timeout = Math.max(150L, Math.min(2000L, Math.max(0L, (long) this.ping()) * 2L + 100L));
+        return now - sent < timeout;
     }
 
     private void resetCounters() {
@@ -114,8 +146,9 @@ extends Module {
 
     private void handleBlockInteraction(class_3965 var1) {
         class_2338 var2;
-        if (var1.method_17783() == class_239.class_240.field_1332 && this.placeDelayCounter <= 0 && (BlockUtil.isBlockAtPosition(var2 = var1.method_17777(), class_2246.field_10540) || BlockUtil.isBlockAtPosition(var2, class_2246.field_9987)) && this.isValidCrystalPlacement(var2)) {
+        if (var1.method_17783() == class_239.class_240.field_1332 && this.placeDelayCounter <= 0 && (BlockUtil.isBlockAtPosition(var2 = var1.method_17777(), class_2246.field_10540) || BlockUtil.isBlockAtPosition(var2, class_2246.field_9987)) && this.isValidCrystalPlacement(var2) && !this.baseBlocked(var2)) {
             BlockUtil.interactWithBlock(var1, true);
+            this.pendingBases.put(var2.method_10063(), System.currentTimeMillis());
             this.placeDelayCounter = this.placeDelay.getIntValue();
         }
     }

@@ -78,7 +78,102 @@ public final class HudLayoutEditor {
         var16 = this.element(var1, HudSection.PLAYER, var5.player && var4.inWorld(), var2, var3, var16, var7, var8, var10, () -> this.playerSize(var1, var4), (var3x, var4x) -> this.drawPlayer(var1, var3x, var4x, var4));
         this.element(var1, HudSection.COORDS, var5.coords && var4.inWorld(), var2, var3, var16, var7, var8, var10, () -> this.coordsSize(var1, var4, var5), (var4x, var5x) -> this.drawCoords(var1, var4x, var5x, var4, var5));
         this.drawModules(var1, var5.modules, var2, var3, var4, var7, var8, var10);
+        if (this.draggingPart != null) {
+            float g = guiScale();
+            VanillaHud.move(this.draggingPart, (float)((var8 - this.grabX) / g), (float)((var10 - this.grabY) / g));
+        }
+        if (var7) {
+            this.drawVanillaFrames(var1, var8, var10);
+            this.drawResetButton(var1, var2, var8, var10);
+        }
         var1.popAlpha();
+    }
+
+    // ------------------------------------------------------------------ vanilla parts + reset button
+
+    private VanillaHud.Part draggingPart;
+    private final float[] resetBounds = new float[4];
+
+    private static float guiScale() {
+        try {
+            return Math.max(1.0f, net.minecraft.class_310.method_1551().method_22683().method_4495());
+        } catch (Throwable t) {
+            return 2.0f;
+        }
+    }
+
+    /** Window-pixel rectangle of a vanilla part, or null. */
+    private float[] partRect(VanillaHud.Part part) {
+        float[] r = VanillaHud.rect(part);
+        if (r == null) return null;
+        float g = guiScale();
+        return new float[]{r[0] * g, r[1] * g, r[2] * g, r[3] * g};
+    }
+
+    private void drawVanillaFrames(UiRenderer ui, double mx, double my) {
+        for (VanillaHud.Part part : VanillaHud.Part.values()) {
+            float[] r = this.partRect(part);
+            if (r == null) continue;
+            boolean visible = VanillaHud.state(part).visible;
+            boolean hot = this.draggingPart == part || mx >= r[0] && mx < r[0] + r[2] && my >= r[1] && my < r[1] + r[3];
+            float h = this.anim("vanilla:" + part.name(), hot ? 1.0f : 0.0f, 14.0f);
+            float pad = this.d(4.0f);
+            if (!visible) ui.round(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), UiRenderer.argb(0.35f, 10, 10, 14));
+            ui.outline(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), visible ? UiRenderer.white(0.22f + 0.35f * h) : UiRenderer.argb(0.5f + 0.3f * h, 230, 120, 120));
+            String label = part.label + (visible ? "  " + Math.round(VanillaHud.state(part).scale * 100.0f) + "%" : "  (hidden)");
+            float lw = this.textW(ui, label, this.d(10.0f), 1) + this.d(12.0f);
+            float lh = this.d(16.0f);
+            float lx = r[0] + r[2] / 2.0f - lw / 2.0f;
+            float ly = r[1] - pad - lh - this.d(4.0f);
+            if (ly < 0.0f) ly = r[1] + r[3] + pad + this.d(4.0f);
+            ui.pushAlpha(0.55f + 0.45f * h);
+            ui.round(lx, ly, lw, lh, lh / 2.0f, UiRenderer.argb(0.85f, 20, 21, 25));
+            ui.text(label, lx + this.d(6.0f), ly + this.d(2.5f), this.d(10.0f), 1, visible ? UiRenderer.white(0.85f) : UiRenderer.argb(0.9f, 240, 150, 150));
+            ui.popAlpha();
+        }
+    }
+
+    private void drawResetButton(UiRenderer ui, int sw, double mx, double my) {
+        String text = "Reset HUD";
+        float w = this.textW(ui, text, this.d(11.0f), 1) + this.d(28.0f);
+        float h = this.d(24.0f);
+        float x = sw / 2.0f - w / 2.0f;
+        // below the boss bar area, above the crosshair: never covers the boss bar or its label
+        float y = net.minecraft.class_310.method_1551().method_22683().method_4506() * 0.30f;
+        boolean hot = mx >= x && mx < x + w && my >= y && my < y + h;
+        float a = this.anim("reset", hot ? 1.0f : 0.0f, 14.0f);
+        ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.85f, 20, 21, 25), UiPalette.accent(0.85f), a * 0.6f));
+        ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.18f), UiPalette.accent(0.9f), a));
+        ui.textCentered(text, sw / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
+        String hint = "Drag to move  \u00B7  Scroll on boss bar / scoreboard to resize  \u00B7  Right-click to hide or show";
+        ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
+        this.resetBounds[0] = x; this.resetBounds[1] = y; this.resetBounds[2] = w; this.resetBounds[3] = h;
+    }
+
+    private VanillaHud.Part partAt(double mx, double my) {
+        for (VanillaHud.Part part : VanillaHud.Part.values()) {
+            float[] r = this.partRect(part);
+            if (r != null && mx >= r[0] && mx < r[0] + r[2] && my >= r[1] && my < r[1] + r[3]) return part;
+        }
+        return null;
+    }
+
+    /** Right click in the editor: hide / show a vanilla part. */
+    public boolean rightClick(double mx, double my) {
+        VanillaHud.Part part = this.partAt(mx, my);
+        if (part == null) return false;
+        VanillaHud.toggle(part);
+        this.save();
+        return true;
+    }
+
+    /** Mouse wheel in the editor over a vanilla part: resize it. */
+    public boolean scroll(double mx, double my, double amount) {
+        VanillaHud.Part part = this.partAt(mx, my);
+        if (part == null || amount == 0.0) return false;
+        VanillaHud.resize(part, amount > 0.0 ? 0.05f : -0.05f);
+        this.save();
+        return true;
     }
 
     private float d(float var1) {
@@ -481,6 +576,18 @@ public final class HudLayoutEditor {
     }
 
     public boolean mousePressed(double var1, double var3) {
+        if (this.resetBounds[2] > 0.0f && var1 >= this.resetBounds[0] && var1 < this.resetBounds[0] + this.resetBounds[2] && var3 >= this.resetBounds[1] && var3 < this.resetBounds[1] + this.resetBounds[3]) {
+            this.resetLayout();
+            return true;
+        }
+        VanillaHud.Part part = this.partAt(var1, var3);
+        if (part != null) {
+            float[] r = this.partRect(part);
+            this.draggingPart = part;
+            this.grabX = var1 - r[0];
+            this.grabY = var3 - r[1];
+            return true;
+        }
         HudSection[] var5 = HudSection.values();
         for (int var6 = var5.length - 1; var6 >= 0; --var6) {
             float[] var7 = this.bounds.get((Object)var5[var6]);
@@ -494,6 +601,10 @@ public final class HudLayoutEditor {
     }
 
     public void mouseReleased() {
+        if (this.draggingPart != null) {
+            this.draggingPart = null;
+            this.save();
+        }
         if (this.dragging != null) {
             this.dragging = null;
             this.save();
@@ -502,6 +613,7 @@ public final class HudLayoutEditor {
 
     public void resetLayout() {
         this.places.clear();
+        VanillaHud.reset();
         this.save();
     }
 
@@ -527,13 +639,14 @@ public final class HudLayoutEditor {
         return var2 < var1 ? var1 : Math.max(var1, Math.min(var2, var0));
     }
 
-    private void load() {
+    public void load() {
         if (!this.loaded) {
             this.loaded = true;
             try {
                 if (this.file != null && Files.isRegularFile(this.file, new LinkOption[0])) {
                     for (String var2 : Files.readAllLines(this.file, StandardCharsets.UTF_8)) {
                         String[] var3 = var2.trim().split(",");
+                        if (VanillaHud.parse(var3)) continue;
                         if (var3.length != 5) continue;
                         adsdzhecwnzmbs var4 = new adsdzhecwnzmbs();
                         var4.moved = true;
@@ -560,6 +673,7 @@ public final class HudLayoutEditor {
                     if (!var4.moved) continue;
                     var1.append(var3.getKey().name()).append(',').append(var4.right ? "R" : "L").append(',').append(var4.bottom ? "B" : "T").append(',').append(String.format(Locale.ROOT, "%.1f,%.1f", Float.valueOf(var4.ox), Float.valueOf(var4.oy))).append('\n');
                 }
+                var1.append(VanillaHud.serialize());
                 Files.createDirectories(this.file.getParent(), new FileAttribute[0]);
                 Files.writeString(this.file, (CharSequence)var1.toString(), StandardCharsets.UTF_8, new OpenOption[0]);
             }

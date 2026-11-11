@@ -56,10 +56,11 @@ extends Module {
     private long last;
 
     public HudModule() {
-        super(EncryptedString.of("HUD"), EncryptedString.of("Clean glass HUD; open chat to drag elements"), -1, Category.CLIENT);
+        super(EncryptedString.of("HUD"), EncryptedString.of("Glass HUD; open chat to move elements, resize/hide boss bar and scoreboard, or reset"), -1, Category.CLIENT);
         this.addSettings(this.showWatermark, this.showTime, this.showInfo, this.showPlayer, this.showCoordinates, this.showDirection, this.showNether, this.showModules, this.rainbow, this.rainbowSpeed, this.hudScale, this.opacity, HIDE_POTION_HUD, this.customIp, this.spoofPing, this.spoofedPing);
         try {
             this.hud.setFile(FabricLoader.getInstance().getConfigDir().resolve("hook-hud-layout.txt"));
+            this.hud.load(); // boss bar / scoreboard layout applies even while the HUD module is off
         }
         catch (Throwable throwable) {
             // empty catch block
@@ -111,7 +112,24 @@ extends Module {
     }
 
     @EventListener
+    public void onMouseScrolled(hook.event.events.MouseScrolledEvent event) {
+        if (this.mc.field_1755 instanceof class_408) {
+            class_1041 w = this.mc.method_22683();
+            double x = this.mc.field_1729.method_1603() * (double)w.method_4489() / (double)Math.max(1, w.method_4480());
+            double y = this.mc.field_1729.method_1604() * (double)w.method_4506() / (double)Math.max(1, w.method_4507());
+            if (this.hud.scroll(x, y, event.amount)) event.cancel();
+        }
+    }
+
+    @EventListener
     public void onMouseButton(MouseButtonEvent var1) {
+        if (var1.button == 1 && var1.actions == 1 && this.mc.field_1755 instanceof class_408) {
+            class_1041 w = this.mc.method_22683();
+            double x = this.mc.field_1729.method_1603() * (double)w.method_4489() / (double)Math.max(1, w.method_4480());
+            double y = this.mc.field_1729.method_1604() * (double)w.method_4506() / (double)Math.max(1, w.method_4507());
+            this.hud.rightClick(x, y);
+            return;
+        }
         if (var1.button == 0) {
             if (var1.actions == 1 && this.mc.field_1755 instanceof class_408) {
                 class_1041 var2 = this.mc.method_22683();

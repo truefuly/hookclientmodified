@@ -16,5 +16,8 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 public interface MinecraftClientAccessor {
     @Invoker(value="doItemUse")
     public void invokeDoItemUse();
+
+    @Invoker(value="method_1536", remap=false)
+    public boolean invokeDoAttack();
 }
 

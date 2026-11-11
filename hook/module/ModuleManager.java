@@ -13,6 +13,8 @@ import hook.event.events.MouseButtonEvent;
 import hook.event.events.TickEvent;
 import hook.feature.AimAssistModule;
 import hook.feature.AnchorMacroModule;
+import hook.feature.ShieldBreakerModule;
+import hook.feature.SpearMacroModule;
 import hook.feature.AntiTrapModule;
 import hook.feature.AntiVanishModule;
 import hook.feature.AuctionSniperModule;
@@ -145,12 +147,15 @@ public final class ModuleManager {
         this.in(Category.COMBAT, new HoverTotemModule());
         this.in(Category.COMBAT, new MovementSyncModule());
         this.in(Category.COMBAT, new TrueJumpResetModule());
+        this.in(Category.COMBAT, new MaceSwapModule());
+        this.in(Category.COMBAT, new ShieldBreakerModule());
+        this.in(Category.COMBAT, new SpearMacroModule());
         // Macros: scripted sequences you start with a key
-        this.in(Category.MACROS, new AnchorMacroModule());
-        this.in(Category.MACROS, new DoubleAnchorModule());
-        this.in(Category.MACROS, new PearlCatchModule());
-        this.in(Category.MACROS, new XbowCartModule());
-        this.in(Category.MACROS, new InstaCartModule());
+        this.in(Category.COMBAT, new AnchorMacroModule());
+        this.in(Category.COMBAT, new DoubleAnchorModule());
+        this.in(Category.COMBAT, new PearlCatchModule());
+        this.in(Category.COMBAT, new XbowCartModule());
+        this.in(Category.COMBAT, new InstaCartModule());
         this.in(Category.MACROS, new AutoTpaModule());
         this.in(Category.MACROS, new XpShopModule());
         this.in(Category.MACROS, new CrateOpenerModule());
@@ -239,7 +244,14 @@ public final class ModuleManager {
             if (module instanceof VerseFallModuleBridge bridge) bridge.syncSettings();
         }
         SwordcoreModuleSupport.sync(this);
+        // autosave every 10 seconds (only writes when something changed), so nothing is lost on a crash
+        if (++this.autosaveTicks >= 200) {
+            this.autosaveTicks = 0;
+            hook.Hook.INSTANCE.getSettingsManager().saveIfChanged();
+        }
     }
+
+    private int autosaveTicks;
 
     public List<Module> a(Category var1) {
         return this.modulesByCategory.getOrDefault((Object)var1, List.of());
@@ -290,6 +302,7 @@ public final class ModuleManager {
                 // inventories, the pause menu or any other screen.
                 if (var1x.getKeybind() == var1.key && ((var2x = var1x instanceof Hook) ? menuKeyAllowed() : hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null && !(hook.Hook.mc.field_1755 instanceof class_408))) {
                     var1x.toggle();
+                    this.autosaveTicks = 180; // save about a second after a keybind toggle
                 }
             });
         }
@@ -302,6 +315,7 @@ public final class ModuleManager {
                 boolean var2;
                 if (var1x.getKeybind() == var1.button && ((var2 = var1x instanceof Hook) ? menuKeyAllowed() : hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null)) {
                     var1x.toggle();
+                    this.autosaveTicks = 180; // save about a second after a keybind toggle
                 }
             });
         }
