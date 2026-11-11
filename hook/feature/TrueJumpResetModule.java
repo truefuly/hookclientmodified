@@ -6,6 +6,6 @@ import hook.utils.EncryptedString;
 
 public final class TrueJumpResetModule extends Module {
     public TrueJumpResetModule() {
-        super(EncryptedString.of("True Jump Reset"), EncryptedString.of("Löst den Jump-Reset aus, wenn Schaden durch einen Spieler erkannt wird."), -1, Category.COMBAT);
+        super(EncryptedString.of("True Jump Reset"), EncryptedString.of("Jump-resets automatically when a player hits you."), -1, Category.COMBAT);
     }
 }

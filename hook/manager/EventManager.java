@@ -20,10 +20,16 @@ public final class EventManager {
     private final Map<Class<?>, Listener[]> EVENTS = new ConcurrentHashMap();
 
     public void register(Object var1) {
-        Method[] var2;
-        for (Method var6 : var2 = var1.getClass().getDeclaredMethods()) {
-            if (!var6.isAnnotationPresent(EventListener.class) || var6.getParameterCount() != 1 || !Event.class.isAssignableFrom(var6.getParameterTypes()[0])) continue;
-            this.addListener(var1, var6, var6.getAnnotation(EventListener.class));
+        // Walk the class hierarchy: listeners declared in a base class (e.g. Block ESP for Tunnel ESP)
+        // must fire for subclasses too. Overridden methods are only registered once (most specific).
+        java.util.Set<String> seen = new java.util.HashSet<String>();
+        for (Class<?> type = var1.getClass(); type != null && type != Object.class; type = type.getSuperclass()) {
+            for (Method var6 : type.getDeclaredMethods()) {
+                if (!var6.isAnnotationPresent(EventListener.class) || var6.getParameterCount() != 1 || !Event.class.isAssignableFrom(var6.getParameterTypes()[0])) continue;
+                if (!seen.add(var6.getName() + "(" + var6.getParameterTypes()[0].getName() + ")")) continue;
+                var6.setAccessible(true);
+                this.addListener(var1, var6, var6.getAnnotation(EventListener.class));
+            }
         }
     }
 

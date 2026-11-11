@@ -50,7 +50,7 @@ public final class FlyModule extends Module {
         }
         if (!abilities.field_7478) {
             if (!this.warned) {
-                player.method_7353(net.minecraft.class_2561.method_43470("Fly benötigt Kreativmodus oder einen Server, der Fliegen erlaubt."), false);
+                player.method_7353(net.minecraft.class_2561.method_43470("Fly needs creative mode or a server that allows flying."), false);
                 this.warned = true;
             }
             return;

@@ -7,8 +7,8 @@ import hook.utils.EncryptedString;
 
 public enum Category {
     COMBAT(EncryptedString.of("Combat")),
-    MISC(EncryptedString.of("Misc")),
     MACROS(EncryptedString.of("Macros")),
+    MISC(EncryptedString.of("Utility")),
     DONUT(EncryptedString.of("Base Finder")),
     GLAZED(EncryptedString.of("Glazed")),
     RENDER(EncryptedString.of("Render")),

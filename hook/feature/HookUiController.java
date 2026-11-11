@@ -368,7 +368,7 @@ public final class HookUiController {
         var1.glow(var8 + this.d(48.0f), var9 + this.d(20.0f), this.d(54.0f), UiEasing.mix(UiRenderer.white(0.035f), UiPalette.light(0.045f), 0.6f));
         float var11 = var1.text("HookVisuals", var8, var9 + this.d(2.0f), this.d(23.0f), 1, TEXT);
         HalloweenGhostOverlay.lantern(var1, var8 + this.d(6.0f) + var11, var9 + this.d(4.0f), this.d(19.0f), this.time, this.hw);
-        var1.text("Automation client", var8 + this.d(1.0f), var9 + this.d(27.0f), this.d(10.5f), 0, FAINT);
+        var1.text("Minecraft 1.21.11", var8 + this.d(1.0f), var9 + this.d(27.0f), this.d(10.5f), 0, FAINT);
         var1.rect(var2 + this.d(18.0f), var3 + var6, var4 - this.d(36.0f), Math.max(1.0f, this.u), UiRenderer.white(0.06f));
         Category[] var12 = Category.values();
         float var13 = var3 + var6 + this.d(14.0f);
@@ -426,7 +426,7 @@ public final class HookUiController {
         return switch (var0) {
             default -> throw new MatchException(null, null);
             case Category.COMBAT -> UiIcon.SWORD;
-            case Category.MISC -> UiIcon.GRID;
+            case Category.MISC -> UiIcon.BOX;
             case Category.MACROS -> UiIcon.BOLT;
             case Category.DONUT -> UiIcon.DONUT;
             case Category.GLAZED -> UiIcon.ACTIVITY;

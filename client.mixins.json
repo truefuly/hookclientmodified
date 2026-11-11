@@ -88,7 +88,10 @@
     "MenuBackgroundMixin",
     "MenuLogoMixin",
     "MenuSplashMixin",
-    "MenuListMixin"
+    "MenuListMixin",
+    "ResourcePackBlockMixin",
+    "HitGlowMixins",
+    "AttackHookMixin"
   ],
   "injectors": {
     "defaultRequire": 1

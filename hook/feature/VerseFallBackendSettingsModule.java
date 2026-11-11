@@ -15,9 +15,9 @@ public final class VerseFallBackendSettingsModule extends Module {
     private final ButtonSetting openMusic = new ButtonSetting(EncryptedString.of("Open Music"), () -> BrowserWindow.open("https://music.youtube.com"));
 
     public VerseFallBackendSettingsModule() {
-        super(EncryptedString.of("Musik"), EncryptedString.of("Einstellungen für die Musikwiedergabe."), -1, Category.CLIENT);
-        this.backend.setDescription(EncryptedString.of("Wähle die Medienquelle für Windows, Linux oder den Browser."));
-        this.openMusic.setDescription(EncryptedString.of("Öffnet den Musikdienst im Browser für Titel- und Textanzeige."));
+        super(EncryptedString.of("Music"), EncryptedString.of("Music playback settings."), -1, Category.CLIENT);
+        this.backend.setDescription(EncryptedString.of("Media source: Windows, Linux or browser."));
+        this.openMusic.setDescription(EncryptedString.of("Opens the music service in your browser for track and lyrics info."));
         this.addSettings(this.backend, this.openMusic);
     }
 }

@@ -17,13 +17,13 @@ public final class MovementSyncModule extends Module {
     public final NumberSetting equalizerRange = new NumberSetting(EncryptedString.of("Equalizer Range"), 0.0, 4.0, 1.0, 0.1);
 
     public MovementSyncModule() {
-        super(EncryptedString.of("Movement Sync"), EncryptedString.of("Passt die Bewegung beim Nahkampf an das Ziel an."), -1, Category.COMBAT);
-        this.innerRange.setDescription(EncryptedString.of("Abstand für die innere Movement-Sync-Zone."));
-        this.airGate.setDescription(EncryptedString.of("Begrenzt das Folgen auf passende Luft- und Bodensituationen."));
-        this.itemGate.setDescription(EncryptedString.of("Beachtet die Item-Bedingungen aus der Vorlage."));
-        this.neutralMode.setDescription(EncryptedString.of("Legt fest, wie die Bewegung bei neutralem Zielverhalten reagiert."));
-        this.equalizer.setDescription(EncryptedString.of("Wählt die Bewegungsangleichung aus der Vorlage."));
-        this.equalizerRange.setDescription(EncryptedString.of("Zusätzlicher Bereich für die Bewegungsangleichung."));
+        super(EncryptedString.of("Movement Sync"), EncryptedString.of("Matches your movement to your target during melee fights."), -1, Category.COMBAT);
+        this.innerRange.setDescription(EncryptedString.of("Distance of the inner movement sync zone."));
+        this.airGate.setDescription(EncryptedString.of("Only follows when you and the target are both in the air or both on the ground."));
+        this.itemGate.setDescription(EncryptedString.of("Only syncs while holding a weapon."));
+        this.neutralMode.setDescription(EncryptedString.of("How to move when the target is neither approaching nor retreating."));
+        this.equalizer.setDescription(EncryptedString.of("How your movement is equalized with the target."));
+        this.equalizerRange.setDescription(EncryptedString.of("Extra range for movement equalizing."));
         this.addSettings(this.innerRange, this.airGate, this.itemGate, this.neutralMode, this.equalizer, this.equalizerRange);
     }
 }

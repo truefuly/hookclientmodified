@@ -19,16 +19,16 @@ public final class XbowCartModule extends Module {
     private final ButtonSetting usage;
 
     public XbowCartModule() {
-        super(EncryptedString.of("Xbow Cart"), EncryptedString.of("Geladene Armbrust in der Hotbar; Schiene, TNT-Lore und Feuerzeug oder Lavaeimer dabeihaben. Rechtsklick auf einen Block startet."), -1, Category.COMBAT);
-        this.safeMode.setDescription(EncryptedString.of("Verwendet während des Ablaufs optional eine Slab, wenn eine in der Hotbar liegt."));
-        this.fireAngle.setDescription(EncryptedString.of("Kleinere Winkel zünden weiter vorne. Anpassen, wenn das Feuer zu nah gesetzt wird."));
-        this.stepDelay.setDescription(EncryptedString.of("Wartezeit zwischen Schiene, TNT-Lore und Zündung in Spielticks."));
+        super(EncryptedString.of("Xbow Cart"), EncryptedString.of("Needs a loaded crossbow, rail, TNT minecart and flint and steel or lava bucket in the hotbar. Right-click a block to start."), -1, Category.COMBAT);
+        this.safeMode.setDescription(EncryptedString.of("Uses a slab during the sequence if one is in the hotbar."));
+        this.fireAngle.setDescription(EncryptedString.of("Lower angles ignite further away. Adjust if the fire is placed too close."));
+        this.stepDelay.setDescription(EncryptedString.of("Delay between rail, TNT minecart and ignition in ticks."));
         this.usage = new ButtonSetting(EncryptedString.of("Anleitung"), () -> {
             if (this.mc.field_1724 != null) {
-                this.mc.field_1724.method_7353(class_2561.method_43470("Xbow Cart: Modul aktivieren. Eine geladene Armbrust muss in der Hotbar liegen. Schiene, TNT-Lore und Feuerzeug oder Lavaeimer ebenfalls bereithalten. H wählt eine geladene Armbrust aus; danach auf den Zielblock rechtsklicken. Die Taste H kannst du unter Steuerung ändern."), false);
+                this.mc.field_1724.method_7353(class_2561.method_43470("Xbow Cart: enable the module and keep a loaded crossbow, a rail, a TNT minecart and flint and steel or a lava bucket in your hotbar. Press H to select a loaded crossbow, then right-click the target block. You can rebind H in Controls."), false);
             }
         });
-        this.usage.setDescription(EncryptedString.of("Zeigt Voraussetzungen und Bedienung im Chat."));
+        this.usage.setDescription(EncryptedString.of("Shows requirements and usage in chat."));
         this.addSettings(this.safeMode, this.fireAngle, this.stepDelay, this.usage);
     }
 

@@ -58,6 +58,29 @@ public final class RenderVisibility {
         ready = false;
     }
 
+    /**
+     * Projects a world position to window pixels with this frame's camera.
+     * @return false when the matrices aren't ready or the point is behind the camera
+     */
+    public static boolean project(double x, double y, double z, int windowWidth, int windowHeight, float[] out) {
+        if (!ready) {
+            return false;
+        }
+        org.joml.Vector4f clip = new org.joml.Vector4f((float)(x - originX), (float)(y - originY), (float)(z - originZ), 1.0f);
+        CLIP.transform(clip);
+        if (clip.w <= 0.05f) {
+            return false;
+        }
+        out[0] = (clip.x / clip.w + 1.0f) * 0.5f * windowWidth;
+        out[1] = (1.0f - clip.y / clip.w) * 0.5f * windowHeight;
+        return true;
+    }
+
+    public static double cameraDistance(double x, double y, double z) {
+        double dx = x - originX, dy = y - originY, dz = z - originZ;
+        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
     public static boolean box(double var0, double var2, double var4, double var6, double var8, double var10) {
         return !ready ? true : FRUSTUM.testAab((float)(Math.min(var0, var6) - originX - 0.5), (float)(Math.min(var2, var8) - originY - 0.5), (float)(Math.min(var4, var10) - originZ - 0.5), (float)(Math.max(var0, var6) - originX + 0.5), (float)(Math.max(var2, var8) - originY + 0.5), (float)(Math.max(var4, var10) - originZ + 0.5));
     }

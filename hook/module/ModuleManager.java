@@ -107,6 +107,11 @@ import hook.feature.VerseFallModuleBridge;
 import hook.feature.VerseFallBackendSettingsModule;
 import hook.feature.TunnelBaseFinderModule;
 import hook.feature.YouTubeModule;
+import hook.feature.XpShopModule;
+import hook.feature.CrateOpenerModule;
+import hook.feature.ResourceBlockerModule;
+import hook.feature.NametagsModule;
+import hook.feature.HitGlowModule;
 import hook.module.Category;
 import hook.module.Module;
 import hook.module.modules.client.Hook;
@@ -132,39 +137,48 @@ public final class ModuleManager {
     }
 
     public void a() {
-        this.a(new TriggerBotModule());
-        this.a(new MovementSyncModule());
-        this.a(new TrueJumpResetModule());
-        this.a(new XbowCartModule());
-        this.a(new InstaCartModule());
-        this.a(new PearlCatchModule());
-        this.a(new HitboxModule());
-        this.a(new AutoTotemModule());
-        this.a(new HoverTotemModule());
-        this.a(new AnchorMacroModule());
-        this.a(new AutoCrystalModule());
-        this.a(new DoubleAnchorModule());
-        this.a(new FastPlaceModule());
-        this.a(new FreecamModule());
+        // Combat: things that help in a fight
+        this.in(Category.COMBAT, new TriggerBotModule());
+        this.in(Category.COMBAT, new HitboxModule());
+        this.in(Category.COMBAT, new AutoCrystalModule());
+        this.in(Category.COMBAT, new AutoTotemModule());
+        this.in(Category.COMBAT, new HoverTotemModule());
+        this.in(Category.COMBAT, new MovementSyncModule());
+        this.in(Category.COMBAT, new TrueJumpResetModule());
+        // Macros: scripted sequences you start with a key
+        this.in(Category.MACROS, new AnchorMacroModule());
+        this.in(Category.MACROS, new DoubleAnchorModule());
+        this.in(Category.MACROS, new PearlCatchModule());
+        this.in(Category.MACROS, new XbowCartModule());
+        this.in(Category.MACROS, new InstaCartModule());
+        this.in(Category.MACROS, new AutoTpaModule());
+        this.in(Category.MACROS, new XpShopModule());
+        this.in(Category.MACROS, new CrateOpenerModule());
+        // Utility: quality of life for the player
+        this.in(Category.MISC, new FastPlaceModule());
+        this.in(Category.MISC, new FlyModule());
+        this.in(Category.MISC, new AutoToolModule());
+        this.in(Category.MISC, new SwingSpeedModule());
+        this.in(Category.MISC, new AutoEatModule());
+        this.in(Category.MISC, new AutoMineModule());
+        this.in(Category.MISC, new NameProtectModule());
+        this.in(Category.MISC, new SkinProtectModule());
+        this.in(Category.MISC, new ResourceBlockerModule());
+        // Render: seeing things in the world
+        this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());
-        this.a(new FlyModule());
-        this.a(new AutoToolModule());
-        this.a(new SwingSpeedModule());
-        this.a(new AutoEatModule());
-        this.a(new AutoMineModule());
-        this.a(new NameProtectModule());
-        this.a(new SkinProtectModule());
-        this.macro(new AutoTpaModule());
-        this.a(new PlayerEspModule());
-        this.a(new StorageEspModule());
-        this.a(new BlockEspModule());
-        this.a(new TunnelEspModule());
-        this.a(new DeepslateRotationEspModule());
-        this.a(new BlockNotifierModule());
-        this.a(new BedrockEspModule());
-        this.a(new SpawnerNotifyModule());
-        this.a(new TargetHudModule());
-        this.a(new VerseFallModuleBridge("HUD Lyrics", "Musiktext im HUD.", "HUD Lyrics"));
+        this.in(Category.RENDER, new PlayerEspModule());
+        this.in(Category.RENDER, new StorageEspModule());
+        this.in(Category.RENDER, new BlockEspModule());
+        this.in(Category.RENDER, new TunnelEspModule());
+        this.in(Category.RENDER, new DeepslateRotationEspModule());
+        this.in(Category.RENDER, new BlockNotifierModule());
+        this.in(Category.RENDER, new BedrockEspModule());
+        this.in(Category.RENDER, new SpawnerNotifyModule());
+        this.in(Category.RENDER, new TargetHudModule());
+        this.in(Category.RENDER, new NametagsModule());
+        this.in(Category.RENDER, new HitGlowModule());
+        this.a(new VerseFallModuleBridge("HUD Lyrics", "Shows the lyrics of the current song on your HUD.", "HUD Lyrics"));
         this.safe("3D Character", Character3dModule::new);
         this.safe("Custom Skys", CustomSkysModule::new);
         this.safe("Block Overlay", BlockOverlayModule::new);
@@ -178,6 +192,25 @@ public final class ModuleManager {
         }
         catch (Throwable var2) {
             System.err.println("Hook: Item Outline unavailable: " + var2.getClass().getSimpleName());
+        }
+        this.sortModules();
+    }
+
+    private void in(Category category, Module module) {
+        module.setCategory(category);
+        this.a(module);
+    }
+
+    /** Category order, then A-Z inside each category; the HookVisuals settings stay first in Client. */
+    private void sortModules() {
+        java.util.Comparator<Module> order = java.util.Comparator
+                .comparing((Module m) -> m.getCategory().ordinal())
+                .thenComparing(m -> !(m instanceof Hook))
+                .thenComparing(m -> m.getName().toString().toLowerCase(java.util.Locale.ROOT));
+        this.modules.sort(order);
+        this.modulesByCategory.clear();
+        for (Module module : this.modules) {
+            this.modulesByCategory.computeIfAbsent(module.getCategory(), c -> new ArrayList<>()).add(module);
         }
     }
 
