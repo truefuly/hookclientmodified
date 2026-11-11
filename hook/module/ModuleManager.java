@@ -132,83 +132,29 @@ public final class ModuleManager {
     }
 
     public void a() {
-        this.a(new ElytraSwapModule());
-        this.a(new MaceSwapModule());
-        this.a(new AimAssistModule());
         this.a(new TriggerBotModule());
         this.a(new MovementSyncModule());
-        this.a(new SmartSwordModule());
-        this.a(new ShieldDisableModule());
-        this.a(new MovementResistModule());
-        this.a(new STappingModule());
-        this.a(new JumpFollowingModule());
-        this.a(new SprintHitFollowModule());
         this.a(new TrueJumpResetModule());
-        this.a(new AxeSwapModule());
         this.a(new XbowCartModule());
         this.a(new InstaCartModule());
         this.a(new PearlCatchModule());
-        this.a(new SpearSwapModule());
         this.a(new HitboxModule());
-        this.a(new StaticHitboxesModule());
         this.a(new AutoTotemModule());
         this.a(new HoverTotemModule());
-        this.a(new AutoInvTotemModule());
         this.a(new AnchorMacroModule());
         this.a(new AutoCrystalModule());
         this.a(new DoubleAnchorModule());
         this.a(new FastPlaceModule());
         this.a(new FreecamModule());
         this.a(new FreelookModule());
-        this.a(new AutoFireworkModule());
-        this.a(new ElytraGlideModule());
         this.a(new FlyModule());
-        this.a(new GlazedRtpBaseFinderModule());
-        this.a(new GlazedRtpEndBaseFinderModule());
-        this.a(new GlazedRtpNetherBaseFinderModule());
-        this.a(new GlazedAmethystEspModule());
-        this.a(new GlazedRotatedDeepslateEspModule());
-        this.a(new GlazedChunkFinderModule());
         this.a(new AutoToolModule());
         this.a(new SwingSpeedModule());
         this.a(new AutoEatModule());
         this.a(new AutoMineModule());
-        this.a(new CordSnapperModule());
         this.a(new NameProtectModule());
         this.a(new SkinProtectModule());
-        this.a(new PlayerDetectionModule());
-        this.a(new FakePayModule());
         this.macro(new AutoTpaModule());
-        this.macro(new AutoRtpModule());
-        this.macro(new SpawnerProtectModule());
-        this.a(new ChunkFinderModule());
-        this.a(new SpawnerOrderModule());
-        this.a(new RtpBaseFinderModule());
-        this.a(new TunnelBaseFinderModule());
-        this.a(new NetheriteFinderModule());
-        this.macro(new SpawnerDropperModule());
-        this.macro(new AutoSellModule());
-        this.macro(new ShulkerDropperModule());
-        this.a(new AntiTrapModule());
-        try {
-            this.macro(new AuctionSniperModule());
-        }
-        catch (RuntimeException var3) {
-            System.err.println("Hook: Auction Sniper unavailable: " + var3.getMessage());
-        }
-        this.macro(new AutoSpawnerSellModule());
-        this.a(new FakeScoreboardModule());
-        this.a(new OgScoreboardModule());
-        this.a(new RegionMapModule());
-        this.a(new PlayerBypassModule());
-        this.a(new SusChunkFinderModule());
-        this.a(new SusChunkV2Module());
-        this.a(new ChunkFinderBetterModule());
-        this.safe("Prime Chunk Finder", PrimeChunkFinderModule::new);
-        this.safe("Anti Vanish", AntiVanishModule::new);
-        this.safe("Halloween", HalloweenModule::new);
-        this.safe("Custom Totem", CustomTotemModule::new);
-        this.safe("Custom Tools", CustomToolsModule::new);
         this.a(new PlayerEspModule());
         this.a(new StorageEspModule());
         this.a(new BlockEspModule());
@@ -218,27 +164,21 @@ public final class ModuleManager {
         this.a(new BedrockEspModule());
         this.a(new SpawnerNotifyModule());
         this.a(new TargetHudModule());
-        this.a(new VerseFallModuleBridge("World Shader", "Musik-Welteffekte.", "World Shader"));
         this.a(new VerseFallModuleBridge("HUD Lyrics", "Musiktext im HUD.", "HUD Lyrics"));
-        this.a(new VerseFallModuleBridge("Lyrics Text", "Musiktext in der Welt.", "Lyrics Text"));
         this.safe("3D Character", Character3dModule::new);
         this.safe("Custom Skys", CustomSkysModule::new);
         this.safe("Block Overlay", BlockOverlayModule::new);
         this.safe("Fullbright", FullbrightModule::new);
-        this.safe("Hand Aura", HandAuraModule::new);
         this.a(new Hook());
         this.a(new PanicButtonModule());
         this.a(new VerseFallBackendSettingsModule());
         this.a(new HudModule());
-        this.a(new YouTubeModule());
         try {
             this.a(new ItemOutlineModule());
         }
         catch (Throwable var2) {
             System.err.println("Hook: Item Outline unavailable: " + var2.getClass().getSimpleName());
         }
-        this.a(new LuckyFinderModule());
-        this.a(new StaffListModule());
     }
 
     public List<Module> b() {

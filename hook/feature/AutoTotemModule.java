@@ -49,11 +49,11 @@ extends Module {
             return;
         }
         RtpBaseFinderModule rtpFinder = (RtpBaseFinderModule)Hook.INSTANCE.MODULE_MANAGER.getModuleByClass(RtpBaseFinderModule.class);
-        if (rtpFinder.isEnabled() && rtpFinder.isRepairingActive()) {
+        if (rtpFinder != null && rtpFinder.isEnabled() && rtpFinder.isRepairingActive()) {
             return;
         }
         TunnelBaseFinderModule tunnelFinder = (TunnelBaseFinderModule)Hook.INSTANCE.MODULE_MANAGER.getModuleByClass(TunnelBaseFinderModule.class);
-        if (tunnelFinder.isEnabled() && tunnelFinder.isDigging()) {
+        if (tunnelFinder != null && tunnelFinder.isEnabled() && tunnelFinder.isDigging()) {
             return;
         }
         if (this.mc.field_1724.method_31548().method_5438(40).method_7909() == class_1802.field_8288) {

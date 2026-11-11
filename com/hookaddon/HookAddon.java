@@ -41,14 +41,10 @@ extends MeteorAddon {
         LOG.info("Initializing Hook Addon");
         TaskManager.setLogSink(message -> LOG.debug("[task] {}", message));
         HookStore.ensureDirectories();
-        Modules.get().add(new AutoSchematicBuilder());
-        Modules.get().add(new AutoSpawner());
-        Modules.get().add(new AutoAreaMiner());
-        Commands.add(new HookCommand());
-        Hud.get().register(HookStatusHud.INFO);
-        HookBridge.register();
+        // The automation modules (Auto Schematic Builder, Auto Spawner, Auto Area Miner), their
+        // command, HUD element and bridge were removed from the client.
         Hook.INSTANCE.getSettingsManager().loadProfile();
-        LOG.info("Hook Addon ready: 3 modules in the {} category", (Object)HookAddon.CATEGORY.name);
+        LOG.info("Hook Addon ready");
     }
 
     @Override

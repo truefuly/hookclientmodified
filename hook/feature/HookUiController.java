@@ -376,6 +376,7 @@ public final class HookUiController {
         boolean var15 = !this.query.isEmpty();
         for (Category var19 : var12) {
             if (PanicButtonModule.isPanicActive() && var19 != Category.VISUALS) continue;
+            if (var19 != Category.CLIENT && this.modules(var19).isEmpty()) continue; // hide emptied categories
             String var20 = "tab:" + var19.name();
             float var21 = var2 + this.d(12.0f);
             float var22 = var4 - this.d(24.0f);
