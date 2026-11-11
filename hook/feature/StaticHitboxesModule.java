@@ -38,7 +38,7 @@ extends Module {
         class_1657 player;
         class_1297 class_12972;
         if (this.isEnabled() && (class_12972 = event.entity) instanceof class_1657 && !(player = (class_1657)class_12972).method_7340()) {
-            event.cir.setReturnValue((Object)class_4050.field_18076);
+            event.cir.setReturnValue(class_4050.field_18076);
         }
     }
 }

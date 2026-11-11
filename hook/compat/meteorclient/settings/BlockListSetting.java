@@ -65,7 +65,7 @@ implements Setting<List<class_2248>> {
     private static String idsOf(class_2248 ... blocks) {
         StringBuilder builder = new StringBuilder();
         for (class_2248 block : blocks) {
-            class_2960 id = class_7923.field_41175.method_10221((Object)block);
+            class_2960 id = class_7923.field_41175.method_10221(block);
             if (id == null) continue;
             if (builder.length() > 0) {
                 builder.append(", ");

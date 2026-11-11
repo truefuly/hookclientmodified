@@ -50,7 +50,7 @@ public class Listener {
             MethodHandles.Lookup var2 = MethodHandles.privateLookupIn(var7, MethodHandles.lookup());
             MethodHandle var3 = var2.unreflect(var0);
             CallSite var4 = LambdaMetafactory.metafactory(var2, "invoke", MethodType.methodType(Invoker.class), INVOKER_TYPE, var3, MethodType.methodType(Void.TYPE, var7, var0.getParameterTypes()[0]));
-            return var4.getTarget().invoke();
+            return (Invoker)var4.getTarget().invoke();
         }
         catch (Throwable var6) {
             try {

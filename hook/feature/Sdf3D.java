@@ -123,10 +123,8 @@ public abstract class Sdf3D {
     }
 
     final float boundDistance(float var1, float var2, float var3) {
-        float var5;
-        float var4;
-        float f = var1 < this.minX ? this.minX - var1 : (var4 = var1 > this.maxX ? var1 - this.maxX : 0.0f);
-        float f2 = var2 < this.minY ? this.minY - var2 : (var5 = var2 > this.maxY ? var2 - this.maxY : 0.0f);
+        float var4 = var1 < this.minX ? this.minX - var1 : (var1 > this.maxX ? var1 - this.maxX : 0.0f);
+        float var5 = var2 < this.minY ? this.minY - var2 : (var2 > this.maxY ? var2 - this.maxY : 0.0f);
         float var6 = var3 < this.minZ ? this.minZ - var3 : (var3 > this.maxZ ? var3 - this.maxZ : 0.0f);
         return (float)Math.sqrt(var4 * var4 + var5 * var5 + var6 * var6);
     }

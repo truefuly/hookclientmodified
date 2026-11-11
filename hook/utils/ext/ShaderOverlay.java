@@ -86,7 +86,7 @@ public final class ShaderOverlay {
             return false;
         }
         try {
-            return SHADER_PACK_IN_USE.invokeExact();
+            return (boolean) SHADER_PACK_IN_USE.invokeExact();
         }
         catch (Throwable var1) {
             return false;

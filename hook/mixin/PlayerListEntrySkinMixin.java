@@ -28,8 +28,8 @@ public abstract class PlayerListEntrySkinMixin {
     private void hook$replaceSkinTextures(CallbackInfoReturnable<class_8685> var1) {
         SkinProtectModule var2;
         if (Hook.INSTANCE != null && Hook.INSTANCE.MODULE_MANAGER != null && (var2 = (SkinProtectModule)Hook.INSTANCE.MODULE_MANAGER.getModuleByClass(SkinProtectModule.class)) != null && var2.isEnabled()) {
-            GameProfile var3 = ((class_640)this).method_2966();
-            var1.setReturnValue((Object)var2.replacementFor(var3.id(), var3.name(), (class_8685)var1.getReturnValue()));
+            GameProfile var3 = (((class_640)(Object)this)).method_2966();
+            var1.setReturnValue(var2.replacementFor(var3.id(), var3.name(), (class_8685)var1.getReturnValue()));
         }
     }
 }

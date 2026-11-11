@@ -73,7 +73,7 @@ public abstract class GameRendererMixin {
     private void onShouldRenderBlockOutline(CallbackInfoReturnable<Boolean> var1) {
         FreecamModule var2 = GameRendererMixin.hook$freecam();
         if (var2 != null && var2.isEnabled()) {
-            var1.setReturnValue((Object)false);
+            var1.setReturnValue(false);
         }
     }
 }

@@ -80,7 +80,7 @@ public final class PlacementPlanner {
         }
         int anchorX = anchorPoint.method_10263();
         int anchorZ = anchorPoint.method_10260();
-        targets.sort(Comparator.comparingInt(target -> target.pos().method_10264()).thenComparingInt(target -> PlacementPlanner.horizontalDistanceSq(target.pos(), anchorX, anchorZ)));
+        targets.sort(Comparator.<Target>comparingInt(target -> target.pos().method_10264()).thenComparingInt(target -> PlacementPlanner.horizontalDistanceSq(target.pos(), anchorX, anchorZ)));
         return new Plan(origin, mirror, rotation, sizeX, sizeY, sizeZ, targets, required);
     }
 

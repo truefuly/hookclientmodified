@@ -23,7 +23,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class HalloweenLookMixin {
     @Inject(method={"changeLookDirection"}, at={@At(value="HEAD")}, cancellable=true)
     private void hook$lockLook(double var1, double var3, CallbackInfo var5) {
-        if (CinematicCamera.inputLocked() && this == class_310.method_1551().field_1724) {
+        if (CinematicCamera.inputLocked() && (Object)this == class_310.method_1551().field_1724) {
             var5.cancel();
         }
     }

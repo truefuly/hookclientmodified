@@ -29,7 +29,7 @@ public abstract class HalloweenInputMixin {
     @Inject(method={"tick"}, at={@At(value="TAIL")})
     private void hook$freeze(CallbackInfo var1) {
         if (CinematicCamera.inputLocked()) {
-            ((class_744)this).field_54155 = class_10185.field_54098;
+            (((class_744)(Object)this)).field_54155 = class_10185.field_54098;
             ((InputAccessor)((Object)this)).hook$setMovementVector(class_241.field_1340);
         }
     }

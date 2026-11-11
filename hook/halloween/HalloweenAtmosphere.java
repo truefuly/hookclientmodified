@@ -80,7 +80,7 @@ public final class HalloweenAtmosphere {
 
     public static float nightness() {
         double var0;
-        double d = mode != 0 ? HalloweenAtmosphere.mod(vis) : (var0 = world != null ? HalloweenAtmosphere.mod(world.method_8401().method_217()) : 18000.0);
+        var0 = mode != 0 ? HalloweenAtmosphere.mod(vis) : (world != null ? HalloweenAtmosphere.mod(world.method_8401().method_217()) : 18000.0);
         if (var0 >= 12000.0 && var0 < 13800.0) {
             return (float)HalloweenAtmosphere.smooth((var0 - 12000.0) / 1800.0);
         }

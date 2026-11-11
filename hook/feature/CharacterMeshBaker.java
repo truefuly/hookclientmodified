@@ -73,7 +73,7 @@ public final class CharacterMeshBaker {
         for (int var13 = 0; var13 < var7; ++var13) {
             CharacterPartBuilder var14 = var6.get(var13);
             if (var14.shape != null) {
-                Object var15 = var14.shape;
+                Sdf3D var15 = (Sdf3D)var14.shape;
                 if (!((Sdf3D)var15).bounded()) {
                     throw new IllegalStateException(var14.name + ": shape is unbounded; intersect planes with a box");
                 }

@@ -52,7 +52,7 @@ implements class_368 {
 
     private static class_1799 createIcon() {
         class_1799 var0 = new class_1799((class_1935)class_1802.field_8106);
-        var0.method_57379(class_9334.field_49641, (Object)true);
+        var0.method_57379(class_9334.field_49641, true);
         return var0;
     }
 

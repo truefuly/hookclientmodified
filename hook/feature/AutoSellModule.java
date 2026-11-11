@@ -57,7 +57,7 @@ extends Module {
         Color var1 = new Color(75, 125, 185);
         for (class_1792 var3 : class_7923.field_41178) {
             if (var3 == class_1802.field_8162) continue;
-            class_2960 var4 = class_7923.field_41178.method_10221((Object)var3);
+            class_2960 var4 = class_7923.field_41178.method_10221(var3);
             var0.add(var4.toString(), AutoSellModule.prettyName(var4.method_12832()), var3, var3 == class_1802.field_17498, var1);
         }
         return var0;
@@ -169,7 +169,7 @@ extends Module {
 
     private boolean shouldSellItem(class_1792 var1) {
         boolean var3;
-        StorageBlocksSetting.Entry var2 = this.items.get(class_7923.field_41178.method_10221((Object)var1).toString());
+        StorageBlocksSetting.Entry var2 = this.items.get(class_7923.field_41178.method_10221(var1).toString());
         boolean bl = var3 = var2 != null && var2.enabled();
         return this.mode.isMode(SellingMode.Whitelist) ? var3 : !var3;
     }

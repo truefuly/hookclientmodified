@@ -96,7 +96,7 @@ final class HeightSliceLimbPartitioner {
                 }
                 merged.add(new float[]{segment[0], segment[1]});
             }
-            this.intervals[band] = (float[][])merged.toArray((T[])new float[0][]);
+            this.intervals[band] = (float[][])merged.toArray(new float[0][]);
             this.labels[band] = new int[this.intervals[band].length];
             this.spans[band] = null;
         }
@@ -283,7 +283,7 @@ final class HeightSliceLimbPartitioner {
         float var5 = Float.MAX_VALUE;
         for (int var6 = 0; var6 < var3.length; ++var6) {
             float var7;
-            float f = var3[var6][0] > 0.0f ? var3[var6][0] : (var7 = var3[var6][1] < 0.0f ? -var3[var6][1] : 0.0f);
+            var7 = var3[var6][0] > 0.0f ? var3[var6][0] : (var3[var6][1] < 0.0f ? -var3[var6][1] : 0.0f);
             if (!(var7 < var5)) continue;
             var5 = var7;
             var4 = var6;
@@ -450,7 +450,7 @@ final class HeightSliceLimbPartitioner {
                 float var11 = Float.MAX_VALUE;
                 for (int var12 = 0; var12 < var9.length; ++var12) {
                     float var13;
-                    float f = var1 < var9[var12][0] ? var9[var12][0] - var1 : (var13 = var1 > var9[var12][1] ? var1 - var9[var12][1] : 0.0f);
+                    var13 = var1 < var9[var12][0] ? var9[var12][0] - var1 : (var1 > var9[var12][1] ? var1 - var9[var12][1] : 0.0f);
                     if (!(var13 < var11)) continue;
                     var11 = var13;
                     var10 = var12;

@@ -32,7 +32,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class OutlineItemMixin {
     @Inject(method={"renderItem"}, at={@At(value="HEAD")})
     private static void hook$outlineHeldItem(class_811 var0, class_4587 var1, class_4597 var2, int var3, int var4, int[] var5, List<?> var6, class_1921 var7, class_10444.class_10445 var8, CallbackInfo var9) {
-        ItemOutlineModule.renderHeldItem(var0, var1, var2, var3, var4, var5, var6, var7);
+        ItemOutlineModule.renderHeldItem(var0, var1, var2, var3, var4, var5, (List<net.minecraft.class_777>)(List)var6, var7);
     }
 }
 

@@ -38,7 +38,7 @@ extends Module {
     @EventListener
     public void onTargetMargin(TargetMarginEvent event) {
         if (event.entity instanceof class_1657) {
-            event.cir.setReturnValue((Object)Float.valueOf((float)this.expand.getValue()));
+            event.cir.setReturnValue(Float.valueOf((float)this.expand.getValue()));
         }
     }
 

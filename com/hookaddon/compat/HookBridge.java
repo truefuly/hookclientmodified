@@ -15,7 +15,6 @@ import hook.compat.meteorclient.commands.Commands;
 import hook.compat.meteorclient.events.game.GameLeftEvent;
 import hook.compat.meteorclient.events.game.ReceiveMessageEvent;
 import hook.compat.meteorclient.events.render.Render3DEvent;
-import hook.compat.meteorclient.events.world.TickEvent;
 import hook.compat.meteorclient.settings.KeybindSetting;
 import hook.compat.meteorclient.systems.hud.Hud;
 import hook.compat.orbit.EventBus;
@@ -57,7 +56,7 @@ public final class HookBridge {
             return;
         }
         this.lastTickAge = HookBridge.mc.field_1724.field_6012;
-        EventBus.get().post(new TickEvent.Pre());
+        EventBus.get().post(new hook.compat.meteorclient.events.world.TickEvent.Pre());
     }
 
     @EventListener

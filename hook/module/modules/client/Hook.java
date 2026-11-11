@@ -87,35 +87,15 @@ extends Module {
         }
     }
 
-    public static final class AnimationMode
-    extends Enum<AnimationMode> {
-        public static final /* enum */ AnimationMode NORMAL = new AnimationMode("Normal", 0);
-        public static final /* enum */ AnimationMode POSITIVE = new AnimationMode("Positive", 1);
-        public static final /* enum */ AnimationMode OFF = new AnimationMode("Off", 2);
-        private static final /* synthetic */ AnimationMode[] $VALUES;
+    /** Rebuilt as a real enum. The constant names match the original ("Normal", ...) so saved settings still load. */
+    public enum AnimationMode {
+        Normal,
+        Positive,
+        Off;
 
-        public static AnimationMode[] values() {
-            return (AnimationMode[])$VALUES.clone();
-        }
-
-        public static AnimationMode valueOf(String name) {
-            return Enum.valueOf(AnimationMode.class, name);
-        }
-
-        private AnimationMode(String nullxx, int nullxxx) {
-        }
-
-        private static AnimationMode[] $values() {
-            return new AnimationMode[]{NORMAL, POSITIVE, OFF};
-        }
-
-        private static /* synthetic */ AnimationMode[] $values$() {
-            return new AnimationMode[]{NORMAL, POSITIVE, OFF};
-        }
-
-        static {
-            $VALUES = AnimationMode.$values$();
-        }
+        public static final AnimationMode NORMAL = Normal;
+        public static final AnimationMode POSITIVE = Positive;
+        public static final AnimationMode OFF = Off;
     }
 }
 

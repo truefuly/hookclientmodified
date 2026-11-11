@@ -75,23 +75,23 @@ final class CharacterJointAngles {
         float gait = Math.min(1.0f, state.field_53451 / state.field_53405);
         switch (pose) {
             case field_3409: {
-                float f = 0.16f + 0.45f * Math.max(0.0f, armMovement) + 0.3f * gait;
+                angle = 0.16f + 0.45f * Math.max(0.0f, armMovement) + 0.3f * gait;
                 break;
             }
             case field_3410: {
-                float f = 0.3f + 0.2f * gait;
+                angle = 0.3f + 0.2f * gait;
                 break;
             }
             case field_3406: {
-                float f = 0.55f;
+                angle = 0.55f;
                 break;
             }
             case field_42877: {
-                float f = 0.4f;
+                angle = 0.4f;
                 break;
             }
             default: {
-                float f = angle = 0.0f;
+                angle = 0.0f;
             }
         }
         if (angle <= 0.0f) {

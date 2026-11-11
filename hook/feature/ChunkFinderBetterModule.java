@@ -191,7 +191,7 @@ implements NewFeature {
         this.heat = var61 = new Long2IntOpenHashMap();
         this.shown = var62 = new LongOpenHashSet();
         this.shownDirty = true;
-        WeakReference<Object> var64 = new WeakReference<Object>(null);
+        WeakReference<net.minecraft.class_634> var64 = new WeakReference<>(null);
         this.probeServer = var64;
         this.probed = var65 = new LongOpenHashSet();
         class_2818[] var67 = new class_2818[9];
@@ -361,7 +361,7 @@ implements NewFeature {
         if (var4 == null) {
             this.flagged.remove(var1);
         } else {
-            this.flagged.put(var1, (Object)var4);
+            this.flagged.put(var1, var4);
             this.spread(var1, var4, 1);
         }
     }

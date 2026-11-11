@@ -1,0 +1,37 @@
+name: Build
+
+# Builds the mod on every push and pull request. The jar is attached to the run as an artifact
+# ("Actions" tab -> run -> Artifacts -> HookVisuals).
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Java 25 runs Gradle/Loom, Java 21 compiles the mod (toolchain in build.gradle).
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: |
+          chmod +x gradlew
+          ./gradlew build --no-daemon -Porg.gradle.java.installations.fromEnv=JAVA_HOME_21_X64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HookVisuals
+          path: |
+            build/libs/*.jar
+            !build/libs/*-sources.jar
+          if-no-files-found: error

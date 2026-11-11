@@ -51,7 +51,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class CharacterPlayerRendererMixin<T extends class_11890>
 extends class_922<T, class_10055, class_591> {
     protected CharacterPlayerRendererMixin(class_5617.class_5618 var1, class_591 var2, float var3) {
-        super(var1, (class_583)var2, var3);
+        super(var1, var2, var3);
     }
 
     @Inject(method={"<init>"}, at={@At(value="TAIL")})

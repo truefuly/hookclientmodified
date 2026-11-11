@@ -24,7 +24,7 @@ public abstract class HalloweenClientInputMixin {
     @Inject(method={"handleInputEvents"}, at={@At(value="HEAD")}, cancellable=true)
     private void hook$swallowInput(CallbackInfo var1) {
         if (CinematicCamera.inputLocked()) {
-            class_310 var2 = (class_310)this;
+            class_310 var2 = ((class_310)(Object)this);
             if (var2.field_1690 != null) {
                 for (class_304 var6 : var2.field_1690.field_1839) {
                     while (var6.method_1436()) {

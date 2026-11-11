@@ -55,7 +55,7 @@ final class ConfigLayoutSupport {
             Iterator iterator = var4.entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry var7Raw;
-                Map.Entry var7 = var7Raw = iterator.next();
+                Map.Entry var7 = var7Raw = (Map.Entry)iterator.next();
                 Object var8 = var7.getValue();
                 JsonObject var9 = new JsonObject();
                 var9.addProperty("moved", (Boolean)ConfigLayoutSupport.field(var8, "moved"));
@@ -132,7 +132,7 @@ final class ConfigLayoutSupport {
             for (Map.Entry var8 : var0.getAsJsonObject("hud").entrySet()) {
                 Object var9;
                 try {
-                    var9 = Enum.valueOf(var5, (String)var8.getKey());
+                    var9 = Enum.valueOf((Class)var5, (String)var8.getKey());
                 }
                 catch (IllegalArgumentException var12) {
                     continue;

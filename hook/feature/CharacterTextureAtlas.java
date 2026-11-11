@@ -44,7 +44,7 @@ final class CharacterTextureAtlas {
         HashMap<Integer, float[]> var4 = new HashMap<Integer, float[]>();
         HashMap<Integer, int[]> var5 = new HashMap<Integer, int[]>();
         for (Map.Entry<Integer, float[]> var7 : var1.entrySet()) {
-            Object var8 = var7.getValue();
+            float[] var8 = var7.getValue();
             int var9 = (int)Math.floor((double)(var8[0] + 0.001f));
             int var10 = (int)Math.floor((double)(var8[1] + 0.001f));
             int var11 = Math.min(8, Math.max(1, (int)Math.ceil((double)(var8[2] - 0.001f)) - var9));
@@ -53,10 +53,10 @@ final class CharacterTextureAtlas {
             Integer var10001 = var7.getKey();
             int[] var10002 = new int[]{var9, var10, var11, var12};
             var5.put(var10001, var10002);
-            reference var16_21 = (var8[0] - (float)var9) / (float)var11;
-            reference var17_22 = (var8[1] - (float)var10) / (float)var12;
-            reference var18_23 = (var8[2] - (float)var9) / (float)var11;
-            reference var19_24 = (var8[3] - (float)var10) / (float)var12;
+            float var16_21 = (var8[0] - (float)var9) / (float)var11;
+            float var17_22 = (var8[1] - (float)var10) / (float)var12;
+            float var18_23 = (var8[2] - (float)var9) / (float)var11;
+            float var19_24 = (var8[3] - (float)var10) / (float)var12;
             int var18 = CharacterTextureAtlas.clamp((int)Math.floor((double)(var16_21 * (float)var13.width())) - 2, 0, var13.width() - 1);
             int var19 = CharacterTextureAtlas.clamp((int)Math.floor((double)(var17_22 * (float)var13.height())) - 2, 0, var13.height() - 1);
             int var20 = CharacterTextureAtlas.clamp((int)Math.ceil((double)(var18_23 * (float)var13.width())) + 2, var18 + 1, var13.width());

@@ -48,7 +48,7 @@ public final class ToolModel {
     public static MeshData build(int var0, int var1) {
         float var3;
         ToolModel var2 = new ToolModel(var0, var1);
-        float f = var0 == 0 ? 1.24f : (var3 = var0 == 3 ? 1.19f : 1.09f);
+        var3 = var0 == 0 ? 1.24f : (var0 == 3 ? 1.19f : 1.09f);
         float var4 = var0 == 1 ? 0.5f : (var0 == 0 ? 0.27f : (var0 == 3 ? 0.19f : 0.4f));
         MeshData var5 = SurfaceNets.build(var2::field, var2::paint, -var4, -0.04f, -0.075f, var4, var3, 0.075f, 0.006666667f, 0.05f);
         float var6 = 0.70710677f;

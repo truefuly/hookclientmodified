@@ -237,7 +237,7 @@ extends ClientModule {
             this.selfPlacedBlocks.put(adjacent.method_10063(), expiresAt);
             String itemPath = "";
             if (AntiVanishModule.MC.field_1724 != null && place.method_12546() != null) {
-                class_2960 id = class_7923.field_41178.method_10221((Object)AntiVanishModule.MC.field_1724.method_5998(place.method_12546()).method_7909());
+                class_2960 id = class_7923.field_41178.method_10221(AntiVanishModule.MC.field_1724.method_5998(place.method_12546()).method_7909());
                 itemPath = VanishSignalClassifier.path(id == null ? "" : id.toString());
             }
             AntiVanishModule.markSelfMultiBlockFootprint(target, itemPath, this.selfPlacedBlocks, expiresAt);
@@ -340,7 +340,7 @@ extends ClientModule {
             this.observations.offer(VanishSignal.entitySound(sound.method_11883(), AntiVanishModule.soundId(((class_3414)sound.method_11882().comp_349()).comp_3319())));
         } else if (packet instanceof class_2675) {
             class_2675 particle = (class_2675)packet;
-            class_2960 id = class_7923.field_41180.method_10221((Object)particle.method_11551().method_10295());
+            class_2960 id = class_7923.field_41180.method_10221(particle.method_11551().method_10295());
             this.observations.offer(VanishSignal.position(VanishSignalType.PARTICLE, particle.method_11544(), particle.method_11547(), particle.method_11546(), id == null ? "" : id.toString()));
         } else if (packet instanceof class_2767) {
             class_2767 sound = (class_2767)packet;
@@ -1009,8 +1009,8 @@ extends ClientModule {
         if (var1 < this.criticalUntilMs) {
             var3.add(new VanishHudEntry("CRITICAL", this.criticalWatcher));
         }
-        HashSet var4 = new HashSet();
-        this.detections.values().stream().filter(var2 -> var2.expiresAt > var1).filter(AntiVanishModule::detectionWorthShowing).sorted(Comparator.comparingInt(var0 -> var0.score).reversed().thenComparing(var0 -> var0.name, String.CASE_INSENSITIVE_ORDER)).map(var0 -> new VanishHudEntry(var0.name, var0.reason)).filter(var1x -> var4.add(AntiVanishModule.hudTag(var1x) + "\u0000" + AntiVanishModule.hudValue(var1x))).limit(4L).forEach(var3::add);
+        HashSet<String> var4 = new HashSet<String>();
+        this.detections.values().stream().filter(var2 -> var2.expiresAt > var1).filter(AntiVanishModule::detectionWorthShowing).sorted(Comparator.<AlertCandidate>comparingInt(var0 -> var0.score).reversed().thenComparing(var0 -> var0.name, String.CASE_INSENSITIVE_ORDER)).map(var0 -> new VanishHudEntry(var0.name, var0.reason)).filter(var1x -> var4.add(AntiVanishModule.hudTag(var1x) + "\u0000" + AntiVanishModule.hudValue(var1x))).limit(4L).forEach(var3::add);
         return List.copyOf(var3);
     }
 
@@ -1071,8 +1071,7 @@ extends ClientModule {
     }
 
     private static String compass(double var0, double var2) {
-        String var4;
-        String string = var2 < -1.0 ? "N" : (var4 = var2 > 1.0 ? "S" : "");
+        String var4 = var2 < -1.0 ? "N" : (var2 > 1.0 ? "S" : "");
         String var5 = var0 > 1.0 ? "E" : (var0 < -1.0 ? "W" : "");
         return var4 + var5;
     }
@@ -1111,7 +1110,7 @@ extends ClientModule {
                 for (int var5 = -2; var5 <= 2; ++var5) {
                     for (int var6 = -2; var6 <= 2; ++var6) {
                         class_2338 var7 = var3.method_10069(var4, var5, var6);
-                        class_2960 var8 = class_7923.field_41175.method_10221((Object)AntiVanishModule.MC.field_1687.method_8320(var7).method_26204());
+                        class_2960 var8 = class_7923.field_41175.method_10221(AntiVanishModule.MC.field_1687.method_8320(var7).method_26204());
                         String var9 = AntiVanishModule.shortId(var8 == null ? "" : var8.toString());
                         if (!var9.contains("campfire") && !var9.contains("furnace") && !var9.contains("smoker") && !var9.contains("torch") && !var9.contains("fire") && !var9.contains("candle") && !var9.contains("respawn_anchor")) continue;
                         return true;

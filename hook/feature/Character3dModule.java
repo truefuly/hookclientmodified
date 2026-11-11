@@ -95,7 +95,7 @@ extends ClientModule {
         this.detail = this.addSetting(var10002, new ModeSetting(var10005, var10006, var10007));
         this.heldItems = this.addSetting("held-items", new BooleanSetting("Held Items", false));
         this.friendCache = new Int2BooleanOpenHashMap();
-        this.level = new WeakReference<Object>(null);
+        this.level = new WeakReference<>(null);
         this.addSetting("characters-folder", new ActionSetting("Open Characters Folder", this::openFolder));
         this.character.onChange(this::prepare);
         this.detail.onChange(this::prepare);

@@ -46,7 +46,7 @@ final class CharacterMotionAnimator {
         if (var6 == null || var6.model != var1) {
             var6 = new MotionState(var1);
             var6.bodyRot = var0.field_53446;
-            STATES.put(var0.field_53528, (Object)var6);
+            STATES.put(var0.field_53528, var6);
         }
         float f = var7 = var6.nanos == 0L ? 0.0f : (float)(var4 - var6.nanos) / 1.0E9f;
         if (var6.nanos != 0L && var7 < 5.0E-4f) {

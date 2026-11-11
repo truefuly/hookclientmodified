@@ -26,7 +26,7 @@ public abstract class FreecamInputMixin {
     private void hook$continueBodyInput(CallbackInfo var1) {
         FreecamModule var2;
         if (Hook.INSTANCE != null && Hook.INSTANCE.getModuleManager() != null && (var2 = (FreecamModule)Hook.INSTANCE.getModuleManager().getModuleByClass(FreecamModule.class)) != null && var2.isEnabled()) {
-            var2.applyContinuedPlayerInput((class_744)this);
+            var2.applyContinuedPlayerInput(((class_744)(Object)this));
         }
     }
 }

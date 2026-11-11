@@ -61,7 +61,7 @@ public final class ExtBridge {
     }
 
     static <E> void subscribe(ClientModule var0, Class<E> var1, Stage var2, Consumer<E> var3, boolean var4) {
-        ExtBridge.add(var1, new Handler(var0, var2, var1x -> var3.accept(var1x), var4));
+        ExtBridge.add(var1, new Handler(var0, var2, var1x -> var3.accept(var1.cast(var1x)), var4));
     }
 
     static void dropOwned(ClientModule var0) {

@@ -38,7 +38,9 @@ extends class_3887<class_10055, class_591> {
         super(context);
     }
 
-    public void render(class_4587 matrices, class_11659 commands, int light, class_10055 state, float animationProgress, float headYaw) {
+    /** FeatureRenderer.render; the sources use intermediary names, so the override is method_4199. */
+    @Override
+    public void method_4199(class_4587 matrices, class_11659 commands, int light, class_10055 state, float animationProgress, float headYaw) {
         this.renderCharacter(matrices, commands, light, state, animationProgress, headYaw);
     }
 

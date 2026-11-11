@@ -324,16 +324,16 @@ public final class HudLayoutEditor {
     }
 
     private void drawModules(UiRenderer var1, boolean var2, int var3, int var4, HudDataSource var5, boolean var6, double var7, double var9) {
-        List<Object> var13;
+        List<String> var13;
         float var11 = this.anim("el:MODULES", var2 ? 1.0f : 0.0f, 9.0f);
         float var12 = this.d(12.5f);
-        List<Object> list = var13 = var2 ? var5.modules() : List.of();
+        var13 = var2 ? var5.modules() : List.of();
         if (var12 != this.sortedAtSize || !var13.equals(this.moduleNames)) {
             this.moduleNames = List.copyOf(var13);
-            ArrayList<Object> var14 = new ArrayList<Object>(var13);
+            ArrayList<String> var14 = new ArrayList<String>(var13);
             var14.sort((var3x, var4x) -> {
-                int var5x = Float.compare(this.textW(var1, (String)var4x, var12, 0), this.textW(var1, (String)var3x, var12, 0));
-                return var5x != 0 ? var5x : var3x.compareTo((String)var4x);
+                int var5x = Float.compare(this.textW(var1, var4x, var12, 0), this.textW(var1, var3x, var12, 0));
+                return var5x != 0 ? var5x : var3x.compareTo(var4x);
             });
             this.sortedModuleNames = var14;
             this.sortedAtSize = var12;

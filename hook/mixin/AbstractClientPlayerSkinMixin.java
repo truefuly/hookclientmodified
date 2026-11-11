@@ -28,9 +28,9 @@ public abstract class AbstractClientPlayerSkinMixin {
     private void hook$replacePlayerSkin(CallbackInfoReturnable<class_8685> var1) {
         SkinProtectModule var2;
         if (Hook.INSTANCE != null && Hook.INSTANCE.MODULE_MANAGER != null && (var2 = (SkinProtectModule)Hook.INSTANCE.MODULE_MANAGER.getModuleByClass(SkinProtectModule.class)) != null && var2.isEnabled()) {
-            class_742 var3 = (class_742)this;
+            class_742 var3 = ((class_742)(Object)this);
             GameProfile var4 = var3.method_7334();
-            var1.setReturnValue((Object)var2.replacementFor(var4.id(), var4.name(), (class_8685)var1.getReturnValue()));
+            var1.setReturnValue(var2.replacementFor(var4.id(), var4.name(), (class_8685)var1.getReturnValue()));
         }
     }
 }

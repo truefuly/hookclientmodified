@@ -1,4 +1,4 @@
-plugins { id 'net.fabricmc.fabric-loom' version "${loom_version}" }
+plugins { id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" }
 
 group = 'hook'
 version = project.mod_version
@@ -7,7 +7,8 @@ repositories { mavenCentral() }
 
 dependencies {
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings "net.fabricmc:intermediary:${project.minecraft_version}"
+    // The sources use intermediary names (class_310, method_1551...), so 'named' = intermediary.
+    mappings files('mappings/intermediary-named.jar')
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
     compileOnly files('libs/versefall-runtime.jar')
@@ -16,17 +17,25 @@ dependencies {
 
 sourceSets.main.java.srcDirs = ['.']
 sourceSets.main.resources.srcDirs = ['.']
-sourceSets.main.java.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**')
+sourceSets.main.java.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', 'mappings/**', 'installer/**')
 sourceSets.main.resources.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', '**/*.java')
-sourceSets.main.resources.exclude('libs/**')
+sourceSets.main.resources.exclude('libs/**', 'mappings/**', 'installer/**', '*.gradle', 'gradle.properties', 'gradlew', 'gradlew.bat', 'README.md', '.gitignore', '.github/**')
 
-java { toolchain { languageVersion = JavaLanguageVersion.of(25) }; withSourcesJar() }
+java { toolchain { languageVersion = JavaLanguageVersion.of(21) }; withSourcesJar() }
+
+// Resources come in twice (resource dir '.' plus explicit includes); keep one copy in every jar.
+tasks.withType(Jar).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
 
 tasks.withType(JavaCompile).configureEach {
     options.release = 21
+    options.compilerArgs += ['-Xmaxerrs', '2000']
 }
 
 jar {
+    // Resources come in twice (resource dir '.' and the explicit list below); keep one copy.
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from('.') {
         include 'fabric.mod.json', 'client.mixins.json', 'spotify_mod.mixins.json', 'swordcore.client.mixins.json', 'spotify_mod.accesswidener', 'hook-refmap.json', 'assets/**', 'licenses/**', 'icon.png', 'META-INF/**'
     }

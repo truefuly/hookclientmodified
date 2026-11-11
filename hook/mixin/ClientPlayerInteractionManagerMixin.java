@@ -29,7 +29,7 @@ public class ClientPlayerInteractionManagerMixin {
         AttackBlockEvent event = new AttackBlockEvent(pos, dir);
         EventManager.b(event);
         if (event.isCancelled()) {
-            cir.setReturnValue((Object)false);
+            cir.setReturnValue(false);
         }
     }
 }

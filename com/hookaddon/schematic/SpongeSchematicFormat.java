@@ -137,7 +137,7 @@ implements SchematicFormat {
         }
         if (!problems.isEmpty()) {
             int shown = Math.min(3, problems.size());
-            throw new SchematicException(problems.size() + " palette entries could not be resolved (" + String.join((CharSequence)"; ", problems.subList(0, shown)) + (problems.size() > shown ? "; ..." : "") + ")");
+            throw new SchematicException(problems.size() + " palette entries could not be resolved (" + problems.subList(0, shown).stream().map(String::valueOf).collect(java.util.stream.Collectors.joining("; ")) + (problems.size() > shown ? "; ..." : "") + ")");
         }
         return palette;
     }

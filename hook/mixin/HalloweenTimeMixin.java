@@ -23,8 +23,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class HalloweenTimeMixin {
     @Inject(method={"getTimeOfDay"}, at={@At(value="RETURN")}, cancellable=true)
     private void hook$halloweenTime(CallbackInfoReturnable<Long> var1) {
-        if (this instanceof class_638 && HalloweenAtmosphere.overridingTime()) {
-            var1.setReturnValue((Object)HalloweenAtmosphere.timeOfDay((class_1937)this, var1.getReturnValueJ()));
+        if ((Object)this instanceof class_638 && HalloweenAtmosphere.overridingTime()) {
+            var1.setReturnValue(HalloweenAtmosphere.timeOfDay(((class_1937)(Object)this), var1.getReturnValueJ()));
         }
     }
 }

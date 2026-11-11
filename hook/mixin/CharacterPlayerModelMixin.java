@@ -32,7 +32,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class CharacterPlayerModelMixin {
     @Inject(method={"setArmAngle"}, at={@At(value="HEAD")}, cancellable=true)
     private void hook$characterHand(class_10055 var1, class_1306 var2, class_4587 var3, CallbackInfo var4) {
-        if (CharacterFeatureRenderer.translateToHand((class_591)this, var1, var2, var3)) {
+        if (CharacterFeatureRenderer.translateToHand(((class_591)(Object)this), var1, var2, var3)) {
             var4.cancel();
         }
     }

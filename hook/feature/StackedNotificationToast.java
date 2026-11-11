@@ -68,7 +68,7 @@ implements class_368 {
     private StackedNotificationToast(Object var1, class_1799 var2, class_2561 var3, class_2561 var4, boolean var5) {
         this.token = var1;
         this.icon = var2.method_7972();
-        this.icon.method_57379(class_9334.field_49641, (Object)true);
+        this.icon.method_57379(class_9334.field_49641, true);
         this.title = var3;
         this.message = var4;
         this.sound = var5;

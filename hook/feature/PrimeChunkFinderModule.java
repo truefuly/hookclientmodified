@@ -565,7 +565,7 @@ extends ClientModule {
             return var7;
         }
         int[] var8 = PrimeChunkFinderModule.scanLamps(var1, var2, var3, var4);
-        this.lampSections.put(var5, (Object)var8);
+        this.lampSections.put(var5, var8);
         return var8;
     }
 
@@ -673,7 +673,7 @@ extends ClientModule {
             return var7;
         }
         long[] var8 = this.scanExposedOres(var1, var2, var3, var4);
-        this.oreSections.put(var5, (Object)var8);
+        this.oreSections.put(var5, var8);
         return var8;
     }
 

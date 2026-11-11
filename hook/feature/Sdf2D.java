@@ -406,8 +406,8 @@ public abstract class Sdf2D {
                 float var7;
                 float var6;
                 int var5 = var4 * 12;
-                float f = var1 < this.seg[var5 + 8] ? this.seg[var5 + 8] - var1 : (var6 = var1 > this.seg[var5 + 10] ? var1 - this.seg[var5 + 10] : 0.0f);
-                float f2 = var2 < this.seg[var5 + 9] ? this.seg[var5 + 9] - var2 : (var7 = var2 > this.seg[var5 + 11] ? var2 - this.seg[var5 + 11] : 0.0f);
+                var6 = var1 < this.seg[var5 + 8] ? this.seg[var5 + 8] - var1 : (var1 > this.seg[var5 + 10] ? var1 - this.seg[var5 + 10] : 0.0f);
+                var7 = var2 < this.seg[var5 + 9] ? this.seg[var5 + 9] - var2 : (var2 > this.seg[var5 + 11] ? var2 - this.seg[var5 + 11] : 0.0f);
                 if (var3 > 0.0f && var3 != Float.MAX_VALUE && var6 * var6 + var7 * var7 >= var3 * var3 || !((var8 = this.segment(var5, var1, var2)) < var3)) continue;
                 var3 = var8;
             }

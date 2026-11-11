@@ -114,7 +114,7 @@ public class CameraMixin {
     private void allowFreelookThroughWalls(float var1, CallbackInfoReturnable<Float> var2) {
         FreelookModule var3 = CameraMixin.hook$freelook();
         if (var3 != null && var3.isEnabled() && var3.isThroughWalls()) {
-            var2.setReturnValue((Object)Float.valueOf(var1));
+            var2.setReturnValue(Float.valueOf(var1));
         }
     }
 }

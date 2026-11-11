@@ -115,7 +115,7 @@ implements NewFeature {
             if (!StaffClassifier.isStaff(string, display, teamName = team == null ? "" : team.method_1197(), prefix = team == null ? "" : StaffListModule.text(team.method_1144()), suffix = team == null ? "" : StaffListModule.text(team.method_1136()))) continue;
             found.put(string.toLowerCase(Locale.ROOT), new StaffListPanel.StaffMember(string, player.method_2966().id()));
         }
-        for (class_640 player : this.mc.field_1687.method_18456()) {
+        for (net.minecraft.class_742 player : this.mc.field_1687.method_18456()) {
             String string = player.method_7334().name();
             if (string == null || !StaffClassifier.knownName(string)) continue;
             found.putIfAbsent(string.toLowerCase(Locale.ROOT), new StaffListPanel.StaffMember(string, player.method_5667()));
@@ -132,7 +132,7 @@ implements NewFeature {
                 UiAudio.play(UiAudio.Cue.CONFIRM);
             }
             if (this.notify.getValue()) {
-                for (Map.Entry<Object, Object> entry : this.staff.entrySet()) {
+                for (Map.Entry<String, StaffListPanel.StaffMember> entry : this.staff.entrySet()) {
                     if (found.containsKey(entry.getKey())) continue;
                     this.message(((StaffListPanel.StaffMember)entry.getValue()).name() + " left or vanished.");
                 }

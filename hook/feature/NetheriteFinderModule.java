@@ -149,7 +149,7 @@ extends Module {
                 hits.add(new BoundingBox(xx, sectionY, z, xx + 16, sectionY + 16, z + 16, false));
             }
         }
-        hits.sort(Comparator.comparingInt(hit -> hit.exact() ? 0 : 1).thenComparingDouble(hit -> {
+        hits.sort(Comparator.<BoundingBox>comparingInt(hit -> hit.exact() ? 0 : 1).thenComparingDouble(hit -> {
             double dx = (hit.x1() + hit.x2()) * 0.5 - playerX;
             double dy = (hit.y1() + hit.y2()) * 0.5 - playerY;
             double dz = (hit.z1() + hit.z2()) * 0.5 - playerZ;

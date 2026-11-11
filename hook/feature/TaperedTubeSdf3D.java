@@ -228,8 +228,8 @@ extends Sdf3D {
     private static float gap(float[] var0, int var1, float var2, float var3, float var4) {
         float var6;
         float var5;
-        float f = var2 < var0[var1 + 14] ? var0[var1 + 14] - var2 : (var5 = var2 > var0[var1 + 17] ? var2 - var0[var1 + 17] : 0.0f);
-        float f2 = var3 < var0[var1 + 15] ? var0[var1 + 15] - var3 : (var6 = var3 > var0[var1 + 18] ? var3 - var0[var1 + 18] : 0.0f);
+        var5 = var2 < var0[var1 + 14] ? var0[var1 + 14] - var2 : (var2 > var0[var1 + 17] ? var2 - var0[var1 + 17] : 0.0f);
+        var6 = var3 < var0[var1 + 15] ? var0[var1 + 15] - var3 : (var3 > var0[var1 + 18] ? var3 - var0[var1 + 18] : 0.0f);
         float var7 = var4 < var0[var1 + 16] ? var0[var1 + 16] - var4 : (var4 > var0[var1 + 19] ? var4 - var0[var1 + 19] : 0.0f);
         return (float)Math.sqrt(var5 * var5 + var6 * var6 + var7 * var7);
     }

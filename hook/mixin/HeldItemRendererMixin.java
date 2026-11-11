@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class HeldItemRendererMixin {
     @Inject(method={"getHandSwingDuration"}, at={@At(value="RETURN")}, cancellable=true)
     private void hook$adjustSwingDuration(CallbackInfoReturnable<Integer> var1) {
-        var1.setReturnValue((Object)SwingSpeedModule.adjustDuration(var1.getReturnValueI()));
+        var1.setReturnValue(SwingSpeedModule.adjustDuration(var1.getReturnValueI()));
     }
 }
 

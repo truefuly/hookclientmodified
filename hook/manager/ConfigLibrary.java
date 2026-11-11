@@ -169,7 +169,7 @@ public final class ConfigLibrary {
         this.load();
         this.capacity();
         JsonObject var2 = ConfigLibrary.decode(var1);
-        Object var3 = ConfigLibrary.cleanName(var2.get("name").getAsString());
+        String var3 = ConfigLibrary.cleanName(var2.get("name").getAsString());
         String var4 = var3;
         int var5 = 2;
         while (this.taken((String)var3, null)) {

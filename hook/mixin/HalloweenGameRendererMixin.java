@@ -49,7 +49,7 @@ public abstract class HalloweenGameRendererMixin {
     @Inject(method={"getFov"}, at={@At(value="RETURN")}, cancellable=true)
     private void hook$cinematicZoom(class_4184 var1, float var2, boolean var3, CallbackInfoReturnable<Float> var4) {
         if (var3 && CinematicCamera.active()) {
-            var4.setReturnValue((Object)Float.valueOf(CinematicCamera.fov(var4.getReturnValueF())));
+            var4.setReturnValue(Float.valueOf(CinematicCamera.fov(var4.getReturnValueF())));
         }
     }
 

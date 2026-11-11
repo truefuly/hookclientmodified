@@ -30,7 +30,7 @@ public final class Modules {
     }
 
     public <T extends Module> Optional<T> getOptional(Class<T> type) {
-        return Optional.ofNullable((Module)Hook.INSTANCE.getModuleManager().getModuleByClass(type));
+        return Optional.ofNullable((T)Hook.INSTANCE.getModuleManager().getModuleByClass(type));
     }
 
     public static void registerCategory(Category category) {

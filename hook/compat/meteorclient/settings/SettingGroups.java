@@ -38,7 +38,7 @@ public final class SettingGroups {
             Object value;
             hook.module.setting.Setting base;
             if (!(setting instanceof hook.module.setting.Setting) || !name.contentEquals((base = (hook.module.setting.Setting)((Object)setting)).getName()) || (value = setting.get()) == null || !type.isInstance(value)) continue;
-            return setting;
+            return (Setting<T>)setting;
         }
         return null;
     }

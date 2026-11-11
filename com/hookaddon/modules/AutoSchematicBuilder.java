@@ -448,7 +448,7 @@ extends Module {
         HookStore.BuildState state = new HookStore.BuildState();
         state.schematicFile = useBlueprint ? null : fileName;
         state.blueprint = useBlueprint ? this.blueprint.get().name() : null;
-        state.blueprintMaterial = useBlueprint ? class_7923.field_41175.method_10221((Object)this.blueprintMaterial.get()).toString() : null;
+        state.blueprintMaterial = useBlueprint ? class_7923.field_41175.method_10221(this.blueprintMaterial.get()).toString() : null;
         state.anchor = this.anchor.get().name();
         state.originX = this.plan.origin().method_10263();
         state.originY = this.plan.origin().method_10264();

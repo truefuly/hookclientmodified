@@ -151,7 +151,7 @@ extends Module {
         try {
             Object sampler;
             class_12247 setup = ((RenderLayerAccessor)original).hook$getRenderSetup();
-            Map<?, ?> textures = ((RenderSetupAccessor)setup).hook$getTextures();
+            Map<?, ?> textures = ((RenderSetupAccessor)(Object)setup).hook$getTextures();
             Object object = sampler = textures == null ? null : (Object)textures.get("Sampler0");
             if (sampler == null) {
                 return null;

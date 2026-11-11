@@ -75,35 +75,17 @@ public final class SchematicFormats {
     }
 
     public static List<Path> listFiles(Path directory) {
-        List<Path> list;
-        block9: {
-            if (directory == null || !Files.isDirectory(directory, new LinkOption[0])) {
-                return List.of();
-            }
-            Stream<Path> stream = Files.list(directory);
-            try {
-                list = stream.filter(x$0 -> Files.isRegularFile(x$0, new LinkOption[0])).filter(path -> SchematicFormats.isSupported(path.getFileName().toString())).sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT))).toList();
-                if (stream == null) break block9;
-            }
-            catch (Throwable throwable) {
-                try {
-                    if (stream != null) {
-                        try {
-                            stream.close();
-                        }
-                        catch (Throwable throwable2) {
-                            throwable.addSuppressed(throwable2);
-                        }
-                    }
-                    throw throwable;
-                }
-                catch (IOException e) {
-                    return List.of();
-                }
-            }
-            stream.close();
+        if (directory == null || !Files.isDirectory(directory, new LinkOption[0])) {
+            return List.of();
         }
-        return list;
+        try (Stream<Path> stream = Files.list(directory)) {
+            return stream.filter(x$0 -> Files.isRegularFile(x$0, new LinkOption[0]))
+                .filter(path -> SchematicFormats.isSupported(path.getFileName().toString()))
+                .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT)))
+                .toList();
+        } catch (IOException e) {
+            return List.of();
+        }
     }
 }
 

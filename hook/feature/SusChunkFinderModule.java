@@ -392,7 +392,7 @@ extends Module {
         double var14 = var581[1] / 2.0;
         double var16 = var581[2] / 2.0;
         double var18 = var581[3] + var59 * var59 + var14 * var14 + var16 * var16;
-        if (d <= 0.0) {
+        if (var18 <= 0.0) {
             return false;
         }
         double var20 = Math.sqrt(var18);
@@ -412,12 +412,11 @@ extends Module {
             int var41 = Integer.MIN_VALUE;
             int var42 = Integer.MIN_VALUE;
             for (class_2338 var44 : var1) {
-                double d2;
                 double var45 = (double)var44.method_10263() - var60;
                 double var47 = (double)var44.method_10264() - var24;
                 double var49 = (double)var44.method_10260() - var26;
                 double var51 = Math.sqrt(var45 * var45 + var47 * var47 + var49 * var49);
-                if (d2 < 1.0E-4) {
+                if (var51 < 1.0E-4) {
                     var51 = 1.0;
                 }
                 var28 += Math.abs(var51 - var20);
@@ -577,7 +576,7 @@ extends Module {
 
     private Set<Long> calculateCandidateChunks(int var1) {
         ArrayList<ChunkCluster> var2 = new ArrayList<ChunkCluster>(this.geodes.values());
-        var2.sort(Comparator.comparingInt(var0 -> var0.pos.field_9181).thenComparingInt(var0 -> var0.pos.field_9180));
+        var2.sort(Comparator.<ChunkCluster>comparingInt(var0 -> var0.pos.field_9181).thenComparingInt(var0 -> var0.pos.field_9180));
         long[] var3 = new long[var2.size()];
         for (int var4 = 0; var4 < var2.size(); ++var4) {
             var3[var4] = var2.get((int)var4).pos.method_8324();

@@ -93,14 +93,18 @@ extends Module {
         if (this.mc.method_1562() != null && (var4 = this.mc.method_1562().method_2874(var1)) != null) {
             var3 = var4.method_2966();
         }
-        CompletableFuture<Optional<Object>> var5 = var3 == null ? CompletableFuture.supplyAsync(() -> this.mc.method_73361().comp_4624().method_73289(var1)) : CompletableFuture.completedFuture(Optional.of(var3));
-        CompletionStage var6 = var5.thenCompose(var1x -> var1x.map(var1xx -> CompletableFuture.supplyAsync(() -> this.mc.method_1582().method_52863(var1xx)).thenCompose(var0 -> var0)).orElseGet(() -> CompletableFuture.completedFuture(Optional.empty())));
+        CompletableFuture<Optional<GameProfile>> var5 = var3 == null
+            ? CompletableFuture.supplyAsync(() -> this.mc.method_73361().comp_4624().method_73289(var1))
+            : CompletableFuture.completedFuture(Optional.of(var3));
+        CompletableFuture<Optional<class_8685>> var6 = var5.thenCompose(var1x -> var1x
+            .map(var1xx -> CompletableFuture.supplyAsync(() -> this.mc.method_1582().method_52863(var1xx)).thenCompose(var0 -> var0))
+            .orElseGet(() -> CompletableFuture.completedFuture(Optional.empty())));
         this.pendingLookup = var6;
-        ((CompletableFuture)var6).whenComplete((var2x, var3x) -> this.mc.execute(() -> {
+        var6.whenComplete((var2x, var3x) -> this.mc.execute(() -> {
             if (var2 == this.lookupVersion && this.isEnabled()) {
                 this.pendingLookup = null;
                 if (var3x == null && var2x != null && var2x.isPresent()) {
-                    this.selectedTextures = (class_8685)var2x.get();
+                    this.selectedTextures = var2x.get();
                     this.nextLookupNanos = Long.MAX_VALUE;
                 } else {
                     this.selectedTextures = class_1068.method_62620();

@@ -435,7 +435,7 @@ public final class ItemFxRenderer {
         class_310 var1 = class_310.method_1551();
         class_276 var2 = var1.method_1522();
         GpuTextureView gpuTextureView = var3 = RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : var2.method_71639();
-        Object object = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : (var4 = var2.field_1478 ? var2.method_71640() : null);
+        var4 = RenderSystem.outputDepthTextureOverride != null ? RenderSystem.outputDepthTextureOverride : (var2.field_1478 ? var2.method_71640() : null);
         if (var3 != null && ItemFxShaders.ready(GLOW_PIPE) && ItemFxShaders.ready(SMOKE_PIPE)) {
             ItemFxRenderer.ensureStatic();
             CommandEncoder var5 = RenderSystem.getDevice().createCommandEncoder();

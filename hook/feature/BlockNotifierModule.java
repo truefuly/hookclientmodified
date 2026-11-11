@@ -100,7 +100,7 @@ extends Module {
         StorageBlocksSetting palette = new StorageBlocksSetting(EncryptedString.of("Blocks To Find"));
         for (class_2248 block : class_7923.field_41175) {
             if (block == class_2246.field_10124 || block == class_2246.field_10543 || block == class_2246.field_10243) continue;
-            class_2960 id = class_7923.field_41175.method_10221((Object)block);
+            class_2960 id = class_7923.field_41175.method_10221(block);
             Color color = Color.getHSBColor((float)(id.toString().hashCode() & 0xFFFF) / 65535.0f, 0.7f, 1.0f);
             palette.add(id.toString(), block.method_9518().getString(), block.method_8389(), false, color);
         }

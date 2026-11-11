@@ -15,7 +15,7 @@ extends Setting {
 
     public ModeSetting(CharSequence charSequence, T defaultValue, Class<T> type) {
         super(charSequence);
-        this.possibleValues = Arrays.asList((Enum[])type.getEnumConstants());
+        this.possibleValues = Arrays.asList(type.getEnumConstants());
         this.originalValue = this.index = this.possibleValues.indexOf(defaultValue);
     }
 

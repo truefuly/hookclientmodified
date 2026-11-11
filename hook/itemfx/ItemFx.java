@@ -226,7 +226,7 @@ public final class ItemFx {
     private static int classOf(class_1792 var0) {
         String var4;
         int var3;
-        class_2960 var1 = class_7923.field_41178.method_10221((Object)var0);
+        class_2960 var1 = class_7923.field_41178.method_10221(var0);
         if (!"minecraft".equals(var1.method_12836())) {
             return 0;
         }
@@ -271,7 +271,7 @@ public final class ItemFx {
             return 0;
         }
         class_2960 var3 = (class_2960)var0.method_58694(class_9334.field_54199);
-        return var3 != null && var3.equals((Object)class_7923.field_41178.method_10221((Object)var1)) ? var2 : 0;
+        return var3 != null && var3.equals((Object)class_7923.field_41178.method_10221(var1)) ? var2 : 0;
     }
 
     public static void tag(class_10444 var0, class_1799 var1, class_811 var2) {
