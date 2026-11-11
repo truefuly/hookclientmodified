@@ -121,29 +121,78 @@ public final class MenuTheme {
         tick();
         draw(ctx, (ui, s) -> {
             ui.pushAlpha(alpha);
-            float mark = 46.0f * s;
-            float textSize = 30.0f * s;
-            String title = "HookVisuals";
-            float textW = ui.textWidth(title, textSize, 1);
-            float gap = 10.0f * s;
-            float total = mark + gap + textW;
-            float x = screenWidth * s / 2.0f - total / 2.0f;
-            float y = 22.0f * s;
-            ui.glow(screenWidth * s / 2.0f, y + mark / 2.0f, total * 0.75f, UiPalette.light(0.08f * UiPalette.lightAmount()));
-            // round badge with "HK" in the client font, tinted by the theme
-            ui.shadow(x, y, mark, mark, mark * 0.3f, 10.0f * s, UiRenderer.argb(0.35f, 0, 0, 0));
-            ui.roundGradient(x, y, mark, mark, mark * 0.3f, UiPalette.logoTop(0.95f), UiPalette.logoBottom(0.95f));
-            ui.roundGradient(x, y, mark, mark * 0.5f, mark * 0.3f, UiRenderer.white(0.18f), UiRenderer.white(0.0f));
-            ui.outline(x, y, mark, mark, mark * 0.3f, Math.max(1.0f, s * 0.7f), UiRenderer.white(0.22f));
-            float badgeText = mark * 0.46f;
-            ui.textCentered("HK", x + mark / 2.0f, y + (mark - badgeText) / 2.0f - badgeText * 0.08f, badgeText, 1, UiRenderer.argb(0.92f, 12, 13, 18));
+            float mark = 50.0f * s;
+            float word = 30.0f * s;
+            float track = 2.2f * s;              // letter spacing of the wordmark
+            float hookW = spaced(ui, "HOOK", word, 1, track);
+            float visW = spaced(ui, "VISUALS", word, 1, track);
+            float space = 7.0f * s;
+            float wordW = hookW + space + visW;
+            float gap = 14.0f * s;
+            float total = mark + gap + wordW;
+            float cx = screenWidth * s / 2.0f;
+            float x = cx - total / 2.0f;
+            float y = 20.0f * s;
+            float pulse = 0.5f + 0.5f * (float) Math.sin(time * 1.4f);
+
+            // ambient light behind the whole logo
+            ui.glow(cx, y + mark / 2.0f, total * 0.8f, UiPalette.light(0.07f * UiPalette.lightAmount()));
+            ui.glow(x + mark / 2.0f, y + mark / 2.0f, mark * 1.6f, UiPalette.accent(0.16f + 0.06f * pulse));
+
+            // emblem: theme gradient tile, dark inset, "HK", accent ring and a moving shine
+            float r = mark * 0.28f;
+            ui.shadow(x, y + 2.0f * s, mark, mark, r, 12.0f * s, UiRenderer.argb(0.45f, 0, 0, 0));
+            ui.roundGradient(x, y, mark, mark, r, UiPalette.logoTop(1.0f), UiPalette.logoBottom(1.0f));
+            float in = 3.2f * s;
+            ui.roundGradient(x + in, y + in, mark - 2 * in, mark - 2 * in, r - in * 0.6f, UiRenderer.argb(0.92f, 18, 20, 26), UiRenderer.argb(0.96f, 8, 9, 12));
+            ui.pushClip(x + in, y + in, mark - 2 * in, mark - 2 * in);
+            float sweep = ((time * 0.35f) % 1.6f) - 0.3f;
+            ui.glow(x + mark * sweep, y + mark * 0.3f, mark * 0.55f, UiRenderer.white(0.07f));
+            ui.popClip();
+            float hk = mark * 0.42f;
+            float hkY = y + (mark - hk) / 2.0f - hk * 0.06f;
+            ui.glow(x + mark / 2.0f, y + mark / 2.0f, mark * 0.45f, UiPalette.accent(0.18f));
+            ui.textCentered("HK", x + mark / 2.0f, hkY, hk, 1, UiEasing.mix(UiRenderer.white(0.97f), UiPalette.light(1.0f), 0.25f));
+            ui.round(x + mark * 0.3f, y + mark - in - 6.0f * s, mark * 0.4f, Math.max(1.0f, 1.6f * s), 1.0f * s, UiPalette.accent(0.95f));
+            ui.outline(x, y, mark, mark, r, Math.max(1.0f, 1.1f * s), UiEasing.mix(UiRenderer.white(0.35f), UiPalette.accent(0.9f), 0.5f + 0.3f * pulse));
+
+            // wordmark: HOOK in white, VISUALS in the theme colour, with soft shadow
             float tx = x + mark + gap;
-            float ty = y + (mark - textSize) / 2.0f - 2.0f * s;
-            ui.text(title, tx + 1.5f * s, ty + 2.0f * s, textSize, 1, UiRenderer.argb(0.45f, 0, 0, 0));
-            ui.text(title, tx, ty, textSize, 1, UiRenderer.white(0.96f));
-            ui.text("Minecraft 1.21.11", tx + 1.0f * s, ty + textSize + 1.0f * s, 10.0f * s, 0, UiEasing.mix(UiRenderer.white(0.55f), UiPalette.accent(0.8f), 0.45f));
+            float ty = y + (mark - word) / 2.0f - 5.0f * s;
+            spacedText(ui, "HOOK", tx + 1.5f * s, ty + 2.0f * s, word, 1, track, UiRenderer.argb(0.5f, 0, 0, 0));
+            spacedText(ui, "VISUALS", tx + hookW + space + 1.5f * s, ty + 2.0f * s, word, 1, track, UiRenderer.argb(0.5f, 0, 0, 0));
+            spacedText(ui, "HOOK", tx, ty, word, 1, track, UiRenderer.white(0.97f));
+            ui.glow(tx + hookW + space + visW / 2.0f, ty + word / 2.0f, visW * 0.6f, UiPalette.accent(0.08f));
+            spacedText(ui, "VISUALS", tx + hookW + space, ty, word, 1, track, UiEasing.mix(UiPalette.accent(1.0f), UiRenderer.white(1.0f), 0.18f));
+
+            // accent line fading out to both ends, then the subtitle
+            float ly = ty + word + 6.0f * s;
+            float lh = Math.max(1.0f, 1.2f * s);
+            int steps = 24;
+            for (int i = 0; i < steps; i++) {
+                float t = (i + 0.5f) / steps;
+                float fade = 1.0f - Math.abs(t - 0.5f) * 2.0f;
+                ui.rect(tx + wordW * i / steps, ly, wordW / steps + 0.5f, lh, UiPalette.accent(0.75f * fade * fade));
+            }
+            spacedText(ui, "MINECRAFT 1.21.11  ·  CLIENT", tx, ly + 5.0f * s, 8.5f * s, 0, 1.6f * s, UiEasing.mix(UiRenderer.white(0.5f), UiPalette.accent(0.7f), 0.35f));
             ui.popAlpha();
         });
+    }
+
+    private static float spaced(UiRenderer ui, String text, float size, int weight, float tracking) {
+        float w = 0.0f;
+        for (int i = 0; i < text.length(); i++) {
+            w += ui.textWidth(String.valueOf(text.charAt(i)), size, weight) + (i > 0 ? tracking : 0.0f);
+        }
+        return w;
+    }
+
+    private static void spacedText(UiRenderer ui, String text, float x, float y, float size, int weight, float tracking, int color) {
+        for (int i = 0; i < text.length(); i++) {
+            String ch = String.valueOf(text.charAt(i));
+            ui.text(ch, x, y, size, weight, color);
+            x += ui.textWidth(ch, size, weight) + tracking;
+        }
     }
 
     // ------------------------------------------------------------------ widget sprites
@@ -204,24 +253,24 @@ public final class MenuTheme {
     }
 
     private static void button(UiRenderer ui, float s, float x, float y, float w, float h, float hover, boolean disabled) {
-        float r = h / 2.0f;
+        float r = Math.min(h / 2.0f, 3.0f * s);
+        float line = Math.max(1.0f, s * 0.5f);
         if (disabled) {
-            ui.round(x, y, w, h, r, UiRenderer.white(0.035f));
-            ui.outline(x, y, w, h, r, Math.max(1.0f, s * 0.6f), UiRenderer.white(0.06f));
+            ui.round(x, y, w, h, r, UiRenderer.argb(0.28f, 0, 0, 0));
+            ui.outline(x, y, w, h, r, line, UiRenderer.white(0.05f));
             return;
         }
-        ui.shadow(x, y + s, w, h, r, 6.0f * s, UiRenderer.argb(0.28f + 0.12f * hover, 0, 0, 0));
+        // dark glass, thin light edge on top; the theme accent shows up on hover
+        ui.round(x, y, w, h, r, UiEasing.mix(UiRenderer.argb(0.55f, 6, 7, 10), UiEasing.mix(UiRenderer.argb(0.62f, 10, 11, 15), UiPalette.accent(0.30f), 0.45f), hover));
+        ui.rect(x + r, y + line, w - 2.0f * r, line, UiRenderer.white(0.07f + 0.05f * hover));
         if (hover > 0.01f) {
-            ui.glow(x + w / 2.0f, y + h / 2.0f, Math.max(w, h) * 0.65f, UiPalette.accent(0.10f * hover));
+            ui.round(x + w * 0.2f, y + h - line * 2.0f, w * 0.6f, line * 2.0f, line, UiPalette.accent(0.9f * hover));
         }
-        int fill = UiEasing.mix(UiEasing.mix(UiPalette.glass(0.55f), UiRenderer.white(0.16f), 0.55f), UiEasing.mix(UiRenderer.white(0.2f), UiPalette.accent(0.42f), 0.6f), hover);
-        ui.round(x, y, w, h, r, fill);
-        ui.roundGradient(x, y, w, h * 0.55f, r, UiRenderer.white(0.10f + 0.06f * hover), UiRenderer.white(0.0f));
-        ui.outline(x, y, w, h, r, Math.max(1.0f, s * 0.6f), UiEasing.mix(UiRenderer.white(0.17f), UiPalette.accent(0.85f), hover));
+        ui.outline(x, y, w, h, r, line, UiEasing.mix(UiRenderer.white(0.11f), UiPalette.accent(0.75f), hover));
     }
 
     private static void track(UiRenderer ui, float s, float x, float y, float w, float h, float hover) {
-        float r = h / 2.0f;
+        float r = Math.min(h / 2.0f, 4.0f * s);
         ui.round(x, y, w, h, r, UiEasing.mix(UiPalette.glass(0.6f), UiRenderer.white(0.08f), 0.5f));
         ui.outline(x, y, w, h, r, Math.max(1.0f, s * 0.6f), UiEasing.mix(UiRenderer.white(0.12f), UiPalette.accent(0.6f), hover));
     }
@@ -233,11 +282,11 @@ public final class MenuTheme {
         float hy = y + inset;
         float hh = h - 2 * inset;
         ui.glow(hx + hw / 2.0f, y + h / 2.0f, h * 0.9f, UiPalette.accent(0.14f + 0.12f * hover));
-        ui.round(hx, hy, hw, hh, hw / 2.0f, UiEasing.mix(UiPalette.accent(0.95f), UiRenderer.white(0.95f), 0.25f + 0.35f * hover));
+        ui.round(hx, hy, hw, hh, Math.min(hw / 2.0f, 2.5f * s), UiEasing.mix(UiPalette.accent(0.95f), UiRenderer.white(0.95f), 0.25f + 0.35f * hover));
     }
 
     private static void field(UiRenderer ui, float s, float x, float y, float w, float h, float hover) {
-        float r = Math.min(h / 2.0f, 6.0f * s);
+        float r = Math.min(h / 2.0f, 4.0f * s);
         ui.round(x, y, w, h, r, UiEasing.mix(UiPalette.glass(0.85f), UiRenderer.argb(0.85f, 8, 9, 12), 0.4f));
         ui.outline(x, y, w, h, r, Math.max(1.0f, s * 0.6f), UiEasing.mix(UiRenderer.white(0.14f), UiPalette.accent(0.9f), hover));
     }
@@ -258,7 +307,7 @@ public final class MenuTheme {
         tick();
         draw(ctx, (ui, s) -> {
             float px = x * s + 6 * s, py = y * s + 2 * s, pw = w * s - 12 * s, ph = h * s - 4 * s;
-            float r = 12.0f * s;
+            float r = 6.0f * s;
             ui.round(px, py, pw, ph, r, UiPalette.glass(0.42f));
             ui.outline(px, py, pw, ph, r, Math.max(1.0f, s * 0.6f), UiRenderer.white(0.07f));
         });
