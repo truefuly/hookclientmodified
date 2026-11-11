@@ -313,7 +313,9 @@ public final class ModuleManager {
         if (!(var1.mode != 1 || hook.Hook.mc != null && (class_4372 = hook.Hook.mc.field_1755) instanceof HookClickGuiScreen && (var2 = (HookClickGuiScreen)class_4372).isTyping())) {
             this.modules.forEach(var1x -> {
                 boolean var2x;
-                if (var1x.getKeybind() == var1.key && ((var2x = var1x instanceof Hook) || hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null && !(hook.Hook.mc.field_1755 instanceof class_408))) {
+                // The menu key only works in-game (no screen) or to close the menu itself - never in chat,
+                // inventories, the pause menu or any other screen.
+                if (var1x.getKeybind() == var1.key && ((var2x = var1x instanceof Hook) ? menuKeyAllowed() : hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null && !(hook.Hook.mc.field_1755 instanceof class_408))) {
                     var1x.toggle();
                 }
             });
@@ -325,11 +327,17 @@ public final class ModuleManager {
         if (var1.actions == 1 && var1.button >= 0 && var1.button <= 7 && !(hook.Hook.mc.field_1755 instanceof HookClickGuiScreen) && !(hook.Hook.mc.field_1755 instanceof class_408)) {
             this.modules.forEach(var1x -> {
                 boolean var2;
-                if (var1x.getKeybind() == var1.button && ((var2 = var1x instanceof Hook) || hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null)) {
+                if (var1x.getKeybind() == var1.button && ((var2 = var1x instanceof Hook) ? menuKeyAllowed() : hook.Hook.mc.field_1724 != null && hook.Hook.mc.field_1690 != null)) {
                     var1x.toggle();
                 }
             });
         }
+    }
+
+    private static boolean menuKeyAllowed() {
+        if (hook.Hook.mc == null) return false;
+        class_437 screen = hook.Hook.mc.field_1755;
+        return screen == null || screen instanceof HookClickGuiScreen || screen instanceof net.minecraft.class_442;
     }
 }
 
