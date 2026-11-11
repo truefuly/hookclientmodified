@@ -37,7 +37,7 @@ extends Module {
     public static final BooleanSetting renderBackground = new BooleanSetting(EncryptedString.of("Background"), true).setDescription(EncryptedString.of("Dims the world behind Hook editor screens"));
     private final BooleanSetting preventClose = new BooleanSetting(EncryptedString.of("Prevent Close"), true).setDescription(EncryptedString.of("For servers with freeze plugins that don't let you open the GUI"));
     public static final ModeSetting<AnimationMode> animationMode = new ModeSetting<AnimationMode>(EncryptedString.of("Animations"), AnimationMode.NORMAL, AnimationMode.class);
-    public static final BooleanSetting customMenus = new BooleanSetting(EncryptedString.of("Custom Menus"), true).setDescription(EncryptedString.of("Themed title screen, options and server list before you join a world"));
+    public static final BooleanSetting customMenus = new BooleanSetting(EncryptedString.of("Custom Menus"), true).setDescription(EncryptedString.of("Custom buttons, sliders and text fields in the menus before you join a world"));
     public boolean shouldPreventClose;
 
     public Hook() {

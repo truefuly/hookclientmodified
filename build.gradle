@@ -17,7 +17,7 @@ dependencies {
 
 sourceSets.main.java.srcDirs = ['.']
 sourceSets.main.resources.srcDirs = ['.']
-sourceSets.main.java.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', 'mappings/**', 'installer/**')
+sourceSets.main.java.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', 'mappings/**', 'installer/**', 'tools/**')
 sourceSets.main.resources.exclude('build/**', '.gradle/**', 'gradle/**', 'third_party/**', '**/*.java')
 sourceSets.main.resources.exclude('libs/**', 'mappings/**', 'installer/**', '*.gradle', 'gradle.properties', 'gradlew', 'gradlew.bat', 'README.md', '.gitignore', '.github/**')
 
