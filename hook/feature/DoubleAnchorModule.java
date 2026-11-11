@@ -37,7 +37,7 @@ extends Module {
     private boolean isAnchoring = false;
 
     public DoubleAnchorModule() {
-        super(EncryptedString.of("Double Anchor"), EncryptedString.of("Automatically Places 2 anchors"), -1, Category.COMBAT);
+        super(EncryptedString.of("Double Anchor"), EncryptedString.of("Places and detonates two respawn anchors in a row"), -1, Category.COMBAT);
         Setting[] var10001 = new Setting[]{this.switchDelay, this.totemSlot, this.activateKey};
         this.addSettings(var10001);
     }

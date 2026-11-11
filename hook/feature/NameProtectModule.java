@@ -15,7 +15,7 @@ extends Module {
     private final StringSetting fakeName = new StringSetting("Fake Name", "Player");
 
     public NameProtectModule() {
-        super(EncryptedString.of("Name Protect"), EncryptedString.of("Replaces your name with given one."), -1, Category.MISC);
+        super(EncryptedString.of("Name Protect"), EncryptedString.of("Hides your real name everywhere on your screen"), -1, Category.MISC);
         this.addSettings(this.fakeName);
     }
 

@@ -1,0 +1,18 @@
+layer sky.png 640 360 0.0 0.0 0 0
+fx bats - 0 30 640 140 0a0608 7
+layer clouds.png 1280 110 0.0 5.0 30 0
+layer far.png 720 360 6.0 0.0 0 0
+fx window mid 366 229 6 6 ff9a2a 3
+fx window mid 382 229 6 6 ff9a2a 3
+fx window mid 397 201 6 6 ff9a2a 3
+fx window mid 366 245 6 6 ff9a2a 3
+layer mid.png 760 360 11.0 0.0 0 0
+fx fog - 0 250 640 60 9a8aa8 0
+fx glow near 66 275 1 1 ff9a2a 3
+fx glow near 476 273 1 1 ff9a2a 3
+fx glow near 546 273 1 1 ff9a2a 3
+fx glow near 696 273 1 1 ff9a2a 3
+fx glow near 746 275 1 1 ff9a2a 3
+fx glow near 606 262 1 1 ffd27a 3
+fx flies near 20 250 760 70 ffb347 14
+layer near.png 800 360 18.0 0.0 0 0

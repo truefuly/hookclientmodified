@@ -52,7 +52,7 @@ extends Module {
     public boolean isActive;
 
     public AutoCrystalModule() {
-        super(EncryptedString.of("Auto Crystal"), EncryptedString.of("Automatically crystals fast for you"), -1, Category.COMBAT);
+        super(EncryptedString.of("Auto Crystal"), EncryptedString.of("Places and breaks end crystals for you while you hold the key"), -1, Category.COMBAT);
         Setting[] var10001 = new Setting[]{this.activateKey, this.placeDelay, this.breakDelay};
         this.addSettings(var10001);
     }

@@ -24,7 +24,7 @@ extends Module {
     private int delayCounter;
 
     public AutoTpaModule() {
-        super(EncryptedString.of("Auto Tpa"), EncryptedString.of("Module that helps you teleport streamers to you"), -1, Category.MISC);
+        super(EncryptedString.of("Auto Tpa"), EncryptedString.of("Sends teleport requests to a player on repeat"), -1, Category.MISC);
         this.addSettings(this.mode, this.delayRange, this.playerName);
     }
 

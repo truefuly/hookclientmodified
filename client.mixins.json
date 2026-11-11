@@ -86,6 +86,8 @@
     "CartcoreBowMixin",
     "MenuSpriteMixin",
     "MenuBackgroundMixin",
+    "MenuSplashMixin",
+    "ItemUseCooldownAccessor",
     "ResourcePackBlockMixin",
     "HitGlowMixins",
     "AttackHookMixin"

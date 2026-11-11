@@ -41,7 +41,7 @@ extends Module {
     private int explodeDelayCounter = 0;
 
     public AnchorMacroModule() {
-        super(EncryptedString.of("Anchor Macro"), EncryptedString.of("Automatically blows up respawn anchors for you"), -1, Category.COMBAT);
+        super(EncryptedString.of("Anchor Macro"), EncryptedString.of("Charges and blows up respawn anchors for you"), -1, Category.COMBAT);
         Setting[] var10001 = new Setting[]{this.switchDelay, this.glowstoneDelay, this.explodeDelay, this.totemSlot};
         this.addSettings(var10001);
     }

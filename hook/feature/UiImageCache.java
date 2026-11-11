@@ -42,6 +42,24 @@ final class UiImageCache {
         });
     }
 
+    private static final Map<String, UiTextureData> PREVIEWS = new HashMap<String, UiTextureData>();
+
+    /** Full-colour preview image of a lobby theme (assets/hook/textures/gui/menu/<folder>/preview.png). */
+    static UiTextureData lobbyPreview(String folder) {
+        return PREVIEWS.computeIfAbsent(folder, key -> {
+            try (InputStream in = UiImageCache.class.getResourceAsStream("/assets/hook/textures/gui/menu/" + key + "/preview.png")) {
+                if (in == null) return null;
+                BufferedImage image = ImageIO.read(in);
+                int w = image.getWidth(), h = image.getHeight();
+                int[] pixels = new int[w * h];
+                image.getRGB(0, 0, w, h, pixels, 0, w);
+                return new UiTextureData("lobby_" + key, w, h, pixels);
+            } catch (Throwable t) {
+                return null;
+            }
+        });
+    }
+
     private static BufferedImage source(String var0) {
         return SOURCES.computeIfAbsent(var0, var0x -> {
             String var1 = switch (var0x) {

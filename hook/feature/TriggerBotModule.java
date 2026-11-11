@@ -22,17 +22,17 @@ import net.minecraft.class_1792;
 import net.minecraft.class_3489;
 
 public final class TriggerBotModule extends Module {
-    private final NumberSetting range = new NumberSetting(EncryptedString.of("Range"), 1.0, 6.0, 4.25, 0.05);
-    private final BooleanSetting playersOnly = new BooleanSetting(EncryptedString.of("Players Only"), true);
-    private final BooleanSetting weaponsOnly = new BooleanSetting(EncryptedString.of("Weapons Only"), false);
-    private final BooleanSetting swordOnly = new BooleanSetting(EncryptedString.of("Sword Only"), false);
-    private final BooleanSetting verticalAim = new BooleanSetting(EncryptedString.of("Vertical Aim"), false);
-    private final NumberSetting verticalAimSpeed = new NumberSetting(EncryptedString.of("Vertical Aim Speed"), 1.0, 90.0, 12.0, 1.0);
-    private final BooleanSetting requireCooldown = new BooleanSetting(EncryptedString.of("Require Attack Cooldown"), true);
-    private final BooleanSetting attackWhileUsing = new BooleanSetting(EncryptedString.of("Attack While Using Items"), false);
+    private final NumberSetting range = new NumberSetting(EncryptedString.of("Range"), 1.0, 6.0, 4.25, 0.05).getValue(EncryptedString.of("Maximum distance to the target in blocks"));
+    private final BooleanSetting playersOnly = new BooleanSetting(EncryptedString.of("Players Only"), true).setDescription(EncryptedString.of("Ignores mobs and animals"));
+    private final BooleanSetting weaponsOnly = new BooleanSetting(EncryptedString.of("Weapons Only"), false).setDescription(EncryptedString.of("Only attacks while holding a sword, axe, mace or spear"));
+    private final BooleanSetting swordOnly = new BooleanSetting(EncryptedString.of("Sword Only"), false).setDescription(EncryptedString.of("Only attacks while holding a sword"));
+    private final BooleanSetting verticalAim = new BooleanSetting(EncryptedString.of("Vertical Aim"), false).setDescription(EncryptedString.of("Adjusts your pitch towards the target before hitting"));
+    private final NumberSetting verticalAimSpeed = new NumberSetting(EncryptedString.of("Vertical Aim Speed"), 1.0, 90.0, 12.0, 1.0).getValue(EncryptedString.of("Degrees per tick the pitch may change"));
+    private final BooleanSetting requireCooldown = new BooleanSetting(EncryptedString.of("Require Attack Cooldown"), true).setDescription(EncryptedString.of("Waits for a fully charged hit"));
+    private final BooleanSetting attackWhileUsing = new BooleanSetting(EncryptedString.of("Attack While Using Items"), false).setDescription(EncryptedString.of("Also attacks while eating, blocking or drawing a bow"));
 
     public TriggerBotModule() {
-        super(EncryptedString.of("Trigger Bot"), EncryptedString.of("Attacks a valid entity under your crosshair."), -1, Category.COMBAT);
+        super(EncryptedString.of("Trigger Bot"), EncryptedString.of("Hits the target under your crosshair automatically"), -1, Category.COMBAT);
         this.addSettings(this.range, this.playersOnly, this.weaponsOnly, this.swordOnly, this.verticalAim, this.verticalAimSpeed, this.requireCooldown, this.attackWhileUsing);
     }
 

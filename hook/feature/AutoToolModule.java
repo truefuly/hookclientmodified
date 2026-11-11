@@ -57,7 +57,7 @@ extends Module {
     private int lastAutomaticSlot = -1;
 
     public AutoToolModule() {
-        super(EncryptedString.of("Auto Tool"), EncryptedString.of("Automatically switches to the best tool"), -1, Category.MISC);
+        super(EncryptedString.of("Auto Tool"), EncryptedString.of("Switches to the best tool for the block you mine"), -1, Category.MISC);
         this.addSettings(this.legit, this.antiBreak, this.antiBreakPercentage);
     }
 

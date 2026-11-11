@@ -29,7 +29,7 @@ extends Module {
     private int delayCounter;
 
     public AutoTotemModule() {
-        super(EncryptedString.of("Auto Totem"), EncryptedString.of("Automatically holds totem in your off hand"), -1, Category.COMBAT);
+        super(EncryptedString.of("Auto Totem"), EncryptedString.of("Keeps a totem of undying in your off hand"), -1, Category.COMBAT);
         this.addSettings(this.delay);
     }
 
@@ -46,6 +46,10 @@ extends Module {
     @EventListener
     public void onTick(TickEvent event) {
         if (this.mc.field_1724 == null) {
+            return;
+        }
+        // with a chest/container open the slot ids belong to that container - wait until it is closed
+        if (this.mc.field_1724.field_7512 != this.mc.field_1724.field_7498) {
             return;
         }
         RtpBaseFinderModule rtpFinder = (RtpBaseFinderModule)Hook.INSTANCE.MODULE_MANAGER.getModuleByClass(RtpBaseFinderModule.class);

@@ -124,6 +124,7 @@ public final class HookUiController {
     private float tipY;
     private static final Object THEME_GRID = new Object();
     private static final Object SKY_PREVIEWS = new Object();
+    private static final Object LOBBY_GRID = new Object();
 
     public HookUiController(UiDataSource var1) {
         this.host = var1;
@@ -746,6 +747,8 @@ public final class HookUiController {
                     this.drawRow(var1, var2, var35, var37, var41, var26, var34, var7);
                 } else if (var33 == THEME_GRID) {
                     this.drawThemes(var1, var37, var41, var26, var7);
+                } else if (var33 == LOBBY_GRID) {
+                    this.drawLobbyThemes(var1, var37, var41, var26, var7);
                 } else if (var33 == SKY_PREVIEWS && var2 instanceof CustomSkysModule) {
                     this.drawSkyPreviews(var1, (CustomSkysModule)var2, var37, var41, var26);
                 } else {
@@ -777,13 +780,15 @@ public final class HookUiController {
         Setting[] var4 = new Setting[]{hook.module.modules.client.Hook.halloweenMusic, hook.module.modules.client.Hook.halloweenVolume, hook.module.modules.client.Hook.beatShake, hook.module.modules.client.Hook.shakeStrength};
         var2.add("Theme");
         var2.add(THEME_GRID);
+        var2.add("Lobby Themes");
+        var2.add(LOBBY_GRID);
         var2.add("Sound");
         var2.addAll(List.of(var3));
         var2.add("Halloween");
         var2.addAll(List.of(var4));
         var2.add("Interface");
         for (Setting var6 : var1.getSettings()) {
-            if (var6 == hook.module.modules.client.Hook.theme || List.of(var3).contains(var6) || List.of(var4).contains(var6)) continue;
+            if (var6 == hook.module.modules.client.Hook.theme || var6 == hook.module.modules.client.Hook.lobbyTheme || List.of(var3).contains(var6) || List.of(var4).contains(var6)) continue;
             var2.add(var6);
         }
         return var2;
@@ -798,6 +803,10 @@ public final class HookUiController {
             return (float)var3 * this.d(108.0f) + (float)(var3 - 1) * this.d(12.0f);
         }
         if (var1 == SKY_PREVIEWS) return this.d(190.0f);
+        if (var1 == LOBBY_GRID) {
+            int rows = (LobbyTheme.values().length + 2) / 3;
+            return rows * this.lobbyTileHeight(var2) + (rows - 1) * this.d(12.0f);
+        }
         return this.d(26.0f);
     }
 
@@ -817,6 +826,67 @@ public final class HookUiController {
             renderer.round(tx, ty, tile, this.d(74.0f), this.d(8.0f), UiRenderer.white(selected ? 0.12f : 0.045f));
             renderer.image(images[i], tx + (tile - imageSize) / 2.0f, ty + this.d(4.0f), imageSize, UiRenderer.white(1.0f));
             renderer.textCentered(names[i], tx + tile / 2.0f, ty + this.d(66.0f), this.d(9.0f), 1, UiRenderer.white(selected ? 0.95f : 0.6f));
+        }
+    }
+
+    private float lobbyTileHeight(float width) {
+        float tile = (width - this.d(12.0f) * 2.0f) / 3.0f;
+        return (tile - this.d(16.0f)) * 9.0f / 16.0f + this.d(52.0f);
+    }
+
+    /** Lobby theme picker: preview tiles like the colour themes; Standard keeps vanilla menus. */
+    private void drawLobbyThemes(UiRenderer ui, float x, float y, float width, boolean interactive) {
+        LobbyTheme[] themes = LobbyTheme.values();
+        LobbyTheme selected = LobbyTheme.selected();
+        float gap = this.d(12.0f);
+        float tileW = (width - gap * 2.0f) / 3.0f;
+        float tileH = this.lobbyTileHeight(width);
+        for (int i = 0; i < themes.length; i++) {
+            LobbyTheme theme = themes[i];
+            float tx = x + (i % 3) * (tileW + gap);
+            float ty = y + (i / 3) * (tileH + gap);
+            String key = "lobby:" + theme.name();
+            boolean hot = interactive && this.hot(tx, ty, tileW, tileH);
+            float hover = this.an(key + ":h", hot ? 1.0f : 0.0f, 13.0f);
+            float sel = this.an(key + ":s", theme == selected ? 1.0f : 0.0f, 9.0f);
+            ty -= this.d(2.0f) * hover;
+            if (sel > 0.01f) ui.shadow(tx, ty, tileW, tileH, this.d(16.0f), this.d(16.0f), UiPalette.accent(0.12f * sel));
+            ui.round(tx, ty, tileW, tileH, this.d(16.0f), UiRenderer.white(0.035f + 0.03f * hover + 0.03f * sel));
+            float px = tx + this.d(8.0f), py = ty + this.d(8.0f), pw = tileW - this.d(16.0f), ph = pw * 9.0f / 16.0f;
+            UiTextureData preview = theme.folder == null ? null : UiImageCache.lobbyPreview(theme.folder);
+            ui.pushClip(px, py, pw, ph);
+            if (preview != null) {
+                ui.texture(preview, px, py, pw, ph, UiRenderer.white(1.0f));
+            } else {
+                ui.gradient(px, py, pw, ph, UiRenderer.argb(1.0f, 92, 124, 182), UiRenderer.argb(1.0f, 50, 72, 40));
+                ui.rect(px, py + ph * 0.72f, pw, ph * 0.28f, UiRenderer.argb(1.0f, 92, 64, 40));
+                ui.rect(px, py + ph * 0.72f, pw, ph * 0.06f, UiRenderer.argb(1.0f, 96, 150, 64));
+                ui.textCentered("VANILLA", px + pw / 2.0f, py + ph * 0.32f, this.d(11.0f), 1, UiRenderer.white(0.85f));
+            }
+            ui.popClip();
+            ui.outline(px, py, pw, ph, this.d(4.0f), Math.max(1.0f, this.u * 0.9f), UiRenderer.white(0.1f));
+            if (theme.limited) {
+                float bw = ui.textWidth("LIMITED", this.d(8.0f), 1) + this.d(10.0f);
+                ui.round(px + pw - bw - this.d(4.0f), py + this.d(4.0f), bw, this.d(14.0f), this.d(7.0f), UiRenderer.argb(0.85f, 230, 120, 40));
+                ui.textCentered("LIMITED", px + pw - bw / 2.0f - this.d(4.0f), py + this.d(6.5f), this.d(8.0f), 1, UiRenderer.white(0.95f));
+            }
+            ui.text(theme.title, tx + this.d(12.0f), py + ph + this.d(9.0f), this.d(11.5f), 1, UiEasing.mix(UiRenderer.white(0.75f), TEXT, Math.max(sel, hover)));
+            ui.text(ui.ellipsize(theme.description, tileW - this.d(24.0f), this.d(8.5f), 0), tx + this.d(12.0f), py + ph + this.d(25.0f), this.d(8.5f), 0, UiRenderer.white(0.42f));
+            if (sel > 0.01f) {
+                float r = this.d(8.0f) * (0.7f + 0.3f * sel);
+                float cx = px + this.d(14.0f), cy = py + this.d(14.0f);
+                ui.circle(cx, cy, r, UiPalette.accent(sel));
+                ui.icon(UiIcon.CHECK, cx - r * 0.65f, cy - r * 0.65f, r * 1.3f, UiRenderer.argb(sel, 22, 23, 27));
+            }
+            ui.outline(tx, ty, tileW, tileH, this.d(16.0f), Math.max(1.0f, this.u * 0.9f), UiEasing.mix(UiRenderer.white(0.06f + 0.08f * hover), UiPalette.accent(0.6f), sel));
+            if (!interactive) continue;
+            int index = i;
+            this.hit(tx, ty, tileW, tileH, click -> {
+                if (hook.module.modules.client.Hook.lobbyTheme.getModeIndex() != index) {
+                    hook.module.modules.client.Hook.lobbyTheme.setModeIndex(index);
+                    UiAudio.play(UiAudio.Cue.THEME);
+                }
+            });
         }
     }
 

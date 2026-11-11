@@ -22,14 +22,14 @@ import net.minecraft.class_9334;
 
 public final class AutoEatModule
 extends Module {
-    private final NumberSetting healthThreshold = new NumberSetting(EncryptedString.of("Health Threshold"), 0.0, 19.0, 17.0, 1.0);
-    private final NumberSetting hungerThreshold = new NumberSetting(EncryptedString.of("Hunger Threshold"), 0.0, 19.0, 19.0, 1.0);
+    private final NumberSetting healthThreshold = new NumberSetting(EncryptedString.of("Health Threshold"), 0.0, 19.0, 17.0, 1.0).getValue(EncryptedString.of("Eats when your health is at or below this"));
+    private final NumberSetting hungerThreshold = new NumberSetting(EncryptedString.of("Hunger Threshold"), 0.0, 19.0, 19.0, 1.0).getValue(EncryptedString.of("Eats when your hunger bar is at or below this"));
     public boolean isEa;
     private int selectedFoodSlot;
     private int previousSelectedSlot;
 
     public AutoEatModule() {
-        super(EncryptedString.of("Auto Eat"), EncryptedString.of(" It detects whenever the hungerbar/health falls a certain threshold, selects food in your hotbar, and starts eating."), -1, Category.MISC);
+        super(EncryptedString.of("Auto Eat"), EncryptedString.of("Eats food from your hotbar when hunger or health gets low"), -1, Category.MISC);
         this.addSettings(this.healthThreshold, this.hungerThreshold);
     }
 
@@ -45,6 +45,7 @@ extends Module {
 
     @EventListener
     public void onTick(TickEvent event) {
+        if (this.mc.field_1724 == null || this.mc.field_1687 == null) return;
         if (!this.isEa) {
             if (this.shouldEat()) {
                 this.selectedFoodSlot = this.findBestFoodSlot();
@@ -59,7 +60,7 @@ extends Module {
             return;
         }
         class_1799 selected = this.mc.field_1724.method_31548().method_5438(this.selectedFoodSlot);
-        if (selected.method_58694(class_9334.field_50075) != null) {
+        if (selected.method_58694(class_9334.field_50075) == null) { // food in that slot is used up
             int bestSlot = this.findBestFoodSlot();
             if (bestSlot == -1) {
                 this.stopEating();
@@ -73,8 +74,10 @@ extends Module {
     public boolean shouldEat() {
         float healthDifference = this.mc.field_1724.method_6032() - (float)this.healthThreshold.getIntValue();
         boolean lowHealth = healthDifference <= 0.0f;
-        boolean lowHunger = this.mc.field_1724.method_7344().method_7586() <= this.hungerThreshold.getIntValue();
-        return this.findBestFoodSlot() != -1 && (lowHealth || lowHunger);
+        int food = this.mc.field_1724.method_7344().method_7586();
+        boolean lowHunger = food <= this.hungerThreshold.getIntValue();
+        // Minecraft only lets you eat with a hunger bar below 20, so low health alone can't start eating
+        return food < 20 && this.findBestFoodSlot() != -1 && (lowHealth || lowHunger);
     }
 
     private int findBestFoodSlot() {

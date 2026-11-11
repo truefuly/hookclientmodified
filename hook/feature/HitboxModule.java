@@ -17,12 +17,11 @@ import net.minecraft.class_1657;
 
 public final class HitboxModule
 extends Module {
-    private final NumberSetting expand = new NumberSetting(EncryptedString.of("Expand"), 0.0, 2.0, 0.5, 0.05);
-    private final BooleanSetting enableRender = new BooleanSetting("Enable Render", true);
+    private final NumberSetting expand = new NumberSetting(EncryptedString.of("Expand"), 0.0, 2.0, 0.5, 0.05).getValue(EncryptedString.of("How many blocks other players' hitboxes grow"));
 
     public HitboxModule() {
-        super(EncryptedString.of("HitBox"), EncryptedString.of("Expands a player's hitbox."), -1, Category.COMBAT);
-        this.addSettings(this.enableRender, this.expand);
+        super(EncryptedString.of("HitBox"), EncryptedString.of("Makes other players easier to hit by growing their hitbox"), -1, Category.COMBAT);
+        this.addSettings(this.expand);
     }
 
     @Override
@@ -42,8 +41,5 @@ extends Module {
         }
     }
 
-    public double getHitboxExpansion() {
-        return this.enableRender.getValue() ? this.expand.getValue() : 0.0;
-    }
 }
 

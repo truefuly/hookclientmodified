@@ -61,8 +61,8 @@ final class MeshSimplifier {
             for (int var4 = 0; var4 < 3; ++var4) {
                 int var5 = this.tri[var35 * 3 + var4];
                 int[] var10000 = this.around[var5];
+                var10000[this.aroundCount[var5]] = var35; // around[v][count++] = triangle
                 this.aroundCount[var5] = this.aroundCount[var5] + 1;
-                var10000[this.aroundCount[var5]] = var35;
             }
         }
         this.quad = new double[this.nv * 10];
@@ -440,8 +440,8 @@ final class MeshSimplifier {
             var3 = Arrays.copyOf(var3, var3.length * 2);
             this.around[var1] = var3;
         }
+        var3[this.aroundCount[var1]] = var2; // was around[v][count++] = t (decompiler had the increment first)
         this.aroundCount[var1] = this.aroundCount[var1] + 1;
-        var3[this.aroundCount[var1]] = var2;
     }
 
     private void compact(int var1) {

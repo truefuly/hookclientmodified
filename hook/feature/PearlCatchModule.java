@@ -40,12 +40,12 @@ extends Module {
     private int currentSwitchDelay;
 
     public PearlCatchModule() {
-        super(EncryptedString.of("Pearl Catch"), EncryptedString.of("Redirects thrown pearls with a wind charge."), -1, Category.COMBAT);
-        this.range = new NumberSetting(EncryptedString.of("Catch Range"), 1.0, 8.0, 3.1, 0.1);
-        this.prediction = new NumberSetting(EncryptedString.of("Prediction"), 1.0, 10.0, 5.0, 1.0);
-        this.minPitch = new NumberSetting(EncryptedString.of("Min Pitch"), -90.0, 0.0, -25.0, 1.0);
-        this.switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true);
-        this.switchDelay = new NumberSetting(EncryptedString.of("Switch Delay"), 0.0, 20.0, 2.0, 1.0);
+        super(EncryptedString.of("Pearl Catch"), EncryptedString.of("Boosts your thrown ender pearl further with a wind charge"), -1, Category.COMBAT);
+        this.range = new NumberSetting(EncryptedString.of("Catch Range"), 1.0, 8.0, 3.1, 0.1).getValue(EncryptedString.of("How far from the pearl the wind charge may hit"));
+        this.prediction = new NumberSetting(EncryptedString.of("Prediction"), 1.0, 10.0, 5.0, 1.0).getValue(EncryptedString.of("Ticks the pearl path is predicted ahead"));
+        this.minPitch = new NumberSetting(EncryptedString.of("Min Pitch"), -90.0, 0.0, -25.0, 1.0).getValue(EncryptedString.of("Only triggers when you throw at least this far upwards"));
+        this.switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true).setDescription(EncryptedString.of("Returns to the pearl slot afterwards"));
+        this.switchDelay = new NumberSetting(EncryptedString.of("Switch Delay"), 0.0, 20.0, 2.0, 1.0).getValue(EncryptedString.of("Ticks before switching back"));
         this.addSettings(this.range, this.prediction, this.minPitch, this.switchBack, this.switchDelay);
     }
 

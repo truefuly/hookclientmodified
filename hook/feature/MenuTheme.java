@@ -40,11 +40,10 @@ public final class MenuTheme {
     private MenuTheme() {
     }
 
-    /** True while the themed menus should replace vanilla visuals (no world loaded, setting on). */
+    /** Custom widgets are on for every lobby theme except Standard - in the lobby and in-game menus (pause, options...). */
     public static boolean active() {
         try {
-            class_310 mc = class_310.method_1551();
-            return mc != null && mc.field_1687 == null && Hook.customMenus.getValue();
+            return LobbyTheme.selected() != LobbyTheme.Standard;
         } catch (Throwable t) {
             return false;
         }

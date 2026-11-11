@@ -34,15 +34,13 @@ extends Module {
     public static final BooleanSetting beatShake = new BooleanSetting(EncryptedString.of("Beat Shake"), true).setDescription(EncryptedString.of("The backdrop moves gently with the beat"));
     public static final NumberSetting shakeStrength = new NumberSetting(EncryptedString.of("Beat Shake Strength"), 0.0, 100.0, 50.0, 5.0).getValue(EncryptedString.of("How strongly the background reacts to the beat"));
     public static final NumberSetting guiSize = new NumberSetting(EncryptedString.of("GUI Size"), 70.0, 140.0, 100.0, 5.0).getValue(EncryptedString.of("Scale of the HookVisuals menu in percent"));
-    public static final BooleanSetting renderBackground = new BooleanSetting(EncryptedString.of("Background"), true).setDescription(EncryptedString.of("Dims the world behind Hook editor screens"));
     private final BooleanSetting preventClose = new BooleanSetting(EncryptedString.of("Prevent Close"), true).setDescription(EncryptedString.of("For servers with freeze plugins that don't let you open the GUI"));
-    public static final ModeSetting<AnimationMode> animationMode = new ModeSetting<AnimationMode>(EncryptedString.of("Animations"), AnimationMode.NORMAL, AnimationMode.class);
-    public static final BooleanSetting customMenus = new BooleanSetting(EncryptedString.of("Custom Menus"), true).setDescription(EncryptedString.of("Custom buttons, sliders and text fields in the menus before you join a world"));
+    public static final ModeSetting<hook.feature.LobbyTheme> lobbyTheme = new ModeSetting<hook.feature.LobbyTheme>(EncryptedString.of("Lobby Theme"), hook.feature.LobbyTheme.OverworldCastle, hook.feature.LobbyTheme.class).setDescription(EncryptedString.of("Background and buttons of the menus; Standard keeps vanilla"));
     public boolean shouldPreventClose;
 
     public Hook() {
         super(EncryptedString.of("HookVisuals"), EncryptedString.of("Settings for the client"), 344, Category.CLIENT);
-        this.addSettings(theme, uiSounds, uiVolume, halloweenMusic, halloweenVolume, beatShake, shakeStrength, guiSize, renderBackground, this.preventClose, animationMode, customMenus);
+        this.addSettings(theme, uiSounds, uiVolume, halloweenMusic, halloweenVolume, beatShake, shakeStrength, guiSize, this.preventClose, lobbyTheme);
     }
 
     @Override

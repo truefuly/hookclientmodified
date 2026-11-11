@@ -1,0 +1,13 @@
+layer sky.png 640 360 0.0 0.0 0 0
+layer aurora.png 1280 180 0.0 3.0 0 1
+layer far.png 720 360 6.0 0.0 0 0
+fx glow mid 590 172 1 1 4fd1a5 9
+fx sparkle mid 539 145 102 54 e8fff6 10
+fx beam mid 120 0 2 262 4fd1a5 0
+fx beam mid 250 0 2 259 4fd1a5 0
+fx beam mid 510 0 2 262 4fd1a5 0
+fx beam mid 640 0 2 265 4fd1a5 0
+layer mid.png 760 360 11.0 0.0 0 0
+fx rise near 0 200 800 100 6cf5c0 26
+fx scan - 0 0 640 360 4fd1a5 0
+layer near.png 800 360 14.0 0.0 0 0

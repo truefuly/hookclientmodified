@@ -1,0 +1,20 @@
+layer sky.png 640 360 0.0 0.0 0 0
+fx shooting - 0 0 640 120 f2f6ff 11
+layer aurora.png 1280 180 0.0 2.5 0 1
+layer clouds.png 1280 110 0.0 4.0 26 0
+layer far.png 720 360 6.0 0.0 0 0
+fx window mid 325 214 3 3 ffc76a 2
+fx window mid 376 214 3 3 ffc76a 2
+fx window mid 351 200 3 3 ffc76a 2
+fx window mid 351 210 3 3 ffc76a 2
+fx window mid 336 230 3 3 ffc76a 2
+fx window mid 364 230 3 3 ffc76a 2
+layer mid.png 760 360 11.0 0.0 0 0
+fx fall near 150 189 12 81 e6f0ff 9
+fx shimmer near 182 273 252 30 bfe4f0 14
+fx drop near 466 236 46 50 f0b4d2 14
+fx portal near 564 242 16 24 c889ff 0
+fx fire near 650 264 5 8 ff9a3c 0
+fx glow near 696 252 1 1 ffd27a 3
+fx flies near 20 250 760 70 e8fff0 22
+layer near.png 800 360 18.0 0.0 0 0

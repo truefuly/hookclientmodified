@@ -1,0 +1,18 @@
+layer sky.png 640 360 0.0 0.0 0 0
+layer aurora.png 1280 180 0.0 2.0 0 1
+fx snow - 0 0 640 360 f4f8ff 70
+layer far.png 720 360 6.0 0.0 0 0
+fx window mid 316 245 5 4 ffcf73 2
+fx window mid 329 245 5 4 ffcf73 2
+fx smoke mid 334 225 1 1 c8d0dc 4
+fx window mid 368 242 5 4 ffcf73 2
+fx window mid 381 242 5 4 ffcf73 2
+fx smoke mid 386 222 1 1 c8d0dc 4
+fx window mid 420 248 5 4 ffcf73 2
+fx window mid 433 248 5 4 ffcf73 2
+fx smoke mid 438 228 1 1 c8d0dc 4
+layer mid.png 760 360 11.0 0.0 0 0
+fx shimmer near 244 292 222 22 ffffff 10
+fx fire near 660 276 5 8 ff9a3c 0
+fx glow near 496 264 1 1 ffd27a 3
+layer near.png 800 360 18.0 0.0 0 0

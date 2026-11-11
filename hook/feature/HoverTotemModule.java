@@ -72,7 +72,8 @@ extends Module {
             --this.remainingDelay;
             return;
         }
-        int hoveredSlot = focused.method_34266();
+        // the click needs the screen slot id; the inventory index differs for hotbar slots (0-8 are crafting/armor ids)
+        int hoveredSlot = focused.field_7874;
         int syncId = ((class_1723)inventoryScreen.method_17577()).field_7763;
         if (!this.mc.field_1724.method_6079().method_31574(class_1802.field_8288)) {
             this.equipOffhandTotem(syncId, hoveredSlot);

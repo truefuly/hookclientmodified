@@ -1,0 +1,18 @@
+layer sky.png 640 360 0.0 0.0 0 0
+fx rise - 0 120 640 240 c98bff 30
+layer far.png 720 360 6.0 0.0 0 0
+fx window mid 430 239 4 5 ffe48a 2
+fx window mid 430 209 4 5 ffe48a 2
+fx window mid 430 187 4 5 ffe48a 2
+fx window mid 430 165 4 5 ffe48a 2
+fx window mid 170 233 4 5 ffe48a 2
+fx window mid 170 203 4 5 ffe48a 2
+fx window mid 170 181 4 5 ffe48a 2
+fx window mid 170 159 4 5 ffe48a 2
+layer mid.png 760 360 11.0 0.0 0 0
+fx crystal near 131 159 10 10 f0a8ff 0
+fx beam near 131 0 2 154 d48cff 0
+fx crystal near 651 139 10 10 f0a8ff 0
+fx beam near 651 0 2 134 d48cff 0
+fx sparkle near 388 260 24 20 c070ff 6
+layer near.png 800 360 18.0 0.0 0 0

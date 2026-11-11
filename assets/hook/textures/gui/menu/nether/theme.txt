@@ -1,0 +1,12 @@
+layer sky.png 640 360 0.0 0.0 0 0
+fx ash - 0 0 640 360 6a5a58 40
+layer far.png 720 360 6.0 0.0 0 0
+fx window mid 372 196 4 6 ff7a2a 2
+fx window mid 384 196 4 6 ff7a2a 2
+layer mid.png 760 360 11.0 0.0 0 0
+fx lava near 230 288 290 40 ffd27a 12
+fx glow near 375 288 1 1 ff6a1c 9
+fx portal near 574 246 16 24 c889ff 0
+fx fire near 190 272 5 8 7fe8ff 0
+fx rise near 230 228 290 60 ffb13d 18
+layer near.png 800 360 18.0 0.0 0 0
