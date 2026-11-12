@@ -5,8 +5,9 @@ import net.minecraft.class_332;
 
 /**
  * Resource-loading screen in the client's style: the selected lobby theme plays in the background, with the
- * HookVisuals title and a progress bar in the client accent colour on top. The Standard lobby theme keeps
- * the vanilla Mojang screen.
+ * HookVisuals title and a progress bar in the client accent colour on top. In a world (server resource packs,
+ * F3+T) the background stays see-through so the game remains visible. The Standard lobby theme keeps the
+ * vanilla Mojang screen.
  */
 public final class ThemedSplash {
     private static boolean failed;
@@ -30,9 +31,9 @@ public final class ThemedSplash {
      * @param barAlpha opacity of the progress bar and texts (fades out once loading is done)
      * @return false if drawing failed (vanilla takes over from then on)
      */
-    public static boolean render(class_332 ctx, float alpha, float progress, float barAlpha) {
+    public static boolean render(class_332 ctx, float alpha, float progress, float barAlpha, boolean seeThrough) {
         try {
-            draw(ctx, alpha, progress, barAlpha);
+            draw(ctx, alpha, progress, barAlpha, seeThrough);
             return true;
         } catch (Throwable t) {
             failed = true;
@@ -41,11 +42,16 @@ public final class ThemedSplash {
         }
     }
 
-    private static void draw(class_332 ctx, float alpha, float progress, float barAlpha) {
+    private static void draw(class_332 ctx, float alpha, float progress, float barAlpha, boolean seeThrough) {
         if (alpha <= 0.0f) return;
-        // background: the lobby theme, faded with the overlay
-        ctx.method_25294(0, 0, ctx.method_51421(), ctx.method_51443(), UiRenderer.argb(alpha, 9, 10, 14));
-        MenuBackground.render(ctx, alpha);
+        if (seeThrough) {
+            // in a world: only a light tint, the game stays visible behind the loading bar
+            ctx.method_25294(0, 0, ctx.method_51421(), ctx.method_51443(), UiRenderer.argb(0.30f * alpha, 6, 7, 10));
+        } else {
+            // background: the lobby theme, faded with the overlay
+            ctx.method_25294(0, 0, ctx.method_51421(), ctx.method_51443(), UiRenderer.argb(alpha, 9, 10, 14));
+            MenuBackground.render(ctx, alpha);
+        }
 
         class_310 mc = class_310.method_1551();
         float s = Math.max(1.0f, (float) mc.method_22683().method_4495());

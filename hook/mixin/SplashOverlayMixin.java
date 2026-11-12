@@ -35,8 +35,15 @@ public abstract class SplashOverlayMixin {
         if (this.field_18219 && this.field_18220 == -1L) this.field_18220 = now;
         float fadeOut = this.field_17771 > -1L ? (now - this.field_17771) / 1000.0f : -1.0f;
         float fadeIn = this.field_18220 > -1L ? (now - this.field_18220) / 500.0f : -1.0f;
+        // on a server / in a world: keep the world (and any open screen) visible behind a light tint
+        boolean seeThrough = this.field_18219 && client.field_1687 != null;
         float alpha;
-        if (fadeOut >= 1.0f) {
+        if (seeThrough && fadeOut < 1.0f) {
+            if (client.field_1755 != null) client.field_1755.method_47413(ctx, mouseX, mouseY, delta);
+            else client.field_1705.method_72738();
+            alpha = Math.max(0.0f, Math.min(1.0f, fadeIn));
+            ctx.method_71048();
+        } else if (fadeOut >= 1.0f) {
             if (client.field_1755 != null) client.field_1755.method_47413(ctx, 0, 0, delta);
             else client.field_1705.method_72738();
             alpha = 1.0f - Math.max(0.0f, Math.min(1.0f, fadeOut - 1.0f));
@@ -51,7 +58,7 @@ public abstract class SplashOverlayMixin {
         }
         this.field_17770 = Math.max(0.0f, Math.min(1.0f, this.field_17770 * 0.95f + this.field_17767.method_18229() * 0.050000012f));
         float barAlpha = fadeOut < 1.0f ? 1.0f - Math.max(0.0f, Math.min(1.0f, fadeOut)) : 0.0f;
-        if (!ThemedSplash.render(ctx, alpha, this.field_17770, barAlpha)) {
+        if (!ThemedSplash.render(ctx, alpha, this.field_17770, barAlpha, seeThrough)) {
             return; // drawing failed: let vanilla draw this frame (and all later ones)
         }
         if (fadeOut >= 2.0f) client.method_18502(null);
