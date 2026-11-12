@@ -92,7 +92,8 @@
     "VanillaHudCaptureMixin",
     "ResourcePackBlockMixin",
     "HitGlowMixins",
-    "AttackHookMixin"
+    "AttackHookMixin",
+    "SplashOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 1

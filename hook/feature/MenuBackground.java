@@ -62,6 +62,23 @@ public final class MenuBackground {
         });
     }
 
+    private static float alpha = 1.0f;
+
+    /** Same as {@link #render(class_332)} but faded: every layer and effect is drawn with the given opacity. */
+    public static boolean render(class_332 ctx, float opacity) {
+        alpha = Math.max(0.0f, Math.min(1.0f, opacity));
+        try {
+            return render(ctx);
+        } finally {
+            alpha = 1.0f;
+        }
+    }
+
+    private static int faded(int color) {
+        if (alpha >= 1.0f) return color;
+        return Math.round((color >>> 24) * alpha) << 24 | (color & 0xFFFFFF);
+    }
+
     /** @return false when the theme draws nothing (Standard), so vanilla stays. */
     public static boolean render(class_332 ctx) {
         LobbyTheme lobby = LobbyTheme.selected();
@@ -113,13 +130,43 @@ public final class MenuBackground {
         return true;
     }
 
+    private static final Map<class_2960, class_2960> DIRECT = new HashMap<>();
+
+    /**
+     * The layer as a texture uploaded straight from the mod jar. It does not go through the resource manager, so it
+     * also draws while resources reload (loading screen) and resource packs cannot break the menu art.
+     */
+    private static class_2960 direct(Layer layer) {
+        return DIRECT.computeIfAbsent(layer.id, id -> {
+            try (InputStream in = MenuBackground.class.getResourceAsStream("/assets/hook/" + id.method_12832())) {
+                if (in == null) return id;
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(in);
+                int w = img.getWidth(), h = img.getHeight();
+                net.minecraft.class_1011 image = new net.minecraft.class_1011(w, h, false);
+                for (int y = 0; y < h; y++) {
+                    for (int x = 0; x < w; x++) {
+                        image.method_61941(x, y, img.getRGB(x, y));
+                    }
+                }
+                class_2960 tid = class_2960.method_60655("hook", "menu_direct/" + id.method_12832().replace(".png", ""));
+                net.minecraft.class_310.method_1551().method_1531().method_4616(tid, new net.minecraft.class_1043(() -> "Hook menu " + layer.name, image));
+                return tid;
+            } catch (Throwable t) {
+                System.err.println("Hook: could not load menu layer " + id + ": " + t);
+                return id;
+            }
+        });
+    }
+
     private static void draw(class_332 ctx, Layer layer, float x, float y, int color) {
+        class_2960 tex = direct(layer);
         ctx.method_51448().pushMatrix();
         ctx.method_51448().translate(x, y);
+        if (alpha < 1.0f) color = faded(color);
         if (color == -1) {
-            ctx.method_25290(class_10799.field_56883, layer.id, 0, 0, 0.0f, 0.0f, layer.w, layer.h, layer.w, layer.h);
+            ctx.method_25290(class_10799.field_56883, tex, 0, 0, 0.0f, 0.0f, layer.w, layer.h, layer.w, layer.h);
         } else {
-            ctx.method_25293(class_10799.field_56883, layer.id, 0, 0, 0.0f, 0.0f, layer.w, layer.h, layer.w, layer.h, layer.w, layer.h, color);
+            ctx.method_25293(class_10799.field_56883, tex, 0, 0, 0.0f, 0.0f, layer.w, layer.h, layer.w, layer.h, layer.w, layer.h, color);
         }
         ctx.method_51448().popMatrix();
     }
@@ -163,7 +210,7 @@ public final class MenuBackground {
     }
 
     private static void fill(class_332 ctx, int x, int y, int w, int h, int color) {
-        ctx.method_25294(x, y, x + w, y + h, color);
+        ctx.method_25294(x, y, x + w, y + h, faded(color));
     }
 
     private static float flicker(float t, float seed) {
