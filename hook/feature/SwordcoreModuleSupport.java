@@ -112,6 +112,7 @@ public final class SwordcoreModuleSupport {
         if (config == null) return;
         config.enabled = true;
         config.chatLogs = false;
+        config.freeHitting = true; // never block swings at the air
         config.movementSyncing = false;
         config.smartSword = false;
         config.shieldDisable = false;
@@ -128,6 +129,8 @@ public final class SwordcoreModuleSupport {
         if (config == null || manager == null) return;
         config.enabled = true;
         config.chatLogs = false;
+        // Swordcore's "free hitting" off = swings at the air get cancelled; keep vanilla behaviour
+        config.freeHitting = true;
         config.autoWTapAutosprint = false;
 
         MovementSyncModule sync = (MovementSyncModule)manager.getModuleByClass(MovementSyncModule.class);
