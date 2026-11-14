@@ -169,8 +169,24 @@ public final class NametagsModule extends Module {
     }
 
     private void drawTag(class_332 ctx, UiRenderer ui, float gui, Tag tag) {
+        // The UI renderer snaps shapes to whole pixels and rasterizes text at whole pixel sizes. Drawing the tag right
+        // at its projected spot and exact size made it hop pixel by pixel and step in size while walking. Instead the
+        // tag is laid out at a stable size around (0,0) and the matrix moves it to the exact sub-pixel position and
+        // scales it to the exact size, so it glides smoothly.
+        float real = gui * this.sizeAt(tag.distance(), tag.zoom());
+        float unit = Math.max(0.25f, (float) Math.ceil(real * 4.0f) / 4.0f);
+        ctx.method_51448().pushMatrix();
+        ctx.method_51448().translate(tag.x(), tag.y());
+        ctx.method_51448().scale(real / unit);
+        try {
+            this.drawTagAt(ctx, ui, new Tag(tag.entity(), tag.distance(), 0.0f, 0.0f, tag.zoom()), unit);
+        } finally {
+            ctx.method_51448().popMatrix();
+        }
+    }
+
+    private void drawTagAt(class_332 ctx, UiRenderer ui, Tag tag, float unit) {
         class_1297 entity = tag.entity();
-        float unit = gui * this.sizeAt(tag.distance(), tag.zoom());
         float textPx = 7.5f * unit;
         float smallPx = 5.5f * unit;
         float gap = 4.0f * unit;
