@@ -27,6 +27,7 @@ import hook.feature.ForceRenderModule;
 import hook.feature.NoParticlesModule;
 import hook.feature.AntiBreakModule;
 import hook.feature.AutoMinerModule;
+import hook.feature.AutoBreedModule;
 import hook.feature.AutoTpaModule;
 import hook.feature.XbowCartModule;
 import hook.feature.InstaCartModule;
@@ -129,6 +130,7 @@ public final class ModuleManager {
         this.in(Category.MISC, new ResourceBlockerModule());
         this.in(Category.MISC, new AntiBreakModule());
         this.in(Category.MISC, new AutoMinerModule());
+        this.in(Category.MISC, new AutoBreedModule());
         // Render: seeing things in the world
         this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());

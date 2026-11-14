@@ -177,7 +177,9 @@ public final class SettingsManager {
                         SettingsManager.validateSetting(var7, var8);
                     }
                     catch (RuntimeException var10) {
-                        throw new IllegalArgumentException("Invalid value: " + String.valueOf(var3.getName()) + " / " + String.valueOf(var7.getName()));
+                        // a setting changed its type or range in an update: drop just that value (it falls back to
+                        // the default) instead of rejecting the whole config and losing every other setting
+                        var5.remove(var7.getName().toString());
                     }
                 }
             }
@@ -364,7 +366,12 @@ public final class SettingsManager {
             for (Setting var17 : var12.getSettings()) {
                 JsonElement var9 = var5.get(var17.getName().toString());
                 if (var9 == null) continue;
-                SettingsManager.set(var17, var9, var12);
+                try {
+                    SettingsManager.set(var17, var9, var12);
+                }
+                catch (RuntimeException ignored) {
+                    // value from an older version that doesn't fit this setting anymore: keep the default
+                }
             }
         }
         if (var1.has("_layout")) {
