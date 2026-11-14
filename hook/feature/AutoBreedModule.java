@@ -112,6 +112,7 @@ public final class AutoBreedModule extends Module {
             if (filter == AgeFilter.Adult && baby || filter == AgeFilter.Baby && !baby) continue;
             double dist = this.mc.field_1724.method_5739(animal);
             if (dist > maxDist || dist >= best) continue;
+            if (!this.mc.field_1724.method_6057(animal)) continue; // only with a clear line of sight, never through blocks
             Long last = this.fed.get(animal.method_5667());
             if (last != null && this.tick - last < refeedTicks) continue;
             int slot = this.foodFor(animal, useHand);
