@@ -103,7 +103,8 @@
     "ForceRenderBlockEntityMixin",
     "AutoMinerBreakMixin",
     "NoRenderMixin",
-    "NoRenderEntityRendererMixin"
+    "NoRenderEntityRendererMixin",
+    "NoRenderTickMixin"
   ],
   "injectors": {
     "defaultRequire": 1

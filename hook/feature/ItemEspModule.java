@@ -44,7 +44,7 @@ public final class ItemEspModule extends Module {
         float tickProgress = camera.method_55437();
         int index = 0;
         for (class_1297 entity : this.mc.field_1687.method_18112()) {
-            if (!(entity instanceof class_1542 item) || item.method_31481()) continue;
+            if (!(entity instanceof class_1542 item) || item.method_31481() || NoRenderModule.hides(item)) continue;
             class_1792 type = item.method_6983().method_7909();
             if (this.filter.getValue() == Filter.Selected) {
                 class_2960 id = class_7923.field_41178.method_10221(type);

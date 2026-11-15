@@ -141,6 +141,7 @@ public final class NametagsModule extends Module {
         float zoom = this.zoomFactor();
         List<Tag> tags = new ArrayList<>();
         for (class_1297 entity : this.mc.field_1687.method_18112()) {
+            if (NoRenderModule.hides(entity)) continue;
             if (!targets(entity)) continue;
             class_243 feet = entity.method_30950(event.tickDelta);
             double hx = feet.field_1352, hy = feet.field_1351 + entity.method_17682() + (entity instanceof class_1542 ? 0.2 : 0.35), hz = feet.field_1350;

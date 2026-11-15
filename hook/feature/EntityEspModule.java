@@ -53,6 +53,7 @@ public final class EntityEspModule extends Module {
         double grow = this.expand.getValue();
         int index = 0;
         for (class_1297 entity : this.mc.field_1687.method_18112()) {
+            if (NoRenderModule.hides(entity)) continue;
             if (entity == this.mc.field_1724 || entity == this.mc.method_1560() || entity.method_31481()) continue;
             if (entity instanceof class_1309 living && !living.method_5805()) continue;
             if (!this.invisible.getValue() && entity.method_5767()) continue;
