@@ -40,7 +40,7 @@ import net.minecraft.class_4587;
 public final class TrajectoriesModule extends Module {
     private final RgbSetting color = new RgbSetting(EncryptedString.of("Color"), 0xFF7FD4FF);
     private final RgbSetting hitColor = new RgbSetting(EncryptedString.of("Hit Color"), 0xFFFF5A6E);
-    private final NumberSetting width = new NumberSetting(EncryptedString.of("Line Width"), 1.0, 6.0, 2.0, 0.5).getValue(EncryptedString.of("Thickness of the flight path"));
+    private final NumberSetting width = new NumberSetting(EncryptedString.of("Line Width"), 1.0, 6.0, 1.5, 0.5).getValue(EncryptedString.of("Thickness of the flight path"));
     private final BooleanSetting hitBox = new BooleanSetting(EncryptedString.of("Show Hit Spot"), true).setDescription(EncryptedString.of("Marks the block or entity it is going to hit"));
     private final BooleanSetting always = new BooleanSetting(EncryptedString.of("Bow Always"), true).setDescription(EncryptedString.of("Shows the bow path even before you pull it back (as full power)"));
     private final BooleanSetting flying = new BooleanSetting(EncryptedString.of("Flying Projectiles"), true).setDescription(EncryptedString.of("Also shows where arrows and pearls that are already in the air will land"));
@@ -118,10 +118,11 @@ public final class TrajectoriesModule extends Module {
     }
 
     private void simulate(class_243 pos, class_243 vel, double gravity, double drag, double waterDrag, class_1297 shooter, boolean own) {
-        Color c = new Color(this.color.getArgb(), true);
-        Color hc = new Color(this.hitColor.getArgb(), true);
-        float w = this.width.getFloatValue();
         var world = this.mc.field_1687;
+        List<class_243> pts = new ArrayList<>();
+        pts.add(pos);
+        class_243 hitPoint = null, hitNormal = null;
+        class_238 hitEntityBox = null;
         for (int i = 0; i < 300; i++) {
             class_243 next = pos.method_1019(vel);
             class_3965 block = world.method_17742(new class_3959(pos, next, class_3959.class_3960.field_17558, class_3959.class_242.field_1348, shooter));
@@ -140,26 +141,80 @@ public final class TrajectoriesModule extends Module {
                     if (d < bestD) { bestD = d; hitEntity = e; entityPoint = hit.get(); }
                 }
             }
-            if (hitEntity != null) {
-                this.lines.add(new RenderUtils.ColoredLine(pos, entityPoint, c, w));
-                if (this.hitBox.getValue()) {
-                    class_238 b = hitEntity.method_5829();
-                    RenderUtils.addBoxOutline(this.lines, b.field_1323, b.field_1322, b.field_1321, b.field_1320, b.field_1325, b.field_1324, hc, w);
-                }
-                return;
-            }
-            this.lines.add(new RenderUtils.ColoredLine(pos, end, c, w));
+            if (hitEntity != null) { pts.add(entityPoint); hitEntityBox = hitEntity.method_5829(); break; }
+            pts.add(end);
             if (hitBlock) {
-                if (this.hitBox.getValue()) {
-                    double s = 0.15;
-                    RenderUtils.addBoxOutline(this.lines, end.field_1352 - s, end.field_1351 - s, end.field_1350 - s, end.field_1352 + s, end.field_1351 + s, end.field_1350 + s, hc, w);
-                }
-                return;
+                hitPoint = end;
+                var side = block.method_17780();
+                hitNormal = new class_243(side.method_10148(), side.method_10164(), side.method_10165());
+                break;
             }
             pos = next;
             boolean inWater = !world.method_8316(net.minecraft.class_2338.method_49638(pos)).method_15769();
             vel = vel.method_1021(inWater ? waterDrag : drag).method_1031(0, -gravity, 0);
-            if (pos.field_1351 < world.method_31607() - 16) return;
+            if (pos.field_1351 < world.method_31607() - 16) break;
         }
+        this.drawPath(pts);
+        float w = this.width.getFloatValue();
+        int hc = this.hitColor.getArgb();
+        if (!this.hitBox.getValue()) return;
+        if (hitEntityBox != null) {
+            RenderUtils.addBoxOutline(this.lines, hitEntityBox.field_1323, hitEntityBox.field_1322, hitEntityBox.field_1321, hitEntityBox.field_1320, hitEntityBox.field_1325, hitEntityBox.field_1324, withAlpha(hc, 0.9), w);
+        } else if (hitPoint != null) {
+            this.ring(hitPoint.method_1019(hitNormal.method_1021(0.02)), hitNormal, 0.35, withAlpha(hc, 0.95), w);
+            this.ring(hitPoint.method_1019(hitNormal.method_1021(0.02)), hitNormal, 0.12, withAlpha(hc, 0.95), w);
+            this.ring(hitPoint.method_1019(hitNormal.method_1021(0.02)), hitNormal, 0.35, withAlpha(hc, 0.25), w * 3.0f);
+        }
+    }
+
+    /** Smooth Catmull-Rom curve through the tick points, with a soft glow underneath and a fade-in near the hand. */
+    private void drawPath(List<class_243> pts) {
+        if (pts.size() < 2) return;
+        int c = this.color.getArgb();
+        float w = this.width.getFloatValue();
+        List<class_243> smooth = new ArrayList<>();
+        int sub = 8;
+        for (int i = 0; i < pts.size() - 1; i++) {
+            class_243 p0 = pts.get(Math.max(0, i - 1)), p1 = pts.get(i), p2 = pts.get(i + 1), p3 = pts.get(Math.min(pts.size() - 1, i + 2));
+            for (int s = 0; s < sub; s++) smooth.add(catmull(p0, p1, p2, p3, s / (double) sub));
+        }
+        smooth.add(pts.get(pts.size() - 1));
+        double total = 0;
+        for (int i = 1; i < smooth.size(); i++) total += smooth.get(i).method_1022(smooth.get(i - 1));
+        double run = 0;
+        for (int i = 1; i < smooth.size(); i++) {
+            class_243 a = smooth.get(i - 1), b = smooth.get(i);
+            run += b.method_1022(a);
+            double fade = Math.min(1.0, run / 1.5); // fades in over the first 1.5 blocks
+            this.lines.add(new RenderUtils.ColoredLine(a, b, withAlpha(c, 0.22 * fade), w * 3.5f));
+            this.lines.add(new RenderUtils.ColoredLine(a, b, withAlpha(c, fade), w));
+        }
+    }
+
+    private void ring(class_243 center, class_243 normal, double radius, Color c, float w) {
+        class_243 up = Math.abs(normal.field_1351) > 0.9 ? new class_243(1, 0, 0) : new class_243(0, 1, 0);
+        class_243 u = normal.method_1036(up).method_1029();
+        class_243 v = normal.method_1036(u).method_1029();
+        int seg = 40;
+        class_243 prev = null;
+        for (int i = 0; i <= seg; i++) {
+            double t = Math.PI * 2 * i / seg;
+            class_243 pt = center.method_1019(u.method_1021(Math.cos(t) * radius)).method_1019(v.method_1021(Math.sin(t) * radius));
+            if (prev != null) this.lines.add(new RenderUtils.ColoredLine(prev, pt, c, w));
+            prev = pt;
+        }
+    }
+
+    private static class_243 catmull(class_243 p0, class_243 p1, class_243 p2, class_243 p3, double t) {
+        double t2 = t * t, t3 = t2 * t;
+        return new class_243(
+                0.5 * (2 * p1.field_1352 + (-p0.field_1352 + p2.field_1352) * t + (2 * p0.field_1352 - 5 * p1.field_1352 + 4 * p2.field_1352 - p3.field_1352) * t2 + (-p0.field_1352 + 3 * p1.field_1352 - 3 * p2.field_1352 + p3.field_1352) * t3),
+                0.5 * (2 * p1.field_1351 + (-p0.field_1351 + p2.field_1351) * t + (2 * p0.field_1351 - 5 * p1.field_1351 + 4 * p2.field_1351 - p3.field_1351) * t2 + (-p0.field_1351 + 3 * p1.field_1351 - 3 * p2.field_1351 + p3.field_1351) * t3),
+                0.5 * (2 * p1.field_1350 + (-p0.field_1350 + p2.field_1350) * t + (2 * p0.field_1350 - 5 * p1.field_1350 + 4 * p2.field_1350 - p3.field_1350) * t2 + (-p0.field_1350 + 3 * p1.field_1350 - 3 * p2.field_1350 + p3.field_1350) * t3));
+    }
+
+    private static Color withAlpha(int argb, double mul) {
+        int a = (int) Math.round(((argb >>> 24) & 0xFF) * Math.max(0, Math.min(1, mul)));
+        return new Color((argb >> 16) & 0xFF, (argb >> 8) & 0xFF, argb & 0xFF, a);
     }
 }
