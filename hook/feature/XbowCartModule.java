@@ -141,30 +141,53 @@ public final class XbowCartModule extends Module {
         if (this.skipIfCart.getValue() && !this.mc.field_1687.method_8390(net.minecraft.class_1688.class, new net.minecraft.class_238(rail).method_1014(0.3), e -> e.method_5805()).isEmpty())
             return this.fail("there is already a cart");
 
-        CartPlanner.Plan plan = new CartPlanner.Plan();
-        if (!CartPlanner.prepareRail(plan, rail, railClick)) return this.fail("can't place a rail there");
+        CartPlanner.Plan plan0 = new CartPlanner.Plan();
+        if (!CartPlanner.prepareRail(plan0, rail, railClick)) return this.fail("can't place a rail there");
 
-        // try aim points over the cart; the first whose arrow reaches the cart through a usable fire cell wins
+        // dense search over the whole cart box: every aim point whose arrow reaches the cart through a usable fire
+        // cell; flat rail first, then ramp rails (cart half a block higher) so steep / odd angles work too
         class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
-        var box = CartPlanner.cartBox(rail);
-        double cx = (box.field_1323 + box.field_1320) / 2, cz = (box.field_1321 + box.field_1324) / 2;
-        double[] ys = {0.38, 0.25, 0.52, 0.15, 0.62, 0.08, 0.68};
-        double[] offs = {0, 0.2, -0.2, 0.35, -0.35, 0.1, -0.1, 0.42, -0.42};
         boolean found = false;
-        outer:
-        for (double fy : ys) for (double ox : offs) for (double oz : offs) {
-            class_243 point = new class_243(cx + ox, box.field_1322 + fy, cz + oz);
-            float[] a = CartPlanner.aimAt(start, point);
-            class_243 vel = CartPlanner.dir(a[0], a[1]).method_1021(3.15);
-            CartPlanner.Trace tr = CartPlanner.trace(start, vel, box);
-            if (!tr.hitsCart) continue;
-            if (this.useFire.getValue() && !CartPlanner.chooseFire(plan, tr, false)) continue;
-            plan.aim = a;
-            found = true;
-            break outer;
+        java.util.List<Object[]> layouts = new java.util.ArrayList<>();
+        layouts.add(new Object[]{plan0, CartPlanner.cartBox(rail)});
+        CartPlanner.Plan plan = plan0;
+        if (railClick != null) for (boolean pb : new boolean[]{false, true}) for (class_2350 d : CartPlanner.HORIZONTAL) {
+            CartPlanner.Plan sp = new CartPlanner.Plan();
+            if (CartPlanner.prepareSlope(sp, rail, d, pb)) layouts.add(new Object[]{sp, CartPlanner.cartBox(rail, true)});
         }
+        outer:
+        for (Object[] lay : layouts) {
+            CartPlanner.Plan cand = (CartPlanner.Plan) lay[0];
+            var box = (net.minecraft.class_238) lay[1];
+            double cx = (box.field_1323 + box.field_1320) / 2, cz = (box.field_1321 + box.field_1324) / 2;
+            double h = box.field_1325 - box.field_1322;
+            for (double inset : new double[]{0.15, 0.06}) {
+                CartPlanner.INSET = inset;
+                for (int iy = 0; iy <= 12; iy++) {
+                    double fy = h * (0.5 + ((iy % 2 == 0) ? 1 : -1) * ((iy + 1) / 2) * 0.075);
+                    if (fy < 0.03 || fy > h - 0.03) continue;
+                    for (int ix = 0; ix <= 12; ix++) for (int iz = 0; iz <= 12; iz++) {
+                        double ox = ((ix % 2 == 0) ? 1 : -1) * ((ix + 1) / 2) * 0.07;
+                        double oz = ((iz % 2 == 0) ? 1 : -1) * ((iz + 1) / 2) * 0.07;
+                        class_243 point = new class_243(cx + ox, box.field_1322 + fy, cz + oz);
+                        float[] a = CartPlanner.aimAt(start, point);
+                        class_243 vel = CartPlanner.dir(a[0], a[1]).method_1021(3.15);
+                        CartPlanner.Trace tr = CartPlanner.trace(start, vel, box);
+                        if (!tr.hitsCart) continue;
+                        if (cand.rampBlock != null && CartPlanner.pathEnters(tr, cand.rampBlock)) continue;
+                        if (this.useFire.getValue() && !CartPlanner.chooseFire(cand, tr, false)) continue;
+                        cand.aim = a;
+                        plan = cand;
+                        found = true;
+                        break outer;
+                    }
+                }
+            }
+        }
+        CartPlanner.INSET = 0.06;
         if (!found) return this.fail(CartPlanner.igniter() == null ? "no flint and steel / fire charge / lava bucket" : "no spot for fire between you and the cart, step back a bit");
 
+        final CartPlanner.Plan fp = plan;
         if (CartTest.ENABLED) {
             CartTest.planFire = plan.fire;
             CartTest.planRail = plan.rail;
@@ -175,10 +198,10 @@ public final class XbowCartModule extends Module {
         final class_1268 shootHand = hand;
         final int crossbowSlot = hand == class_1268.field_5808 ? p.method_31548().method_67532() : -1;
         this.queue.clear();
-        this.queue.add(() -> CartPlanner.placeRail(plan));
-        this.queue.add(() -> CartPlanner.placeCart(plan));
-        if (plan.fire != null) this.queue.add(() -> CartPlanner.placeFire(plan));
-        this.queue.add(() -> this.shoot(plan, shootHand, crossbowSlot));
+        this.queue.add(() -> CartPlanner.placeRail(fp));
+        this.queue.add(() -> CartPlanner.placeCart(fp));
+        if (plan.fire != null) this.queue.add(() -> CartPlanner.placeFire(fp));
+        this.queue.add(() -> this.shoot(fp, shootHand, crossbowSlot));
         this.nextAt = p.field_6012;
         if (this.stepDelay.getIntValue() == 0) {
             while (!this.queue.isEmpty()) this.queue.poll().run();
