@@ -569,7 +569,7 @@ public final class HookUiController {
             }
             this.hitClip = null;
             var1.popClip();
-            this.scrollbar(var1, var12 + var14 + this.d(4.0f), var13, var15, var21, this.gridMax, var20);
+            this.scrollbar(var1, var12 + var14 + this.d(4.0f), var13, var15, var21, this.gridMax, var20, this.gridScroll);
         }
     }
 
@@ -759,7 +759,7 @@ public final class HookUiController {
         }
         this.hitClip = null;
         var1.popClip();
-        this.scrollbar(var1, var37 + var26 + this.d(4.0f), var38, var27, var40, this.pageMax, var29);
+        this.scrollbar(var1, var37 + var26 + this.d(4.0f), var38, var27, var40, this.pageMax, var29, this.pageScroll);
     }
 
     private boolean isClient(Module var1) {
@@ -1756,13 +1756,39 @@ public final class HookUiController {
         }
     }
 
-    private void scrollbar(UiRenderer var1, float var2, float var3, float var4, float var5, float var6, float var7) {
+    private float[] barDrag;
+    private float barTrackY, barTrackH, barThumbH, barMax, barGrab;
+
+    private void scrollbar(UiRenderer var1, float var2, float var3, float var4, float var5, float var6, float var7, float[] state) {
         if (var6 > 0.5f) {
             float var8 = var4 / var7;
             float var9 = Math.max(this.d(30.0f), var4 * var8);
             float var10 = var3 + (var4 - var9) * (var5 / var6);
-            var1.round(var2, var10, this.d(4.0f), var9, this.d(2.0f), UiRenderer.white(0.18f));
+            boolean active = this.barDrag == state;
+            boolean hover = this.mx >= var2 - this.d(4.0f) && this.mx < var2 + this.d(8.0f) && this.my >= var3 && this.my < var3 + var4;
+            var1.round(var2, var10, this.d(4.0f), var9, this.d(2.0f), UiRenderer.white(active ? 0.42f : hover ? 0.3f : 0.18f));
+            final float thumbY = var10, thumbH = var9, max = var6;
+            // grab the thumb (or click the track to jump there) and drag to scroll
+            this.hit(var2 - this.d(4.0f), var3, this.d(12.0f), var4, b -> {
+                if (b != 0) return;
+                this.barDrag = state;
+                this.barTrackY = var3;
+                this.barTrackH = var4;
+                this.barThumbH = thumbH;
+                this.barMax = max;
+                boolean onThumb = this.my >= thumbY && this.my < thumbY + thumbH;
+                this.barGrab = onThumb ? (float) this.my - thumbY : thumbH / 2.0f;
+                this.applyBarDrag();
+            });
         }
+    }
+
+    private void applyBarDrag() {
+        if (this.barDrag == null) return;
+        float free = Math.max(1.0f, this.barTrackH - this.barThumbH);
+        float t = UiEasing.clamp(((float) this.my - this.barGrab - this.barTrackY) / free, 0.0f, 1.0f);
+        this.barDrag[1] = t * this.barMax;
+        this.barDrag[0] = this.barDrag[1];
     }
 
     private float scroll(float[] var1, float var2) {
@@ -1909,6 +1935,7 @@ public final class HookUiController {
             this.sliding = null;
         }
         this.colorDrag = 0;
+        this.barDrag = null;
     }
 
     public void mouseDragged(double var1, double var3) {
@@ -1916,6 +1943,7 @@ public final class HookUiController {
         this.my = var3;
         this.applySlide();
         this.applyColorDrag();
+        this.applyBarDrag();
     }
 
     public void mouseScrolled(double var1, double var3, double var5) {
