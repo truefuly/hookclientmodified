@@ -99,7 +99,8 @@
     "AntiBreakMixin",
     "NoParticlesMixin",
     "ForceRenderSodiumMixin",
-    "AutoMinerBreakMixin"
+    "AutoMinerBreakMixin",
+    "NoRenderMixin"
   ],
   "injectors": {
     "defaultRequire": 1

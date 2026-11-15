@@ -147,6 +147,7 @@ public final class ModuleManager {
         this.in(Category.RENDER, new NoFogModule());
         this.in(Category.RENDER, new ForceRenderModule());
         this.in(Category.RENDER, new NoParticlesModule());
+        this.in(Category.RENDER, new hook.feature.NoRenderModule());
         this.in(Category.RENDER, new HitGlowModule());
         this.a(new VerseFallModuleBridge("HUD Lyrics", "Shows the lyrics of the current song on your HUD.", "HUD Lyrics"));
         this.safe("3D Character", Character3dModule::new);
