@@ -18,11 +18,13 @@ import java.awt.Color;
 public final class NoRenderModule extends Module {
     private static NoRenderModule instance;
     private final StorageBlocksSetting entities = createList();
+    private final StorageBlocksSetting items = createItemList();
 
     public NoRenderModule() {
         super(EncryptedString.of("No Render"), EncryptedString.of("Stops your client from rendering the entities you select"), -1, Category.RENDER);
         this.entities.setDescription(EncryptedString.of("Ticked entities are not rendered"));
-        this.addSettings(this.entities);
+        this.items.setDescription(EncryptedString.of("Dropped items of these types are not rendered"));
+        this.addSettings(this.entities, this.items);
         instance = this;
     }
 
@@ -31,6 +33,11 @@ public final class NoRenderModule extends Module {
         NoRenderModule m = instance;
         if (m == null || !m.isEnabled() || entity == null) return false;
         if (entity == m.mc.field_1724 || entity == m.mc.method_1560()) return false;
+        if (entity instanceof net.minecraft.class_1542 dropped) {
+            class_2960 itemId = class_7923.field_41178.method_10221(dropped.method_6983().method_7909());
+            StorageBlocksSetting.Entry ie = itemId == null ? null : m.items.get(itemId.toString());
+            if (ie != null && ie.enabled()) return true;
+        }
         class_2960 id = class_7923.field_41177.method_10221(entity.method_5864());
         StorageBlocksSetting.Entry e = id == null ? null : m.entities.get(id.toString());
         return e != null && e.enabled();
@@ -43,7 +50,17 @@ public final class NoRenderModule extends Module {
             if (id == null) continue;
             class_1826 egg = class_1826.method_8019(type);
             class_1792 icon = egg != null ? (class_1792) egg : class_1802.field_8803;
-            list.add(id.toString(), type.method_5897().getString(), icon, false, Color.WHITE);
+            list.addEntity(id.toString(), type.method_5897().getString(), icon, type, false, Color.WHITE);
+        }
+        return list;
+    }
+
+    private static StorageBlocksSetting createItemList() {
+        StorageBlocksSetting list = new StorageBlocksSetting(EncryptedString.of("Items")).pickerOnly();
+        for (class_1792 item : class_7923.field_41178) {
+            class_2960 id = class_7923.field_41178.method_10221(item);
+            if (id == null || id.method_12832().equals("air")) continue;
+            list.add(id.toString(), item.method_63680().getString(), item, false, Color.WHITE);
         }
         return list;
     }

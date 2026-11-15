@@ -111,7 +111,7 @@ public final class EntityEspModule extends Module {
             class_1826 egg = class_1826.method_8019(type);
             boolean player = id.method_12832().equals("player");
             class_1792 icon = egg != null ? (class_1792) egg : player ? class_1802.field_8575 : class_1802.field_8803;
-            list.add(id.toString(), type.method_5897().getString(), icon, player, Color.WHITE);
+            list.addEntity(id.toString(), type.method_5897().getString(), icon, type, player, Color.WHITE);
         }
         return list;
     }

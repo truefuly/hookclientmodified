@@ -46,6 +46,14 @@ extends Setting {
         return this;
     }
 
+    /** Like {@link #add}, but the picker draws the real entity model of {@code entityType} instead of the item icon. */
+    public StorageBlocksSetting addEntity(String id, String name, class_1792 fallbackIcon, Object entityType, boolean enabled, Color color) {
+        Entry e = new Entry(id, name, fallbackIcon, enabled, color);
+        e.entityType = entityType;
+        this.entries.add(e);
+        return this;
+    }
+
     public List<Entry> entries() {
         return Collections.unmodifiableList(this.entries);
     }
@@ -87,6 +95,7 @@ extends Setting {
         private final Color defaultColor;
         private boolean enabled;
         private Color color;
+        private Object entityType;
 
         private Entry(String var1, String var2, class_1792 var3, boolean var4, Color var5) {
             this.id = var1;
@@ -104,6 +113,11 @@ extends Setting {
 
         public String displayName() {
             return this.displayName;
+        }
+
+        /** EntityType whose model the picker shows, or null for a normal item icon. */
+        public Object entityType() {
+            return this.entityType;
         }
 
         public class_1792 item() {

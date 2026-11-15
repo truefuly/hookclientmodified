@@ -220,6 +220,7 @@ public final class ColorListEditorScreen extends class_437 {
                 StorageBlocksSetting.Entry e = (StorageBlocksSetting.Entry) it[0];
                 float cx = (Float) it[1], cy = (Float) it[2];
                 if (cy < gy - this.d(4) || cy + cell > gy + gh + this.d(4)) continue;
+                if (e.entityType() != null && this.drawEntity(ctx, e.entityType(), cx, cy, cell)) continue;
                 float icon = cell * 0.62f;
                 ctx.method_51448().pushMatrix();
                 ctx.method_51448().translate(cx + (cell - icon) / 2.0f, cy + (cell - icon) / 2.0f);
@@ -376,5 +377,37 @@ public final class ColorListEditorScreen extends class_437 {
 
     private void returnToGui() {
         class_310.method_1551().method_1507((class_437) Hook.INSTANCE.GUI);
+    }
+
+    private static final java.util.Map<Object, net.minecraft.class_1309> MODELS = new java.util.HashMap<>();
+
+    /** Draws the real mob model in a picker cell; false when this entity can't be shown that way (then the icon is used). */
+    private boolean drawEntity(net.minecraft.class_332 ctx, Object type, float cx, float cy, float cell) {
+        class_310 mc = class_310.method_1551();
+        if (mc.field_1687 == null) return false;
+        net.minecraft.class_1309 living = type == net.minecraft.class_1299.field_6097 ? mc.field_1724 : MODELS.get(type);
+        if (living == null && type != net.minecraft.class_1299.field_6097 && !MODELS.containsKey(type)) {
+            try {
+                Object made = ((net.minecraft.class_1299<?>) type).method_5883(mc.field_1687, net.minecraft.class_3730.field_16467);
+                living = made instanceof net.minecraft.class_1309 l ? l : null;
+            } catch (Throwable t) {
+                living = null;
+            }
+            MODELS.put(type, living);
+        }
+        if (living == null) return false;
+        float s = this.scale();
+        float pad = cell * 0.14f;
+        int x1 = Math.round((cx + pad) / s), y1 = Math.round((cy + pad) / s);
+        int x2 = Math.round((cx + cell - pad) / s), y2 = Math.round((cy + cell - pad) / s);
+        float extent = Math.max(living.method_17682(), living.method_17681() * 1.1f);
+        int size = Math.max(1, Math.round((y2 - y1) * 0.8f / Math.max(0.3f, extent)));
+        try {
+            net.minecraft.class_490.method_2486(ctx, x1, y1, x2, y2, size, 0.0625f, (x1 + x2) / 2.0f + 20.0f, (y1 + y2) / 2.0f, living);
+            return true;
+        } catch (Throwable t) {
+            MODELS.put(type, null);
+            return false;
+        }
     }
 }

@@ -50,7 +50,8 @@ public final class AutoBreedModule extends Module {
     private final ModeSetting<AgeFilter> ageFilter = new ModeSetting<AgeFilter>(EncryptedString.of("Mob Age Filter"), AgeFilter.Adult, AgeFilter.class).setDescription(EncryptedString.of("Adult: breed. Baby: feed babies so they grow up faster. Both: everything"));
     private final BooleanSetting autoSwitch = new BooleanSetting(EncryptedString.of("Auto Switch"), true).setDescription(EncryptedString.of("Switches to the right food in your hotbar when the hand holds something the animal doesn't eat"));
     private final BooleanSetting switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true).setDescription(EncryptedString.of("Switches back to your old hotbar slot when nothing is left to feed"));
-    private final NumberSetting refeed = new NumberSetting(EncryptedString.of("Refeed After"), 5.0, 330.0, 31.0, 1.0).getValue(EncryptedString.of("Seconds before the same animal is fed again (love lasts 30s, breeding cooldown 5 min; on cooldown the server doesn't take the item)"));
+    private final BooleanSetting continuous = new BooleanSetting(EncryptedString.of("Continuous Breeding"), true).setDescription(EncryptedString.of("Feed the same animal again after the breeding interval"));
+    private final NumberSetting interval = new NumberSetting(EncryptedString.of("Breeding Interval"), 1.0, 24000.0, 6600.0, 20.0).getValue(EncryptedString.of("Ticks before the same animal is fed again (6600 = 30s love + 5 min cooldown)"));
 
     private final Map<UUID, Long> fed = new HashMap<>();
     private long tick;
@@ -61,7 +62,8 @@ public final class AutoBreedModule extends Module {
         super(EncryptedString.of("Auto Breed"), EncryptedString.of("Automatically breeds the selected animals around you"), -1, Category.MISC);
         this.entities.setDescription(EncryptedString.of("Animals that get bred"));
         SettingVisibility.set(this.switchBack, this.autoSwitch::getValue);
-        this.addSettings(this.entities, this.range, this.hand, this.ageFilter, this.autoSwitch, this.switchBack, this.refeed);
+        this.addSettings(this.entities, this.range, this.hand, this.ageFilter, this.continuous, this.interval, this.autoSwitch, this.switchBack);
+        SettingVisibility.set(this.interval, this.continuous::getValue);
     }
 
     @Override
@@ -84,7 +86,7 @@ public final class AutoBreedModule extends Module {
         if (this.mc.field_1724 == null || this.mc.field_1687 == null || this.mc.field_1761 == null) return;
         this.tick++;
         if (this.tick % 200 == 0) {
-            long keep = this.refeed.getIntValue() * 20L;
+            long keep = this.continuous.getValue() ? this.interval.getIntValue() : Long.MAX_VALUE;
             this.fed.values().removeIf(t -> this.tick - t > keep);
         }
         if (this.wait > 0) {
@@ -93,7 +95,7 @@ public final class AutoBreedModule extends Module {
         }
         class_1268 useHand = this.hand.getValue() == BreedHand.OffHand ? class_1268.field_5810 : class_1268.field_5808;
         double maxDist = this.range.getValue();
-        long refeedTicks = this.refeed.getIntValue() * 20L;
+        long refeedTicks = this.continuous.getValue() ? this.interval.getIntValue() : Long.MAX_VALUE;
 
         class_1429 target = null;
         int foodSlot = -1;
@@ -106,7 +108,7 @@ public final class AutoBreedModule extends Module {
             if (filter == AgeFilter.Adult && baby || filter == AgeFilter.Baby && !baby) continue;
             double dist = this.mc.field_1724.method_5739(animal);
             if (dist > maxDist || dist >= best) continue;
-            if (!this.mc.field_1724.method_6057(animal)) continue; // only with a clear line of sight, never through blocks
+            if (!this.canSee(animal)) continue; // only with a clear line of sight, never through blocks
             Long last = this.fed.get(animal.method_5667());
             if (last != null && this.tick - last < refeedTicks) continue;
             int slot = this.foodFor(animal, useHand);
@@ -126,9 +128,11 @@ public final class AutoBreedModule extends Module {
         // like Meteor: look at it server side and feed it right away, one animal per tick
         float[] aim = aimAt(this.mc.field_1724.method_33571(), target.method_5829().method_1005());
         this.mc.method_1562().method_52787(new class_2828.class_2831(aim[0], aim[1], this.mc.field_1724.method_24828(), this.mc.field_1724.field_5976));
-        if (this.mc.field_1761.method_2905(this.mc.field_1724, target, useHand).method_23665()) {
-            this.mc.field_1724.method_6104(useHand);
-        }
+        // like a real right click (and Meteor): interact at the exact spot on the animal, then plain interact
+        net.minecraft.class_3966 hit = new net.minecraft.class_3966(target, target.method_5829().method_1005());
+        net.minecraft.class_1269 result = this.mc.field_1761.method_2917(this.mc.field_1724, target, hit, useHand);
+        if (!result.method_23665()) result = this.mc.field_1761.method_2905(this.mc.field_1724, target, useHand);
+        this.mc.field_1724.method_6104(useHand);
         this.fed.put(target.method_5667(), this.tick);
     }
 
@@ -170,8 +174,28 @@ public final class AutoBreedModule extends Module {
             if (egg == null) continue; // only mobs; Auto Breed skips everything that can't breed anyway
             class_2960 id = class_7923.field_41177.method_10221(type);
             if (id == null) continue;
-            list.add(id.toString(), type.method_5897().getString(), (class_1792) egg, DEFAULTS.contains(id.method_12832()), Color.WHITE);
+            list.addEntity(id.toString(), type.method_5897().getString(), (class_1792) egg, type, DEFAULTS.contains(id.method_12832()), Color.WHITE);
         }
         return list;
+    }
+
+    /** True when some part of the animal can be seen from your eyes (fence gaps count, solid walls don't). */
+    private boolean canSee(class_1429 animal) {
+        class_243 eye = this.mc.field_1724.method_33571();
+        net.minecraft.class_238 box = animal.method_5829();
+        double[][] pts = {
+            {(box.field_1323 + box.field_1320) / 2, (box.field_1322 + box.field_1325) / 2, (box.field_1321 + box.field_1324) / 2},
+            {(box.field_1323 + box.field_1320) / 2, box.field_1325 - 0.05, (box.field_1321 + box.field_1324) / 2},
+            {box.field_1323 + 0.05, (box.field_1322 + box.field_1325) / 2, box.field_1321 + 0.05},
+            {box.field_1320 - 0.05, (box.field_1322 + box.field_1325) / 2, box.field_1324 - 0.05},
+            {box.field_1323 + 0.05, (box.field_1322 + box.field_1325) / 2, box.field_1324 - 0.05},
+            {box.field_1320 - 0.05, (box.field_1322 + box.field_1325) / 2, box.field_1321 + 0.05},
+        };
+        for (double[] p : pts) {
+            class_243 to = new class_243(p[0], p[1], p[2]);
+            net.minecraft.class_3965 hit = this.mc.field_1687.method_17742(new net.minecraft.class_3959(eye, to, net.minecraft.class_3959.class_3960.field_17558, net.minecraft.class_3959.class_242.field_1348, this.mc.field_1724));
+            if (hit == null || hit.method_17783() == net.minecraft.class_239.class_240.field_1333) return true;
+        }
+        return false;
     }
 }
