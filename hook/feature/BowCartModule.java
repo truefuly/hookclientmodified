@@ -1,0 +1,247 @@
+package hook.feature;
+
+import hook.event.EventListener;
+import hook.event.events.Render3DEvent;
+import hook.event.events.TickEvent;
+import hook.module.Category;
+import hook.module.Module;
+import hook.module.setting.BooleanSetting;
+import hook.module.setting.RgbSetting;
+import hook.utils.EncryptedString;
+import hook.utils.InventoryUtil;
+import hook.utils.RenderUtils;
+import java.awt.Color;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.class_1753;
+import net.minecraft.class_1799;
+import net.minecraft.class_2338;
+import net.minecraft.class_2350;
+import net.minecraft.class_238;
+import net.minecraft.class_243;
+import net.minecraft.class_2561;
+import net.minecraft.class_4184;
+import net.minecraft.class_4587;
+import net.minecraft.class_746;
+
+/**
+ * Bow cart (Flame bows only): while you draw a Flame bow it shows where the rail and TNT minecart would go; when you
+ * let go it places them there in the same tick, right after the shot, so the burning arrow blows the cart up the
+ * moment it arrives. If the arrow comes down out of your reach (shooting up, far away) nothing is placed.
+ *
+ * Raised spots: an arrow aimed at the top of a block hits that block's side just below where a cart on top would be.
+ * Then a rail goes on top of the block and one in front of it, so the front one becomes a ramp and the cart stands
+ * half a block higher, exactly in the arrow's way (with no block there, one from your hotbar is put down first).
+ */
+public final class BowCartModule extends Module {
+    private static BowCartModule instance;
+    private final BooleanSetting highlight = new BooleanSetting(EncryptedString.of("Highlight"), true);
+    private final RgbSetting color = new RgbSetting(EncryptedString.of("Highlight Color"), 0xFFFF8A3D);
+    private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
+    private CartPlanner.Plan pending;
+    private volatile CartPlanner.Plan preview;
+    private int lastAge = Integer.MIN_VALUE;
+
+
+    public BowCartModule() {
+        super(EncryptedString.of("Bow Cart"), EncryptedString.of("Flame bow: rail + TNT minecart are placed where the arrow lands (in reach), instantly. Normal bows are ignored."), -1, Category.COMBAT);
+        this.highlight.setDescription(EncryptedString.of("Holding or drawing a Flame bow: a soft outline on the spot where the cart will be placed."));
+        this.color.setDescription(EncryptedString.of("Colour of the outline"));
+        this.messages.setDescription(EncryptedString.of("Tells you in the action bar why it could not cart."));
+        this.addSettings(this.highlight, this.color, this.messages);
+        hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
+        instance = this;
+    }
+
+    @Override
+    public void onDisable() {
+        this.preview = null;
+        this.pending = null;
+        super.onDisable();
+    }
+
+    /** Called right before the bow is released (the arrow is about to be shot). */
+    public static void beforeRelease() {
+        BowCartModule m = instance;
+        if (m == null) return;
+        m.pending = null;
+        if (!m.isEnabled()) return;
+        try { m.pending = m.plan(false); } catch (Throwable t) { m.pending = null; }
+    }
+
+    /** Called right after the release packet went out: place everything before the arrow's first server tick. */
+    public static void afterRelease() {
+        BowCartModule m = instance;
+        if (m == null) return;
+        m.preview = null;
+        if (m.pending == null) return;
+        CartPlanner.Plan plan = m.pending;
+        m.pending = null;
+        class_746 p = m.mc.field_1724;
+        if (p == null) return;
+        int slot = p.method_31548().method_67532();
+        CartPlanner.placeRail(plan);
+        CartPlanner.placeCart(plan);
+        InventoryUtil.swap(slot);
+    }
+
+    @EventListener
+    public void onTick(TickEvent event) {
+        class_746 p = this.mc.field_1724;
+        if (p == null) { this.preview = null; return; }
+        if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
+        this.lastAge = p.field_6012;
+        if (!this.highlight.getValue()) { this.preview = null; return; }
+        try { this.preview = this.plan(true); } catch (Throwable t) { this.preview = null; }
+    }
+
+    @EventListener
+    public void onRender3D(Render3DEvent event) {
+        CartPlanner.Plan plan = this.preview;
+        if (plan == null || !this.highlight.getValue()) return;
+        class_4184 camera = RenderUtils.getCamera();
+        if (camera == null) return;
+        int argb = this.color.getArgb();
+        Color base = new Color((argb >> 16) & 255, (argb >> 8) & 255, argb & 255);
+        // gentle flicker, like a small flame breathing
+        double t = System.currentTimeMillis() / 1000.0;
+        double flicker = 0.78 + 0.14 * Math.sin(t * 5.1) + 0.08 * Math.sin(t * 11.7 + 1.3);
+        List<RenderUtils.ColoredLine> lines = new ArrayList<>();
+        floor(lines, plan.rail, plan.slope ? 0.0 : 0.0, base, flicker);
+        if (plan.upper != null) floor(lines, plan.upper, 0.0, base, flicker);
+        class_4587 matrices = event.matrixStack;
+        matrices.method_22903();
+        RenderUtils.applyCameraTransform(matrices, camera);
+        RenderUtils.renderLines(matrices, lines);
+        matrices.method_22909();
+    }
+
+    /** Thin outline lying on the top of the block below this cell, with two faint wider layers as a soft glow. */
+    private static void floor(List<RenderUtils.ColoredLine> lines, class_2338 c, double lift, Color col, double flicker) {
+        double y = c.method_10264() + 0.02 + lift;
+        double[][] layers = {{0.0, 200, 1.6}, {0.035, 70, 3.5}, {0.07, 28, 6.0}};
+        for (double[] l : layers) {
+            double g = l[0];
+            double x1 = c.method_10263() + 0.04 - g, z1 = c.method_10260() + 0.04 - g;
+            double x2 = c.method_10263() + 0.96 + g, z2 = c.method_10260() + 0.96 + g;
+            Color k = alpha(col, (int) Math.max(0, Math.min(255, l[1] * flicker)));
+            float w = (float) l[2];
+            lines.add(new RenderUtils.ColoredLine(new class_243(x1, y, z1), new class_243(x2, y, z1), k, w));
+            lines.add(new RenderUtils.ColoredLine(new class_243(x2, y, z1), new class_243(x2, y, z2), k, w));
+            lines.add(new RenderUtils.ColoredLine(new class_243(x2, y, z2), new class_243(x1, y, z2), k, w));
+            lines.add(new RenderUtils.ColoredLine(new class_243(x1, y, z2), new class_243(x1, y, z1), k, w));
+        }
+    }
+
+    private static Color alpha(Color c, int a) { return new Color(c.getRed(), c.getGreen(), c.getBlue(), a); }
+
+    /** quiet = live preview: no messages, no test bookkeeping. */
+    private CartPlanner.Plan plan(boolean quiet) {
+        class_746 p = this.mc.field_1724;
+        if (p == null || this.mc.field_1687 == null) return null;
+        class_1799 bow;
+        float power;
+        if (p.method_6115()) {
+            bow = p.method_6030();
+            power = class_1753.method_7722(p.method_6048());
+        } else {
+            if (!quiet) return null;
+            // just holding it: show where a full draw would land
+            bow = p.method_6047().method_7909() instanceof class_1753 ? p.method_6047() : p.method_6079();
+            power = 1.0f;
+        }
+        if (!(bow.method_7909() instanceof class_1753)) return null;
+        if (!CartPlanner.hasFlame(bow)) return null; // normal bows: ignored, plain shot
+        if (power < 0.1f) return null;
+        if (CartPlanner.cartSlot() < 0) return quiet ? null : this.fail("no TNT minecart in hotbar");
+
+        // same launch as BowItem: eye - 0.1, rotation * power * 3, plus your own movement
+        class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
+        class_243 vel = CartPlanner.dir(p.method_36454(), p.method_36455()).method_1021(power * 3.0);
+        class_243 mv = p.method_60478();
+        vel = vel.method_1031(mv.field_1352, p.method_24828() ? 0.0 : mv.field_1351, mv.field_1350);
+
+        CartPlanner.Trace land = CartPlanner.trace(start, vel, null);
+        class_243 eye = p.method_33571();
+        double reach = p.method_55754() + 0.5;
+        class_2338 rail = null;
+        if (land.block != null) {
+            class_2338 hit = land.block.method_17777();
+            class_2350 face = land.block.method_17780();
+            if (CartPlanner.isRailBlock(hit)) rail = hit;
+            else if (face != class_2350.field_11033) rail = hit.method_10093(face);
+        }
+        boolean landInReach = rail != null && eye.method_1022(new class_243(rail.method_10263() + 0.5, rail.method_10264(), rail.method_10260() + 0.5)) <= reach;
+
+        // the landing cell first, then the cells the arrow crosses just before it (it often only grazes the
+        // bottom of a cart standing exactly where it lands, but goes straight through one a block earlier).
+        // When it lands out of reach (e.g. aimed over a raised spot), every cell on its way that is in reach counts.
+        List<class_2338> candidates = new ArrayList<>();
+        if (landInReach) candidates.add(rail);
+        for (int i = land.cells.size() - 1; i >= 0 && candidates.size() < 20; i--) {
+            class_2338 c = land.cells.get(i);
+            if (candidates.contains(c)) continue;
+            if (landInReach && Math.abs(c.method_10264() - rail.method_10264()) > 1) continue;
+            if (eye.method_1022(new class_243(c.method_10263() + 0.5, c.method_10264(), c.method_10260() + 0.5)) > reach) continue;
+            candidates.add(c);
+        }
+        if (candidates.isEmpty()) return null; // nothing in reach (shooting up / far): just a normal shot
+
+        String why = "can't place a rail where it lands";
+        CartPlanner.Plan plan = null;
+        for (double inset : new double[]{0.15, 0.06}) {
+            CartPlanner.INSET = inset;
+            for (class_2338 c : candidates) {
+                CartPlanner.Plan cand = new CartPlanner.Plan();
+                if (!CartPlanner.prepareRail(cand, c, null)) continue;
+                CartPlanner.Trace tr = CartPlanner.trace(start, vel, CartPlanner.cartBox(c));
+                if (!tr.hitsCart) { why = "arrow would miss the cart there"; continue; }
+                plan = cand;
+                break;
+            }
+            if (plan != null) break;
+        }
+        // raised spot: the arrow hits the block's side just below a cart on top -> ramp rail, cart sits 0.5 higher
+        if (plan == null) {
+            List<class_2338> lows = new ArrayList<>();
+            for (class_2338 c : candidates) {
+                if (!lows.contains(c)) lows.add(c);
+                if (!lows.contains(c.method_10074())) lows.add(c.method_10074());
+            }
+            outer:
+            for (boolean placeBlock : new boolean[]{false, true})
+                for (double inset : new double[]{0.15, 0.06}) {
+                    CartPlanner.INSET = inset;
+                    for (class_2338 c : lows) {
+                        for (class_2350 d : CartPlanner.HORIZONTAL) {
+                            CartPlanner.Plan cand = new CartPlanner.Plan();
+                            if (!CartPlanner.prepareSlope(cand, c, d, placeBlock)) continue;
+                            CartPlanner.Trace tr = CartPlanner.trace(start, vel, CartPlanner.cartBox(c, true));
+                            if (!tr.hitsCart) continue;
+                            if (cand.rampBlock != null && CartPlanner.pathEnters(tr, cand.rampBlock)) continue; // arrow would hit our block
+                            plan = cand;
+                            break outer;
+                        }
+                    }
+                }
+        }
+        CartPlanner.INSET = 0.06;
+        if (plan == null) {
+            if (quiet || !landInReach) return null; // long shot past things: stay quiet
+            return this.fail(CartPlanner.railSlot() < 0 ? "no rail in hotbar" : why);
+        }
+        if (!quiet && CartTest.ENABLED) {
+            CartTest.planFire = null;
+            CartTest.planRail = plan.rail;
+            CartTest.planInfo = (plan.slope ? (plan.rampBlock != null ? "RAMP+BLOCK " : "RAMP ") : "") + "rail=" + plan.rail.method_23854() + " power=" + power;
+        }
+        return plan;
+    }
+
+    private CartPlanner.Plan fail(String why) {
+        if (CartTest.ENABLED) CartTest.lastFail = why;
+        if (this.messages.getValue() && this.mc.field_1724 != null)
+            this.mc.field_1724.method_7353(class_2561.method_43470("§cBow Cart: §f" + why), true);
+        return null;
+    }
+}

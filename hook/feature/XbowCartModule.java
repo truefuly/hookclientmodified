@@ -1,58 +1,199 @@
 package hook.feature;
 
+import hook.event.EventListener;
+import hook.event.events.PreItemUseEvent;
+import hook.event.events.TickEvent;
 import hook.module.Category;
 import hook.module.Module;
 import hook.module.setting.BooleanSetting;
 import hook.module.setting.ButtonSetting;
 import hook.module.setting.NumberSetting;
 import hook.utils.EncryptedString;
-import hook.event.EventListener;
-import hook.event.events.TickEvent;
+import hook.utils.InventoryUtil;
+import java.util.ArrayDeque;
+import net.minecraft.class_1268;
+import net.minecraft.class_1657;
+import net.minecraft.class_2338;
+import net.minecraft.class_2350;
+import net.minecraft.class_239;
+import net.minecraft.class_243;
 import net.minecraft.class_2561;
+import net.minecraft.class_3965;
+import net.minecraft.class_746;
 import thetruetrident.cartcore.CartcoreCore;
 
-/** CartCore crossbow-cart sequence, without chat reports or remote services. */
+/**
+ * Crossbow cart: right-click a block with a loaded crossbow and it places a rail, a TNT minecart on it, fire in the
+ * arrow's way and fires the crossbow through the fire into the cart - all planned up front, by default in one tick.
+ */
 public final class XbowCartModule extends Module {
-    private final BooleanSetting safeMode = new BooleanSetting(EncryptedString.of("Safe Xbow"), true);
-    private final NumberSetting fireAngle = new NumberSetting(EncryptedString.of("Fire Angle"), 25.0, 85.0, 55.0, 5.0);
-    private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 20.0, 0.0, 1.0);
+    static XbowCartModule instance;
+    private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 5.0, 0.0, 1.0);
+    private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
     private final ButtonSetting usage;
 
+    private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
+    private int nextAt;
+    private int restoreSlot = -1;
+
     public XbowCartModule() {
-        super(EncryptedString.of("Xbow Cart"), EncryptedString.of("Needs a loaded crossbow, rail, TNT minecart and flint and steel or lava bucket in the hotbar. Right-click a block to start."), -1, Category.COMBAT);
-        this.safeMode.setDescription(EncryptedString.of("Uses a slab during the sequence if one is in the hotbar."));
-        this.fireAngle.setDescription(EncryptedString.of("Lower angles ignite further away. Adjust if the fire is placed too close."));
-        this.stepDelay.setDescription(EncryptedString.of("Delay between rail, TNT minecart and ignition in ticks."));
+        super(EncryptedString.of("Xbow Cart"), EncryptedString.of("Right-click a block with a loaded crossbow: rail, TNT minecart, fire and the shot, instantly. Needs rail, TNT minecart and flint and steel / fire charge / lava bucket in the hotbar."), -1, Category.COMBAT);
+        this.stepDelay.setDescription(EncryptedString.of("0 = everything in the same tick (fastest). Higher = one step every N ticks."));
+        this.messages.setDescription(EncryptedString.of("Tells you in the action bar why it could not cart."));
         this.usage = new ButtonSetting(EncryptedString.of("Anleitung"), () -> {
             if (this.mc.field_1724 != null) {
-                this.mc.field_1724.method_7353(class_2561.method_43470("Xbow Cart: enable the module and keep a loaded crossbow, a rail, a TNT minecart and flint and steel or a lava bucket in your hotbar. Press H to select a loaded crossbow, then right-click the target block. You can rebind H in Controls."), false);
+                this.mc.field_1724.method_7353(class_2561.method_43470("Xbow Cart: keep a loaded crossbow, a rail, a TNT minecart and flint and steel (or fire charge / lava bucket) in your hotbar. Press H to pick the loaded crossbow, look at a block within reach and right-click. The module places rail + cart, puts fire into the arrow's path and shoots through it."), false);
             }
         });
         this.usage.setDescription(EncryptedString.of("Shows requirements and usage in chat."));
-        this.addSettings(this.safeMode, this.fireAngle, this.stepDelay, this.usage);
+        this.addSettings(this.stepDelay, this.messages, this.usage);
+        instance = this;
+        disableLegacy();
+    }
+
+    /** The old CartCore crossbow logic must stay off, this module replaces it. */
+    private static void disableLegacy() {
+        try {
+            if (CartcoreCore.cartConfig.crossbowCarting) {
+                CartcoreCore.cartConfig.crossbowCarting = false;
+                CartcoreCore.cartConfig.save();
+            }
+        } catch (Throwable ignored) {}
     }
 
     @Override
     public void onEnable() {
-        CartcoreCore.cartConfig.safeXbow = this.safeMode.getValue();
-        CartcoreCore.cartConfig.fireAngle = this.fireAngle.getIntValue();
-        CartcoreCore.cartConfig.crossbowStepDelay = this.stepDelay.getIntValue();
-        CartcoreCore.cartConfig.crossbowCarting = true;
-        CartcoreCore.cartConfig.save();
+        disableLegacy();
+        this.queue.clear();
     }
 
     @Override
     public void onDisable() {
-        CartcoreCore.cartConfig.crossbowCarting = false;
-        CartcoreCore.releaseCartAim(this.mc);
-        thetruetrident.cartcore.crossCartin.resetSequence(this.mc);
-        CartcoreCore.cartConfig.save();
+        this.queue.clear();
+        this.restoreSlot = -1;
     }
 
     @EventListener
     public void onTick(TickEvent event) {
-        CartcoreCore.cartConfig.safeXbow = this.safeMode.getValue();
-        CartcoreCore.cartConfig.fireAngle = this.fireAngle.getIntValue();
-        CartcoreCore.cartConfig.crossbowStepDelay = this.stepDelay.getIntValue();
+        class_746 p = this.mc.field_1724;
+        if (p == null) return;
+        while (thetruetrident.cartcore.C.A.method_1436()) {
+            int s = CartPlanner.hotbar(CartPlanner::loadedCrossbow);
+            if (s >= 0) InventoryUtil.swap(s);
+        }
+        if (CartTest.ENABLED) CartTest.tick();
+        if (!this.queue.isEmpty() && p.field_6012 >= this.nextAt) {
+            this.queue.poll().run();
+            this.nextAt = p.field_6012 + this.stepDelay.getIntValue();
+            if (this.queue.isEmpty()) this.finish();
+        }
+    }
+
+    @EventListener
+    public void onPacket(hook.event.events.PacketReceiveEvent event) {
+        if (CartTest.ENABLED && event.packet instanceof net.minecraft.class_2664) CartTest.explosions++;
+    }
+
+    @EventListener
+    public void onPreItemUse(PreItemUseEvent event) {
+        if (!this.queue.isEmpty()) { event.cancel(); return; }
+        if (this.tryStart()) event.cancel();
+    }
+
+    /** @return true when the right-click was handled here (sequence started, or refused with a message). */
+    boolean tryStart() {
+        class_746 p = this.mc.field_1724;
+        if (p == null || this.mc.field_1687 == null || this.mc.field_1761 == null) return false;
+        class_1268 hand;
+        if (CartPlanner.loadedCrossbow(p.method_6047())) hand = class_1268.field_5808;
+        else if (CartPlanner.loadedCrossbow(p.method_6079())) hand = class_1268.field_5810;
+        else return false;
+        // only when you look at a block in reach; otherwise the crossbow shoots normally
+        if (this.mc.field_1765 instanceof net.minecraft.class_3966) return false; // aiming at an entity: normal shot
+        // fresh block raycast along your view (does not depend on the last rendered crosshair)
+        if (!(p.method_5745(p.method_55754(), 1.0f, false) instanceof class_3965 bh) || bh.method_17783() != class_239.class_240.field_1332) return false;
+
+        class_2338 clicked = bh.method_17777();
+        class_2338 rail;
+        class_3965 railClick;
+        if (CartPlanner.isRailBlock(clicked)) {
+            rail = clicked;
+            railClick = null;
+        } else {
+            if (bh.method_17780() == class_2350.field_11033) return this.fail("can't put a rail under a block");
+            rail = clicked.method_10093(bh.method_17780());
+            railClick = bh;
+        }
+        if (CartPlanner.railSlot() < 0 && !CartPlanner.isRailBlock(rail)) return this.fail("no rail in hotbar");
+        if (CartPlanner.cartSlot() < 0) return this.fail("no TNT minecart in hotbar");
+
+        CartPlanner.Plan plan = new CartPlanner.Plan();
+        if (!CartPlanner.prepareRail(plan, rail, railClick)) return this.fail("can't place a rail there");
+
+        // try aim points over the cart; the first whose arrow reaches the cart through a usable fire cell wins
+        class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
+        var box = CartPlanner.cartBox(rail);
+        double cx = (box.field_1323 + box.field_1320) / 2, cz = (box.field_1321 + box.field_1324) / 2;
+        double[] ys = {0.38, 0.25, 0.52, 0.15, 0.62};
+        double[] offs = {0, 0.2, -0.2, 0.35, -0.35};
+        boolean found = false;
+        outer:
+        for (double fy : ys) for (double ox : offs) for (double oz : offs) {
+            class_243 point = new class_243(cx + ox, box.field_1322 + fy, cz + oz);
+            float[] a = CartPlanner.aimAt(start, point);
+            class_243 vel = CartPlanner.dir(a[0], a[1]).method_1021(3.15);
+            CartPlanner.Trace tr = CartPlanner.trace(start, vel, box);
+            if (!tr.hitsCart) continue;
+            if (!CartPlanner.chooseFire(plan, tr, false)) continue;
+            plan.aim = a;
+            found = true;
+            break outer;
+        }
+        if (!found) return this.fail(CartPlanner.igniter() == null ? "no flint and steel / fire charge / lava bucket" : "no spot for fire between you and the cart, step back a bit");
+
+        if (CartTest.ENABLED) {
+            CartTest.planFire = plan.fire;
+            CartTest.planRail = plan.rail;
+            CartTest.planInfo = "rail=" + plan.rail.method_23854() + " fire=" + (plan.fire == null ? "-" : plan.fire.method_23854()) + " aim=" + plan.aim[0] + "/" + plan.aim[1] + " railClick=" + (plan.railClick != null);
+        }
+        this.restoreSlot = p.method_31548().method_67532();
+        final class_1268 shootHand = hand;
+        final int crossbowSlot = hand == class_1268.field_5808 ? this.restoreSlot : -1;
+        this.queue.clear();
+        this.queue.add(() -> CartPlanner.placeRail(plan));
+        this.queue.add(() -> CartPlanner.placeCart(plan));
+        if (plan.fire != null) this.queue.add(() -> CartPlanner.placeFire(plan));
+        this.queue.add(() -> this.shoot(plan, shootHand, crossbowSlot));
+        this.nextAt = p.field_6012;
+        if (this.stepDelay.getIntValue() == 0) {
+            while (!this.queue.isEmpty()) this.queue.poll().run();
+            this.finish();
+        }
+        return true;
+    }
+
+    private void shoot(CartPlanner.Plan plan, class_1268 hand, int crossbowSlot) {
+        class_746 p = this.mc.field_1724;
+        if (crossbowSlot >= 0) InventoryUtil.swap(crossbowSlot);
+        float yaw = p.method_36454(), pitch = p.method_36455();
+        p.method_36456(plan.aim[0]);
+        p.method_36457(plan.aim[1]);
+        // the use packet carries this rotation; the camera is put straight back
+        this.mc.field_1761.method_2919((class_1657) p, hand);
+        p.method_36456(yaw);
+        p.method_36457(pitch);
+    }
+
+    private void finish() {
+        if (this.restoreSlot >= 0 && this.mc.field_1724 != null) InventoryUtil.swap(this.restoreSlot);
+        this.restoreSlot = -1;
+    }
+
+    /** Shows why and swallows the click, so the loaded crossbow is not wasted. */
+    private boolean fail(String why) {
+        if (CartTest.ENABLED) CartTest.lastFail = why;
+        if (this.messages.getValue() && this.mc.field_1724 != null)
+            this.mc.field_1724.method_7353(class_2561.method_43470("§cXbow Cart: §f" + why), true);
+        return true;
     }
 }

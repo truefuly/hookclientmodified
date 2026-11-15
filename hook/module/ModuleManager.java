@@ -114,6 +114,7 @@ public final class ModuleManager {
         this.in(Category.COMBAT, new DoubleAnchorModule());
         this.in(Category.COMBAT, new PearlCatchModule());
         this.in(Category.COMBAT, new XbowCartModule());
+        this.in(Category.COMBAT, new hook.feature.BowCartModule());
         this.in(Category.COMBAT, new InstaCartModule());
         this.in(Category.COMBAT, new AutoClickerModule());
         this.in(Category.MACROS, new AutoTpaModule());
