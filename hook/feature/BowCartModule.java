@@ -40,10 +40,11 @@ public final class BowCartModule extends Module {
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
     private final BooleanSetting crosshair = new BooleanSetting(EncryptedString.of("Place At Crosshair"), true);
     private final BooleanSetting flameOnly = new BooleanSetting(EncryptedString.of("Flame Bows Only"), true);
-    private final hook.module.setting.NumberSetting minPower = new hook.module.setting.NumberSetting(EncryptedString.of("Min Draw %"), 10.0, 100.0, 10.0, 5.0);
+    private final hook.module.setting.NumberSetting minPower = new hook.module.setting.NumberSetting(EncryptedString.of("Min Draw %"), 0.0, 100.0, 0.0, 5.0);
     private final hook.module.setting.NumberSetting cooldown = new hook.module.setting.NumberSetting(EncryptedString.of("Cooldown (ticks)"), 0.0, 40.0, 10.0, 1.0);
     private final BooleanSetting skipIfCart = new BooleanSetting(EncryptedString.of("Skip If Cart There"), true);
     private final BooleanSetting swapBack = new BooleanSetting(EncryptedString.of("Swap Back"), true);
+    private final hook.module.setting.NumberSetting quickDraw = new hook.module.setting.NumberSetting(EncryptedString.of("Quick Shot Below %"), 0.0, 100.0, 60.0, 5.0);
     private int lastPlace = Integer.MIN_VALUE / 2;
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
@@ -61,7 +62,8 @@ public final class BowCartModule extends Module {
         this.cooldown.setDescription(EncryptedString.of("Minimum ticks between two placements - stops double / spam placing."));
         this.skipIfCart.setDescription(EncryptedString.of("Does not place again where a minecart already stands."));
         this.swapBack.setDescription(EncryptedString.of("Switches back to the bow after placing."));
-        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.highlight, this.color, this.messages);
+        this.quickDraw.setDescription(EncryptedString.of("Shots drawn less than this (quick taps) put rail + cart where the arrow will land instead of the crosshair."));
+        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
         instance = this;
     }
@@ -186,7 +188,7 @@ public final class BowCartModule extends Module {
         if (power < Math.max(0.1f, this.minPower.getFloatValue() / 100.0f)) return null;
         if (CartPlanner.cartSlot() < 0) return quiet ? null : this.fail("no TNT minecart in hotbar");
 
-        if (this.crosshair.getValue()) {
+        if (this.crosshair.getValue() && power >= this.quickDraw.getFloatValue() / 100.0f) {
             // the block under your crosshair at the moment you shoot - works from any angle
             if (!(p.method_5745(p.method_55754(), 1.0f, false) instanceof net.minecraft.class_3965 bh) || bh.method_17783() != net.minecraft.class_239.class_240.field_1332) return null;
             class_2338 hitPos = bh.method_17777();
@@ -214,7 +216,7 @@ public final class BowCartModule extends Module {
 
         CartPlanner.Trace land = CartPlanner.trace(start, vel, null);
         class_243 eye = p.method_33571();
-        double reach = p.method_55754() + 0.5;
+        double reach = p.method_55754(); // vanilla block reach
         class_2338 rail = null;
         if (land.block != null) {
             class_2338 hit = land.block.method_17777();

@@ -28,7 +28,7 @@ import thetruetrident.cartcore.CartcoreCore;
  */
 public final class XbowCartModule extends Module {
     public static XbowCartModule instance;
-    private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 5.0, 0.0, 1.0);
+    private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 5.0, 1.0, 1.0);
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
     private final NumberSetting cooldown = new NumberSetting(EncryptedString.of("Cooldown (ticks)"), 0.0, 40.0, 10.0, 1.0);
     private final BooleanSetting skipIfCart = new BooleanSetting(EncryptedString.of("Skip If Cart There"), true);
