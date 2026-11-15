@@ -27,9 +27,14 @@ import thetruetrident.cartcore.CartcoreCore;
  * arrow's way and fires the crossbow through the fire into the cart - all planned up front, by default in one tick.
  */
 public final class XbowCartModule extends Module {
-    static XbowCartModule instance;
+    public static XbowCartModule instance;
     private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 5.0, 0.0, 1.0);
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
+    private final NumberSetting cooldown = new NumberSetting(EncryptedString.of("Cooldown (ticks)"), 0.0, 40.0, 10.0, 1.0);
+    private final BooleanSetting skipIfCart = new BooleanSetting(EncryptedString.of("Skip If Cart There"), true);
+    private final BooleanSetting useFire = new BooleanSetting(EncryptedString.of("Place Fire"), true);
+    private final BooleanSetting swapBack = new BooleanSetting(EncryptedString.of("Swap Back"), true);
+    private int lastStart = Integer.MIN_VALUE / 2;
     private final ButtonSetting usage;
 
     private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
@@ -46,7 +51,11 @@ public final class XbowCartModule extends Module {
             }
         });
         this.usage.setDescription(EncryptedString.of("Shows requirements and usage in chat."));
-        this.addSettings(this.stepDelay, this.messages, this.usage);
+        this.cooldown.setDescription(EncryptedString.of("Minimum ticks between two carts - stops double placing."));
+        this.skipIfCart.setDescription(EncryptedString.of("Never places a second cart where one already stands."));
+        this.useFire.setDescription(EncryptedString.of("Puts fire in the arrow's path (needed unless the crossbow has Flame-like ignition)."));
+        this.swapBack.setDescription(EncryptedString.of("Switches back to the crossbow slot afterwards."));
+        this.addSettings(this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
         instance = this;
         disableLegacy();
     }
@@ -97,6 +106,9 @@ public final class XbowCartModule extends Module {
     @EventListener
     public void onPreItemUse(PreItemUseEvent event) {
         if (!this.queue.isEmpty()) { event.cancel(); return; }
+        // a held right-click fires this every tick: one cart per click, never two
+        if (this.mc.field_1724 != null && this.mc.field_1724.field_6012 - this.lastStart < this.cooldown.getIntValue()
+                && (CartPlanner.loadedCrossbow(this.mc.field_1724.method_6047()) || CartPlanner.loadedCrossbow(this.mc.field_1724.method_6079()))) { event.cancel(); return; }
         if (this.tryStart()) event.cancel();
     }
 
@@ -126,6 +138,8 @@ public final class XbowCartModule extends Module {
         }
         if (CartPlanner.railSlot() < 0 && !CartPlanner.isRailBlock(rail)) return this.fail("no rail in hotbar");
         if (CartPlanner.cartSlot() < 0) return this.fail("no TNT minecart in hotbar");
+        if (this.skipIfCart.getValue() && !this.mc.field_1687.method_8390(net.minecraft.class_1688.class, new net.minecraft.class_238(rail).method_1014(0.3), e -> e.method_5805()).isEmpty())
+            return this.fail("there is already a cart");
 
         CartPlanner.Plan plan = new CartPlanner.Plan();
         if (!CartPlanner.prepareRail(plan, rail, railClick)) return this.fail("can't place a rail there");
@@ -134,8 +148,8 @@ public final class XbowCartModule extends Module {
         class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
         var box = CartPlanner.cartBox(rail);
         double cx = (box.field_1323 + box.field_1320) / 2, cz = (box.field_1321 + box.field_1324) / 2;
-        double[] ys = {0.38, 0.25, 0.52, 0.15, 0.62};
-        double[] offs = {0, 0.2, -0.2, 0.35, -0.35};
+        double[] ys = {0.38, 0.25, 0.52, 0.15, 0.62, 0.08, 0.68};
+        double[] offs = {0, 0.2, -0.2, 0.35, -0.35, 0.1, -0.1, 0.42, -0.42};
         boolean found = false;
         outer:
         for (double fy : ys) for (double ox : offs) for (double oz : offs) {
@@ -144,7 +158,7 @@ public final class XbowCartModule extends Module {
             class_243 vel = CartPlanner.dir(a[0], a[1]).method_1021(3.15);
             CartPlanner.Trace tr = CartPlanner.trace(start, vel, box);
             if (!tr.hitsCart) continue;
-            if (!CartPlanner.chooseFire(plan, tr, false)) continue;
+            if (this.useFire.getValue() && !CartPlanner.chooseFire(plan, tr, false)) continue;
             plan.aim = a;
             found = true;
             break outer;
@@ -156,9 +170,10 @@ public final class XbowCartModule extends Module {
             CartTest.planRail = plan.rail;
             CartTest.planInfo = "rail=" + plan.rail.method_23854() + " fire=" + (plan.fire == null ? "-" : plan.fire.method_23854()) + " aim=" + plan.aim[0] + "/" + plan.aim[1] + " railClick=" + (plan.railClick != null);
         }
-        this.restoreSlot = p.method_31548().method_67532();
+        this.lastStart = p.field_6012;
+        this.restoreSlot = this.swapBack.getValue() ? p.method_31548().method_67532() : -1;
         final class_1268 shootHand = hand;
-        final int crossbowSlot = hand == class_1268.field_5808 ? this.restoreSlot : -1;
+        final int crossbowSlot = hand == class_1268.field_5808 ? p.method_31548().method_67532() : -1;
         this.queue.clear();
         this.queue.add(() -> CartPlanner.placeRail(plan));
         this.queue.add(() -> CartPlanner.placeCart(plan));

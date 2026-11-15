@@ -102,6 +102,20 @@ implements Serializable {
         this.settings.addAll(Arrays.asList(a));
     }
 
+    /** Puts every setting of this module back to its default (keybinds stay). */
+    public void resetSettings() {
+        for (Object s : this.getSettings()) {
+            try {
+                if (s instanceof hook.module.setting.BooleanSetting b) b.setValue(b.getDefaultValue());
+                else if (s instanceof hook.module.setting.NumberSetting n) n.getValue(n.getDefaultValue());
+                else if (s instanceof hook.module.setting.ModeSetting<?> m) m.setModeIndex(m.getOriginalValue());
+                else if (s instanceof hook.module.setting.RgbSetting c) c.setArgb(c.getDefault());
+                else if (s instanceof hook.module.setting.ChoiceSetting c) c.resetToDefault();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     public void toggle(boolean enabled) {
         if (enabled) {
             // empty if block

@@ -669,6 +669,9 @@ public final class HookUiController {
         UiAudio.play(UiAudio.Cue.OPEN);
     }
 
+    private Module resetArmed;
+    private long resetArmedAt;
+
     private void closePage() {
         this.page = null;
         this.editing = null;
@@ -715,6 +718,32 @@ public final class HookUiController {
             float var25 = this.an("page:on:" + var15, var2.isEnabled() ? 1.0f : 0.0f, 10.0f);
             this.toggle(var1, var22, var23, var20, var21, var25, this.an("page:toh", var36 ? 1.0f : 0.0f, 15.0f));
             var1.textRight(var2.isEnabled() ? "Enabled" : "Disabled", var22 - this.d(12.0f), var23 + (var21 - this.d(12.0f)) / 2.0f - this.d(1.0f), this.d(12.0f), 0, SUB);
+            // reset button with a confirm step: first click arms it (red), a second click within 4 s resets
+            boolean armed = var2 == this.resetArmed && System.currentTimeMillis() - this.resetArmedAt < 4000L;
+            String rl = armed ? "Confirm reset?" : "Reset settings";
+            float rh = this.d(28.0f);
+            float rw = var1.textWidth(rl, this.d(12.0f), 0) + this.d(24.0f);
+            float rx = var22 - this.d(12.0f) - var1.textWidth("Disabled", this.d(12.0f), 0) - this.d(16.0f) - rw;
+            float ry = var23 + (var21 - rh) / 2.0f;
+            boolean rhot = var7 && this.hot(rx, ry, rw, rh);
+            float ra = this.an("page:reset", rhot ? 1.0f : 0.0f, 15.0f);
+            int bg = armed ? UiRenderer.argb(0.30f + 0.2f * ra, 225, 70, 70) : UiRenderer.white(0.06f + 0.06f * ra);
+            var1.round(rx, ry, rw, rh, this.d(10.0f), bg);
+            var1.outline(rx, ry, rw, rh, this.d(10.0f), Math.max(1.0f, this.u * 0.9f), armed ? UiRenderer.argb(0.7f, 240, 90, 90) : UiRenderer.white(0.09f + 0.08f * ra));
+            var1.text(rl, rx + this.d(12.0f), ry + (rh - this.d(12.0f)) / 2.0f - this.d(1.0f), this.d(12.0f), 0, armed ? TEXT : SUB);
+            if (var7) {
+                this.hit(rx, ry, rw, rh, var2x -> {
+                    if (var2 == this.resetArmed && System.currentTimeMillis() - this.resetArmedAt < 4000L) {
+                        var2.resetSettings();
+                        this.resetArmed = null;
+                        UiAudio.play(UiAudio.Cue.CONFIRM);
+                    } else {
+                        this.resetArmed = var2;
+                        this.resetArmedAt = System.currentTimeMillis();
+                        UiAudio.play(UiAudio.Cue.TICK);
+                    }
+                });
+            }
             if (var7) {
                 this.hit(var22, var23, var20, var21, var2x -> this.toggleModule(var2));
             }

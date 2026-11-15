@@ -66,5 +66,8 @@ extends Setting {
     public String getDefaultMode() {
         return this.defaultMode;
     }
-}
 
+    public void resetToDefault() {
+        this.index = Math.max(0, this.modes.indexOf(this.defaultMode));
+    }
+}

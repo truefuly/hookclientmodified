@@ -21,7 +21,7 @@ public final class InstaCartModule extends Module {
     @Override
     public void onEnable() {
         CartcoreCore.cartConfig.cartOverloading = this.cartOverloading.getValue();
-        CartcoreCore.cartConfig.instaCarting = true;
+        CartcoreCore.cartConfig.instaCarting = !BowCartModule.active() && !(XbowCartModule.instance != null && XbowCartModule.instance.isEnabled());
         CartcoreCore.cartConfig.save();
     }
 

@@ -38,6 +38,13 @@ public final class BowCartModule extends Module {
     private final BooleanSetting highlight = new BooleanSetting(EncryptedString.of("Highlight"), true);
     private final RgbSetting color = new RgbSetting(EncryptedString.of("Highlight Color"), 0xFFFF8A3D);
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
+    private final BooleanSetting crosshair = new BooleanSetting(EncryptedString.of("Place At Crosshair"), true);
+    private final BooleanSetting flameOnly = new BooleanSetting(EncryptedString.of("Flame Bows Only"), true);
+    private final hook.module.setting.NumberSetting minPower = new hook.module.setting.NumberSetting(EncryptedString.of("Min Draw %"), 10.0, 100.0, 10.0, 5.0);
+    private final hook.module.setting.NumberSetting cooldown = new hook.module.setting.NumberSetting(EncryptedString.of("Cooldown (ticks)"), 0.0, 40.0, 10.0, 1.0);
+    private final BooleanSetting skipIfCart = new BooleanSetting(EncryptedString.of("Skip If Cart There"), true);
+    private final BooleanSetting swapBack = new BooleanSetting(EncryptedString.of("Swap Back"), true);
+    private int lastPlace = Integer.MIN_VALUE / 2;
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
     private int lastAge = Integer.MIN_VALUE;
@@ -48,9 +55,29 @@ public final class BowCartModule extends Module {
         this.highlight.setDescription(EncryptedString.of("Holding or drawing a Flame bow: a soft outline on the spot where the cart will be placed."));
         this.color.setDescription(EncryptedString.of("Colour of the outline"));
         this.messages.setDescription(EncryptedString.of("Tells you in the action bar why it could not cart."));
-        this.addSettings(this.highlight, this.color, this.messages);
+        this.crosshair.setDescription(EncryptedString.of("On: rail + cart go on the block you look at when you shoot (any angle). Off: where the arrow lands."));
+        this.flameOnly.setDescription(EncryptedString.of("Only Flame bows trigger it; normal bows shoot normally."));
+        this.minPower.setDescription(EncryptedString.of("Shots drawn less than this do nothing."));
+        this.cooldown.setDescription(EncryptedString.of("Minimum ticks between two placements - stops double / spam placing."));
+        this.skipIfCart.setDescription(EncryptedString.of("Does not place again where a minecart already stands."));
+        this.swapBack.setDescription(EncryptedString.of("Switches back to the bow after placing."));
+        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
         instance = this;
+    }
+
+    @Override
+    public void onEnable() {
+        thetruetrident.cartcore.CartcoreCore.cartConfig.instaCarting = false; // old insta-cart auto-releases the bow
+        super.onEnable();
+    }
+
+    public static boolean active() {
+        return instance != null && instance.isEnabled();
+    }
+
+    private boolean hasCart(class_2338 r) {
+        return this.mc.field_1687 != null && !this.mc.field_1687.method_8390(net.minecraft.class_1688.class, new class_238(r).method_1014(0.3), e -> e.method_5805()).isEmpty();
     }
 
     @Override
@@ -79,10 +106,14 @@ public final class BowCartModule extends Module {
         m.pending = null;
         class_746 p = m.mc.field_1724;
         if (p == null) return;
+        // exactly one rail + one cart per shot
+        if (p.field_6012 - m.lastPlace < m.cooldown.getIntValue()) return;
+        if (m.skipIfCart.getValue() && m.hasCart(plan.rail)) return;
+        m.lastPlace = p.field_6012;
         int slot = p.method_31548().method_67532();
-        CartPlanner.placeRail(plan);
+        if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
         CartPlanner.placeCart(plan);
-        InventoryUtil.swap(slot);
+        if (m.swapBack.getValue()) InventoryUtil.swap(slot);
     }
 
     @EventListener
@@ -151,9 +182,29 @@ public final class BowCartModule extends Module {
             power = 1.0f;
         }
         if (!(bow.method_7909() instanceof class_1753)) return null;
-        if (!CartPlanner.hasFlame(bow)) return null; // normal bows: ignored, plain shot
-        if (power < 0.1f) return null;
+        if (this.flameOnly.getValue() && !CartPlanner.hasFlame(bow)) return null; // normal bows: ignored, plain shot
+        if (power < Math.max(0.1f, this.minPower.getFloatValue() / 100.0f)) return null;
         if (CartPlanner.cartSlot() < 0) return quiet ? null : this.fail("no TNT minecart in hotbar");
+
+        if (this.crosshair.getValue()) {
+            // the block under your crosshair at the moment you shoot - works from any angle
+            if (!(p.method_5745(p.method_55754(), 1.0f, false) instanceof net.minecraft.class_3965 bh) || bh.method_17783() != net.minecraft.class_239.class_240.field_1332) return null;
+            class_2338 hitPos = bh.method_17777();
+            class_2338 r;
+            net.minecraft.class_3965 rc;
+            if (CartPlanner.isRailBlock(hitPos)) { r = hitPos; rc = null; }
+            else {
+                if (bh.method_17780() == class_2350.field_11033) return quiet ? null : this.fail("can't put a rail under a block");
+                r = hitPos.method_10093(bh.method_17780());
+                rc = bh;
+            }
+            if (CartPlanner.railSlot() < 0 && !CartPlanner.isRailBlock(r)) return quiet ? null : this.fail("no rail in hotbar");
+            if (this.skipIfCart.getValue() && this.hasCart(r)) return null;
+            CartPlanner.Plan cp = new CartPlanner.Plan();
+            if (!CartPlanner.prepareRail(cp, r, rc)) return quiet ? null : this.fail("can't place a rail there");
+            if (!quiet && CartTest.ENABLED) { CartTest.planFire = null; CartTest.planRail = cp.rail; CartTest.planInfo = "CROSSHAIR rail=" + cp.rail.method_23854(); }
+            return cp;
+        }
 
         // same launch as BowItem: eye - 0.1, rotation * power * 3, plus your own movement
         class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());

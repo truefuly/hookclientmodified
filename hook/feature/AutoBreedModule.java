@@ -1,6 +1,7 @@
 package hook.feature;
 
 import hook.event.EventListener;
+import hook.event.events.PacketReceiveEvent;
 import hook.event.events.TickEvent;
 import hook.module.Category;
 import hook.module.Module;
@@ -60,6 +61,10 @@ public final class AutoBreedModule extends Module {
     private final NumberSetting interval = new NumberSetting(EncryptedString.of("Breeding Interval"), 20.0, 24000.0, 6020.0, 20.0).getValue(EncryptedString.of("Ticks before the same animal is fed again (6000 = vanilla breeding cooldown)"));
 
     private final Map<UUID, Integer> fed = new HashMap<>();
+    /** Fed adults waiting for the server's "in love" hearts (entity event 18): uuid -> {tick fed, tries}. */
+    private final Map<UUID, int[]> unconfirmed = new HashMap<>();
+    private final java.util.concurrent.ConcurrentLinkedQueue<net.minecraft.class_2663> events = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final int CONFIRM_TICKS = 12, MAX_TRIES = 3;
     private int lastAge = Integer.MIN_VALUE;
     private int previousSlot = -1;
     static AutoBreedModule instance;
@@ -75,6 +80,8 @@ public final class AutoBreedModule extends Module {
     @Override
     public void onEnable() {
         this.fed.clear();
+        this.unconfirmed.clear();
+        this.events.clear();
         this.previousSlot = -1;
         this.lastAge = Integer.MIN_VALUE;
         super.onEnable();
@@ -89,6 +96,37 @@ public final class AutoBreedModule extends Module {
 
     private record Candidate(class_1429 animal, class_243 point, double dist) {}
 
+    /** The server shows hearts (event 18) when an animal really went into love mode - ours or anyone's. */
+    @EventListener
+    public void onPacket(PacketReceiveEvent event) {
+        if (event.packet instanceof net.minecraft.class_2663 e && e.method_11470() == 18) this.events.add(e);
+    }
+
+    private void readHearts(int now) {
+        net.minecraft.class_2663 e;
+        while ((e = this.events.poll()) != null) {
+            if (this.mc.field_1687 == null) continue;
+            class_1297 entity = e.method_11469(this.mc.field_1687);
+            if (entity == null) continue;
+            this.unconfirmed.remove(entity.method_5667());
+            this.retries.remove(entity.method_5667());
+            this.fed.put(entity.method_5667(), now); // in love now: no point feeding it again before the cooldown
+        }
+        // no hearts in time: the server did not take it (lag, anticheat, wrong food) -> try that animal again
+        var it = this.unconfirmed.entrySet().iterator();
+        while (it.hasNext()) {
+            var en = it.next();
+            if (now - en.getValue()[0] < CONFIRM_TICKS) continue;
+            it.remove();
+            if (en.getValue()[1] < MAX_TRIES) {
+                this.fed.remove(en.getKey());
+                this.retries.put(en.getKey(), en.getValue()[1]);
+            }
+        }
+    }
+
+    private final Map<UUID, Integer> retries = new HashMap<>();
+
     @EventListener
     public void onTick(TickEvent event) {
         var p = this.mc.field_1724;
@@ -96,9 +134,11 @@ public final class AutoBreedModule extends Module {
         int now = p.field_6012;
         if (now == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = now;
+        this.readHearts(now);
         if (now % 200 == 0) {
             int keep = this.continuous.getValue() ? this.interval.getIntValue() : Integer.MAX_VALUE;
             this.fed.values().removeIf(t -> now - t > keep || now < t);
+            this.retries.keySet().removeIf(id -> !this.fed.containsKey(id) && !this.unconfirmed.containsKey(id));
         }
         if (this.mc.field_1755 != null || p.method_6115()) return; // not while in a menu or eating / using an item
 
@@ -154,6 +194,10 @@ public final class AutoBreedModule extends Module {
         if (!result.method_23665()) this.mc.field_1761.method_2905(p, target, useHand);
         p.method_6104(useHand);
         this.fed.put(target.method_5667(), p.field_6012);
+        if (!target.method_6109()) {
+            int tries = this.retries.getOrDefault(target.method_5667(), 0) + 1;
+            this.unconfirmed.put(target.method_5667(), new int[]{p.field_6012, tries});
+        }
     }
 
     /** -1: the hand already holds food for it, 0-8: hotbar slot to switch to, -2: no food. */

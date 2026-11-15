@@ -16,7 +16,7 @@ public final class VerseFallClientInitializer implements ClientModInitializer {
         var insta = modules.getModuleByClass(hook.feature.InstaCartModule.class);
         // the old CartCore crossbow logic stays off: Xbow Cart / Bow Cart replace it (its use-block hook blocked their clicks)
         thetruetrident.cartcore.CartcoreCore.cartConfig.crossbowCarting = false;
-        thetruetrident.cartcore.CartcoreCore.cartConfig.instaCarting = insta != null && insta.isEnabled();
+        thetruetrident.cartcore.CartcoreCore.cartConfig.instaCarting = insta != null && insta.isEnabled() && !hook.feature.BowCartModule.active() && !(hook.feature.XbowCartModule.instance != null && hook.feature.XbowCartModule.instance.isEnabled());
         thetruetrident.cartcore.CartcoreCore.cartConfig.save();
         Binds.openClickGui = () -> {};
         hook.feature.SwordcoreModuleSupport.initialize();
