@@ -26,6 +26,7 @@ public final class ShieldBreakerModule extends Module {
     private final NumberSetting returnDelay = (NumberSetting) new NumberSetting(EncryptedString.of("Switch Back Delay"), 0.0, 10.0, 4.0, 1.0).setDescription(EncryptedString.of("Ticks before your old item comes back"));
     private final NumberSetting chance = (NumberSetting) new NumberSetting(EncryptedString.of("Consistency"), 50.0, 100.0, 100.0, 1.0).setDescription(EncryptedString.of("How often (%) a shield hit triggers the swap"));
     private final BooleanSetting playersOnly = new BooleanSetting(EncryptedString.of("Only Players"), true);
+    private final BooleanSetting groundOnly = new BooleanSetting(EncryptedString.of("Leave Air Hits To Mace"), true).setDescription(EncryptedString.of("While you fall for a mace slam, Mace Swap / Stun Slam handles the hit instead"));
 
     private int originalSlot = -1;
     private int axeSlot = -1;
@@ -33,22 +34,26 @@ public final class ShieldBreakerModule extends Module {
 
     public ShieldBreakerModule() {
         super(EncryptedString.of("Shield Breaker"), EncryptedString.of("Swaps to your axe when you hit a shielding target, then back"), -1, Category.COMBAT);
-        this.addSettings(this.returnDelay, this.chance, this.playersOnly);
+        this.addSettings(this.returnDelay, this.chance, this.playersOnly, this.groundOnly);
         instance = this;
     }
 
     /** Called at the start of ClientPlayerInteractionManager.attackEntity. */
     public static void beforeAttack(class_1297 target) {
         ShieldBreakerModule m = instance;
-        if (m == null || !m.isEnabled() || MaceSwapModule.isMaceFollowUp()) return;
+        if (m == null || !m.isEnabled() || MaceSwapModule.isBusy()) return;
         class_310 mc = class_310.method_1551();
+        if (mc.field_1724 != null && m.groundOnly.getValue() && !mc.field_1724.method_24828() && MaceSwapModule.handlesAirHit()) return;
         if (mc.field_1724 == null || !(target instanceof class_1309 living) || !isShielding(living)) return;
         if (m.playersOnly.getValue() && !(target instanceof class_1657)) return;
         if (m.chance.getIntValue() < 100 && ThreadLocalRandom.current().nextInt(100) >= m.chance.getIntValue()) return;
         int axe = findAxeSlot();
         int current = mc.field_1724.method_31548().method_67532();
         if (axe < 0 || axe == current) return;
-        if (m.ticksRemaining < 0) m.originalSlot = current;
+        if (m.ticksRemaining < 0) {
+            int maceReturn = MaceSwapModule.takeReturnSlot();
+            m.originalSlot = maceReturn >= 0 ? maceReturn : current;
+        }
         m.axeSlot = axe;
         InventoryUtil.swap(axe);
         m.ticksRemaining = m.returnDelay.getIntValue();
@@ -58,6 +63,15 @@ public final class ShieldBreakerModule extends Module {
     public static void afterAttack() {
         ShieldBreakerModule m = instance;
         if (m != null && m.ticksRemaining == 0) m.restore();
+    }
+
+    /** Stun Slam takes over: stop the pending switch back and hand over the slot to return to (-1 if none). */
+    public static int takeOver() {
+        ShieldBreakerModule m = instance;
+        if (m == null || m.ticksRemaining < 0) return -1;
+        int slot = m.originalSlot;
+        m.originalSlot = m.axeSlot = m.ticksRemaining = -1;
+        return slot;
     }
 
     @EventListener

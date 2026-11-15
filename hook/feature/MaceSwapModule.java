@@ -41,6 +41,9 @@ public final class MaceSwapModule extends Module {
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Status Messages"), true).setDescription(EncryptedString.of("Shows what happened in the action bar"));
 
     private static boolean maceFollowUp;
+    private static MaceSwapModule instance;
+    /** True while this module sends its own stun slam hits (axe and mace). */
+    private static boolean slamming;
     private class_1297 slamTarget;
     private int slamTicks = -1;
     private int slamOriginal = -1;
@@ -50,6 +53,30 @@ public final class MaceSwapModule extends Module {
     public MaceSwapModule() {
         super(EncryptedString.of("Mace Swap"), EncryptedString.of("Swaps to your mace for smash hits, with optional Stun Slam against shields"), -1, Category.COMBAT);
         this.addSettings(this.preferred, this.onlySmash, this.onlyPlayers, this.stunSlam, this.followUp, this.holdTime, this.switchBack, this.messages);
+        instance = this;
+    }
+
+    /** True while a stun slam / mace hit is running or the mace is still held: Shield Breaker stays out of it. */
+    public static boolean isBusy() {
+        MaceSwapModule m = instance;
+        return maceFollowUp || slamming || m != null && m.isEnabled() && (m.slamTarget != null || m.returnSlot >= 0);
+    }
+
+    /** True when this hit will be handled as a mace hit (mace module on, mace in hotbar, falling for a smash). */
+    public static boolean handlesAirHit() {
+        MaceSwapModule m = instance;
+        if (m == null || !m.isEnabled() || m.mc.field_1724 == null) return false;
+        if (m.findMace() < 0) return false;
+        return !m.onlySmash.getValue() || class_9362.method_58659(m.mc.field_1724);
+    }
+
+    /** Hands a pending switch-back slot over to another module (so only one of them swaps back). */
+    public static int takeReturnSlot() {
+        MaceSwapModule m = instance;
+        if (m == null || m.returnSlot < 0) return -1;
+        int slot = m.returnSlot;
+        m.returnSlot = -1;
+        return slot;
     }
 
     /** True while the mace hit of a stun slam is being sent (Shield Breaker must not swap to the axe then). */
@@ -107,14 +134,20 @@ public final class MaceSwapModule extends Module {
             return;
         }
         int selected = player.method_31548().method_67532();
-        int original = this.returnSlot >= 0 ? this.returnSlot : selected;
+        int breakerOriginal = ShieldBreakerModule.takeOver();
+        int original = this.returnSlot >= 0 ? this.returnSlot : breakerOriginal >= 0 ? breakerOriginal : selected;
         this.returnSlot = -1;
 
         int axe = this.stunSlam.getValue() && ShieldBreakerModule.isShielding(target) ? ShieldBreakerModule.findAxeSlot() : -1;
         if (axe >= 0) {
             event.cancel();
             InventoryUtil.swap(axe);
-            this.attack(target);
+            slamming = true;
+            try {
+                this.attack(target);
+            } finally {
+                slamming = false;
+            }
             if (this.followUp.getIntValue() == 0) {
                 InventoryUtil.swap(mace);
                 this.maceAttack(target);
