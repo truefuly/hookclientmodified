@@ -57,7 +57,8 @@ import hook.feature.MaceSwapModule;
 import hook.feature.NameProtectModule;
 import hook.feature.PearlCatchModule;
 import hook.feature.PanicButtonModule;
-import hook.feature.PlayerEspModule;
+import hook.feature.EntityEspModule;
+import hook.feature.ItemEspModule;
 import hook.feature.SkinProtectModule;
 import hook.feature.SpawnerNotifyModule;
 import hook.feature.StorageEspModule;
@@ -134,7 +135,8 @@ public final class ModuleManager {
         // Render: seeing things in the world
         this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());
-        this.in(Category.RENDER, new PlayerEspModule());
+        this.in(Category.RENDER, new EntityEspModule());
+        this.in(Category.RENDER, new ItemEspModule());
         this.in(Category.RENDER, new StorageEspModule());
         this.in(Category.RENDER, new BlockEspModule());
         this.in(Category.RENDER, new TunnelEspModule());

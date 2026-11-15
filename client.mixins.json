@@ -100,7 +100,8 @@
     "NoParticlesMixin",
     "ForceRenderSodiumMixin",
     "AutoMinerBreakMixin",
-    "NoRenderMixin"
+    "NoRenderMixin",
+    "NoRenderEntityRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
