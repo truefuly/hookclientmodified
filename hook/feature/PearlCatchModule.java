@@ -22,7 +22,7 @@ import net.minecraft.class_3959;
 import net.minecraft.class_3965;
 
 /**
- * Boosts a thrown ender pearl with a wind charge.
+ * Catches a thrown ender pearl with a wind charge for a teleport plus wind boost.
  *
  * A wind charge can't hit a pearl; it only bursts when it hits a block, and the burst pushes every entity within
  * 2.4 blocks away from its centre, harder the closer it is. So right after the pearl leaves your hand (same tick,
@@ -32,15 +32,11 @@ import net.minecraft.class_3965;
 public final class PearlCatchModule extends Module {
     /** Player-thrown pearls and wind charges both start at 1.5 blocks per tick. */
     private static final double THROW_SPEED = 1.5;
-    /** Wind burst radius 1.2; entities up to twice that are pushed with strength (1 - distance / 2.4). */
-    private static final double BURST_REACH = 2.4;
     private static final double PEARL_GRAVITY = 0.03;
     private static final double PEARL_DRAG = 0.99;
 
-    private final NumberSetting maxTicks = new NumberSetting(EncryptedString.of("Max Flight Ticks"), 1.0, 6.0, 4.0, 1.0).getValue(EncryptedString.of("How many ticks the wind charge may fly before it has to burst"));
-    private final NumberSetting minBoost = new NumberSetting(EncryptedString.of("Min Boost"), 5.0, 100.0, 20.0, 5.0).getValue(EncryptedString.of("Only throws the wind charge when the pearl gets at least this much push (percent of a point blank burst)"));
-    private final NumberSetting maxPitch = new NumberSetting(EncryptedString.of("Max Pitch"), -90.0, 90.0, 30.0, 1.0).getValue(EncryptedString.of("Only boosts pearls thrown at least this far up (90 = any direction, negative = only upwards)"));
-    private final BooleanSetting forwardOnly = new BooleanSetting(EncryptedString.of("Push Forward Only"), true).setDescription(EncryptedString.of("Only bursts that push the pearl along its flight, never sideways or backwards"));
+    private final NumberSetting maxTicks = new NumberSetting(EncryptedString.of("Catch Ticks"), 2.0, 10.0, 4.0, 1.0).getValue(EncryptedString.of("How many ticks after the throw the wind charge may meet the pearl at most"));
+    private final NumberSetting maxPitch = new NumberSetting(EncryptedString.of("Max Pitch"), -90.0, 90.0, 90.0, 1.0).getValue(EncryptedString.of("Only boosts pearls thrown at least this far up (90 = any direction, negative = only upwards)"));
     private final BooleanSetting silent = new BooleanSetting(EncryptedString.of("Silent Rotation"), true).setDescription(EncryptedString.of("Aims the wind charge without moving your camera"));
     private final BooleanSetting switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true).setDescription(EncryptedString.of("Returns to the pearl slot right away"));
 
@@ -48,7 +44,7 @@ public final class PearlCatchModule extends Module {
 
     public PearlCatchModule() {
         super(EncryptedString.of("Pearl Catch"), EncryptedString.of("Boosts your thrown ender pearl further with a wind charge burst"), -1, Category.COMBAT);
-        this.addSettings(this.maxTicks, this.minBoost, this.maxPitch, this.forwardOnly, this.silent, this.switchBack);
+        this.addSettings(this.maxTicks, this.maxPitch, this.silent, this.switchBack);
     }
 
     @Override
@@ -103,61 +99,36 @@ public final class PearlCatchModule extends Module {
         if (this.switchBack.getValue()) InventoryUtil.swap(previousSlot);
     }
 
-    /** Returns {yaw, pitch} of the throw whose burst pushes the pearl hardest, or null if none is good enough. */
+    /**
+     * The pearl itself can't be hit, but a flying pearl hits wind charges (they are redirectable projectiles). So the
+     * wind charge is thrown right away into the point where it meets the pearl a few ticks later: the pearl runs into
+     * it, the charge bursts and you get teleported with the boost. Picks the tick where both arrive at the same time.
+     */
     private float[] findBestAim(class_243 eye, class_243 pearlStart, class_243 pearlVel0) {
         int ticks = this.maxTicks.getIntValue();
-        double reach = THROW_SPEED * ticks + 0.5;
-        // pearl path, index = ticks after the throw
-        class_243[] pearl = new class_243[ticks + 2];
+        class_243 motion = this.mc.field_1724.method_18798();
+        class_243 inherit = new class_243(motion.field_1352, this.mc.field_1724.method_24828() ? 0.0 : motion.field_1351, motion.field_1350);
         class_243 p = pearlStart;
         class_243 v = pearlVel0;
-        pearl[0] = p;
-        for (int t = 1; t < pearl.length; t++) {
+        class_243 bestTarget = null;
+        double bestMiss = Double.MAX_VALUE;
+        for (int t = 1; t <= ticks; t++) {
             p = p.method_1019(v);
             v = v.method_1031(0.0, -PEARL_GRAVITY, 0.0).method_1021(PEARL_DRAG);
-            pearl[t] = p;
+            if (t < 2) continue; // never burst right in your face
+            // where the charge must head (its own motion on top of what it inherits from you)
+            class_243 rel = p.method_1020(inherit.method_1021(t)).method_1020(eye);
+            double miss = Math.abs(rel.method_1033() - THROW_SPEED * t);
+            // don't aim through walls
+            class_3965 hit = this.mc.field_1687.method_17742(new class_3959(eye, p, class_3959.class_3960.field_17558, class_3959.class_242.field_1348, (class_1297)this.mc.field_1724));
+            if (hit != null && hit.method_17783() == class_239.class_240.field_1332) break;
+            if (miss < bestMiss) { bestMiss = miss; bestTarget = rel; }
         }
-        class_243 flight = pearlVel0.method_1029();
-
-        double best = this.minBoost.getValue() / 100.0;
-        float[] result = null;
-        float baseYaw = this.mc.field_1724.method_36454();
-        for (int pitchStep = -30; pitchStep <= 30; pitchStep++) {
-            float pitch = pitchStep * 3.0f;
-            for (int yawStep = 0; yawStep < 72; yawStep++) {
-                float yaw = baseYaw + yawStep * 5.0f;
-                class_243 dir = directionOf(yaw, pitch);
-                class_243 end = eye.method_1019(dir.method_1021(reach));
-                class_3965 hit = this.mc.field_1687.method_17742(new class_3959(eye, end, class_3959.class_3960.field_17558, class_3959.class_242.field_1348, (class_1297)this.mc.field_1724));
-                if (hit == null || hit.method_17783() != class_239.class_240.field_1332) continue;
-                class_243 at = hit.method_17784();
-                double travelled = at.method_1022(eye);
-                if (travelled < 0.3) continue;
-                // the charge bursts in the tick it reaches the block; the pearl has moved that many ticks too
-                int t = Math.max(1, (int)Math.ceil(travelled / THROW_SPEED));
-                if (t >= pearl.length) continue;
-                class_2350 side = hit.method_17780();
-                class_243 burst = at.method_1031(side.method_10148() * 0.25, side.method_10164() * 0.25, side.method_10165() * 0.25);
-                double score = this.pushScore(burst, pearl[t], flight);
-                if (score > best) {
-                    best = score;
-                    result = new float[]{class_3532.method_15393(yaw), pitch};
-                }
-            }
-        }
-        return result;
-    }
-
-    /** How much the burst pushes the pearl along its flight (1 = point blank, straight behind it). */
-    private double pushScore(class_243 burst, class_243 pearlPos, class_243 flight) {
-        class_243 away = pearlPos.method_1020(burst);
-        double distance = away.method_1033();
-        if (distance >= BURST_REACH) return 0.0;
-        double strength = 1.0 - distance / BURST_REACH;
-        if (distance < 1.0E-4) return strength;
-        double along = away.method_1021(1.0 / distance).method_1026(flight);
-        if (this.forwardOnly.getValue() && along < 0.3) return 0.0;
-        return strength * along;
+        if (bestTarget == null || bestMiss > 1.0) return null;
+        class_243 d = bestTarget.method_1029();
+        float yaw = (float)Math.toDegrees(Math.atan2(-d.field_1352, d.field_1350));
+        float pitch = (float)Math.toDegrees(-Math.asin(d.field_1351));
+        return new float[]{class_3532.method_15393(yaw), class_3532.method_15363(pitch, -90.0f, 90.0f)};
     }
 
     private static class_243 directionOf(float yaw, float pitch) {
