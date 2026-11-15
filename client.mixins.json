@@ -99,6 +99,8 @@
     "AntiBreakMixin",
     "NoParticlesMixin",
     "ForceRenderSodiumMixin",
+    "ForceRenderDistanceMixin",
+    "ForceRenderBlockEntityMixin",
     "AutoMinerBreakMixin",
     "NoRenderMixin",
     "NoRenderEntityRendererMixin"

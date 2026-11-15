@@ -18,6 +18,8 @@ import java.lang.reflect.Field;
 public final class ForceRenderModule extends Module {
     private final BooleanSetting occlusion = new BooleanSetting(EncryptedString.of("Ignore Occlusion"), true).setDescription(EncryptedString.of("Renders chunks hidden behind blocks too, so caves and bases far away are already built"));
     private final BooleanSetting fog = new BooleanSetting(EncryptedString.of("Ignore Fog Culling"), true).setDescription(EncryptedString.of("Sodium: renders chunks behind the fog distance too"));
+    private final BooleanSetting distances = new BooleanSetting(EncryptedString.of("Ignore Render Distances"), true).setDescription(EncryptedString.of("Entities and block entities (chests, signs...) render at any distance the server sends them"));
+    private final BooleanSetting cullingMod = new BooleanSetting(EncryptedString.of("Disable Entity Culling Mod"), true).setDescription(EncryptedString.of("Turns off the Entity Culling mod's hiding of entities and block entities behind walls"));
     private final BooleanSetting entities = new BooleanSetting(EncryptedString.of("Ignore Entity Culling"), true).setDescription(EncryptedString.of("Sodium: draws entities in hidden chunks as well"));
 
     private boolean savedSmartCull = true;
@@ -28,8 +30,46 @@ public final class ForceRenderModule extends Module {
 
     public ForceRenderModule() {
         super(EncryptedString.of("Force Render"), EncryptedString.of("Renders everything the server sent you, even when performance mods would skip it"), -1, Category.RENDER);
-        this.addSettings(this.occlusion, this.fog, this.entities);
+        this.addSettings(this.occlusion, this.fog, this.entities, this.distances, this.cullingMod);
         instance = this;
+    }
+
+    public static boolean ignoreDistances() {
+        ForceRenderModule m = instance;
+        return m != null && m.isEnabled() && m.distances.getValue();
+    }
+
+    private Boolean savedSkipEntity, savedSkipBlockEntity;
+
+    /** Sets EntityCulling's skip flags (reflection, the mod is optional); remembers the user's values. */
+    private void applyCullingMod(boolean disable) {
+        try {
+            Class<?> base = Class.forName("dev.tr7zw.entityculling.EntityCullingModBase");
+            Object inst = base.getField("instance").get(null);
+            if (inst == null) return;
+            Object config = null;
+            for (Class<?> c = base; c != null && config == null; c = c.getSuperclass()) {
+                for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                    if (f.getType().getName().equals("dev.tr7zw.entityculling.versionless.Config")) {
+                        f.setAccessible(true);
+                        config = f.get(inst);
+                        break;
+                    }
+                }
+            }
+            if (config == null) return;
+            Field se = config.getClass().getField("skipEntityCulling"), sb = config.getClass().getField("skipBlockEntityCulling");
+            if (disable) {
+                if (this.savedSkipEntity == null) { this.savedSkipEntity = se.getBoolean(config); this.savedSkipBlockEntity = sb.getBoolean(config); }
+                se.setBoolean(config, true);
+                sb.setBoolean(config, true);
+            } else if (this.savedSkipEntity != null) {
+                se.setBoolean(config, this.savedSkipEntity);
+                sb.setBoolean(config, this.savedSkipBlockEntity);
+                this.savedSkipEntity = null;
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
@@ -67,12 +107,14 @@ public final class ForceRenderModule extends Module {
             if (this.savedEntities != null) setSodiumFlag("useEntityCulling", this.savedEntities);
             if (this.mc.field_1769 != null) this.mc.field_1769.method_3292();
         }
+        this.applyCullingMod(false);
         super.onDisable();
     }
 
     @EventListener
     public void onTick(TickEvent event) {
         if (this.mc == null) return;
+        this.applyCullingMod(this.cullingMod.getValue());
         boolean changed = false;
         boolean smartCull = !this.occlusion.getValue() && this.savedSmartCull;
         if (this.mc.field_1730 != smartCull) { this.mc.field_1730 = smartCull; changed = true; }
