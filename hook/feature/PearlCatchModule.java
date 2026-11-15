@@ -1,11 +1,9 @@
 package hook.feature;
 
 import hook.event.EventListener;
-import hook.event.events.PostItemUseEvent;
 import hook.event.events.PreItemUseEvent;
 import hook.module.Category;
 import hook.module.Module;
-import hook.module.setting.BooleanSetting;
 import hook.module.setting.NumberSetting;
 import hook.utils.EncryptedString;
 import hook.utils.InventoryUtil;
@@ -14,7 +12,7 @@ import net.minecraft.class_1297;
 import net.minecraft.class_1657;
 import net.minecraft.class_1799;
 import net.minecraft.class_1802;
-import net.minecraft.class_2350;
+import net.minecraft.class_238;
 import net.minecraft.class_239;
 import net.minecraft.class_243;
 import net.minecraft.class_3532;
@@ -22,113 +20,121 @@ import net.minecraft.class_3959;
 import net.minecraft.class_3965;
 
 /**
- * Catches a thrown ender pearl with a wind charge for a teleport plus wind boost.
+ * Wind charge pearl catch: when you throw an ender pearl, a wind charge is thrown first in the same tick, aimed so
+ * the pearl runs right into it and you land on the charge.
  *
- * A wind charge can't hit a pearl; it only bursts when it hits a block, and the burst pushes every entity within
- * 2.4 blocks away from its centre, harder the closer it is. So right after the pearl leaves your hand (same tick,
- * before it flies out of reach) this searches the directions around you for the block hit whose burst pushes the
- * pearl hardest along its flight path, throws the wind charge there with a silent rotation and switches back.
+ * How vanilla decides it: a pearl can't be hit, but a flying pearl hits wind charges. Every tick the pearl applies
+ * gravity (0.03) and drag (0.99), then tests its move against entity boxes inflated by 0.3; a move that starts inside
+ * a box never counts. Entities tick in spawn order, so the charge (thrown first) has already moved when the pearl
+ * tests its move. The charge spawns at eye height and flies straight at 1.5 blocks per tick; the pearl spawns 0.1
+ * lower at 1.5; both inherit your movement. This module replays exactly that and picks the throw angle where the
+ * pearl's move passes closest to the centre of the charge, so the server's small random throw spread can't make it miss.
  */
 public final class PearlCatchModule extends Module {
-    /** Player-thrown pearls and wind charges both start at 1.5 blocks per tick. */
     private static final double THROW_SPEED = 1.5;
     private static final double PEARL_GRAVITY = 0.03;
     private static final double PEARL_DRAG = 0.99;
+    /** Wind charge hitbox is 0.3125 wide; projectile hit tests inflate the target box by 0.3. */
+    private static final double WIND_HALF = 0.15625, WIND_SIZE = 0.3125, HIT_MARGIN = 0.3;
 
-    private final NumberSetting maxTicks = new NumberSetting(EncryptedString.of("Catch Ticks"), 2.0, 10.0, 4.0, 1.0).getValue(EncryptedString.of("How many ticks after the throw the wind charge may meet the pearl at most"));
-    private final NumberSetting maxPitch = new NumberSetting(EncryptedString.of("Max Pitch"), -90.0, 90.0, 90.0, 1.0).getValue(EncryptedString.of("Only boosts pearls thrown at least this far up (90 = any direction, negative = only upwards)"));
-    private final BooleanSetting silent = new BooleanSetting(EncryptedString.of("Silent Rotation"), true).setDescription(EncryptedString.of("Aims the wind charge without moving your camera"));
-    private final BooleanSetting switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true).setDescription(EncryptedString.of("Returns to the pearl slot right away"));
-
-    private boolean pearlArmed;
+    private final NumberSetting maxTicks = new NumberSetting(EncryptedString.of("Catch Ticks"), 1.0, 10.0, 3.0, 1.0).getValue(EncryptedString.of("Latest tick after the throw in which the pearl may land on the wind charge"));
+    private final NumberSetting maxPitch = new NumberSetting(EncryptedString.of("Max Pitch"), -90.0, 90.0, 90.0, 1.0).getValue(EncryptedString.of("Only catches pearls thrown at least this far up (90 = any direction, negative = only upwards)"));
+    private final NumberSetting maxTurn = new NumberSetting(EncryptedString.of("Max Aim Offset"), 0.0, 10.0, 6.0, 0.5).getValue(EncryptedString.of("How many degrees the wind charge may be aimed away from where you look"));
 
     public PearlCatchModule() {
-        super(EncryptedString.of("Pearl Catch"), EncryptedString.of("Boosts your thrown ender pearl further with a wind charge burst"), -1, Category.COMBAT);
-        this.addSettings(this.maxTicks, this.maxPitch, this.silent, this.switchBack);
-    }
-
-    @Override
-    public void onDisable() {
-        this.pearlArmed = false;
-        super.onDisable();
+        super(EncryptedString.of("Pearl Catch"), EncryptedString.of("Throws a wind charge right before your pearl so the pearl lands on it"), -1, Category.COMBAT);
+        this.addSettings(this.maxTicks, this.maxPitch, this.maxTurn);
     }
 
     @EventListener
     public void onPreItemUse(PreItemUseEvent event) {
-        this.pearlArmed = false;
-        if (this.mc.field_1724 == null || this.mc.field_1687 == null || this.mc.field_1755 != null) return;
-        class_1799 hand = this.mc.field_1724.method_5998(class_1268.field_5808);
-        if (hand.method_7909() != class_1802.field_8634) return;
-        if (this.mc.field_1724.method_7357().method_7904(hand)) return; // still on cooldown, nothing gets thrown
-        if (this.mc.field_1724.method_36455() > this.maxPitch.getFloatValue()) return;
-        this.pearlArmed = true;
-    }
-
-    @EventListener
-    public void onPostItemUse(PostItemUseEvent event) {
-        if (!this.pearlArmed) return;
-        this.pearlArmed = false;
-        if (this.mc.field_1724 == null || this.mc.field_1687 == null || this.mc.field_1761 == null) return;
-        // the pearl was really thrown only if it went on cooldown
-        if (!this.mc.field_1724.method_7357().method_7904(new class_1799(class_1802.field_8634))) return;
+        var p = this.mc.field_1724;
+        if (p == null || this.mc.field_1687 == null || this.mc.field_1761 == null || this.mc.field_1755 != null) return;
+        if (p.method_6047().method_7909() != class_1802.field_8634) return;
+        if (p.method_7357().method_7904(p.method_6047())) return; // pearl on cooldown, nothing gets thrown
+        if (p.method_36455() > this.maxPitch.getFloatValue()) return;
         int windSlot = this.findWindChargeSlot();
         if (windSlot == -1) return;
-        if (this.mc.field_1724.method_7357().method_7904(this.mc.field_1724.method_31548().method_5438(windSlot))) return;
+        if (p.method_7357().method_7904(p.method_31548().method_5438(windSlot))) return;
 
-        class_243 eye = this.mc.field_1724.method_33571();
-        class_243 pearlPos = new class_243(eye.field_1352, eye.field_1351 - 0.1, eye.field_1350);
-        class_243 motion = this.mc.field_1724.method_18798();
-        class_243 pearlVel = this.mc.field_1724.method_5828(1.0f).method_1021(THROW_SPEED)
-                .method_1031(motion.field_1352, this.mc.field_1724.method_24828() ? 0.0 : motion.field_1351, motion.field_1350);
+        float yaw = p.method_36454(), pitch = p.method_36455();
+        // the server uses the position from your last movement packet, which is your current position
+        class_243 eye = p.method_33571();
+        class_243 motion = p.method_18798();
+        class_243 inherit = new class_243(motion.field_1352, p.method_24828() ? 0.0 : motion.field_1351, motion.field_1350);
+        class_243 pearlStart = new class_243(eye.field_1352, eye.field_1351 - 0.1, eye.field_1350);
+        class_243 pearlVel = directionOf(yaw, pitch).method_1021(THROW_SPEED).method_1019(inherit);
 
-        float[] aim = this.findBestAim(eye, pearlPos, pearlVel);
+        float[] aim = this.findBestAim(eye, inherit, pearlStart, pearlVel, yaw, pitch);
         if (aim == null) return;
 
-        int previousSlot = this.mc.field_1724.method_31548().method_67532();
-        float yaw = this.mc.field_1724.method_36454();
-        float pitch = this.mc.field_1724.method_36455();
+        int pearlSlot = p.method_31548().method_67532();
         InventoryUtil.swap(windSlot);
-        this.mc.field_1724.method_36456(aim[0]);
-        this.mc.field_1724.method_36457(aim[1]);
+        p.method_36456(aim[0]);
+        p.method_36457(aim[1]);
         // the use packet carries this rotation, so the server throws the charge exactly where we aimed
-        this.mc.field_1761.method_2919((class_1657)this.mc.field_1724, class_1268.field_5808);
-        if (this.silent.getValue()) {
-            this.mc.field_1724.method_36456(yaw);
-            this.mc.field_1724.method_36457(pitch);
-        }
-        if (this.switchBack.getValue()) InventoryUtil.swap(previousSlot);
+        this.mc.field_1761.method_2919((class_1657)p, class_1268.field_5808);
+        // camera never moves: the rotation is only used for that one packet
+        p.method_36456(yaw);
+        p.method_36457(pitch);
+        // back on the pearl: vanilla now throws it with your real rotation, right after the charge
+        InventoryUtil.swap(pearlSlot);
     }
 
-    /**
-     * The pearl itself can't be hit, but a flying pearl hits wind charges (they are redirectable projectiles). So the
-     * wind charge is thrown right away into the point where it meets the pearl a few ticks later: the pearl runs into
-     * it, the charge bursts and you get teleported with the boost. Picks the tick where both arrive at the same time.
-     */
-    private float[] findBestAim(class_243 eye, class_243 pearlStart, class_243 pearlVel0) {
+    private float[] findBestAim(class_243 eye, class_243 inherit, class_243 pearlStart, class_243 pearlVel0, float yaw, float pitch) {
         int ticks = this.maxTicks.getIntValue();
-        class_243 motion = this.mc.field_1724.method_18798();
-        class_243 inherit = new class_243(motion.field_1352, this.mc.field_1724.method_24828() ? 0.0 : motion.field_1351, motion.field_1350);
-        class_243 p = pearlStart;
+        class_243[] pearl = new class_243[ticks + 1];
+        pearl[0] = pearlStart;
         class_243 v = pearlVel0;
-        class_243 bestTarget = null;
-        double bestMiss = Double.MAX_VALUE;
+        int pearlTicks = ticks;
         for (int t = 1; t <= ticks; t++) {
-            p = p.method_1019(v);
             v = v.method_1031(0.0, -PEARL_GRAVITY, 0.0).method_1021(PEARL_DRAG);
-            if (t < 2) continue; // never burst right in your face
-            // where the charge must head (its own motion on top of what it inherits from you)
-            class_243 rel = p.method_1020(inherit.method_1021(t)).method_1020(eye);
-            double miss = Math.abs(rel.method_1033() - THROW_SPEED * t);
-            // don't aim through walls
-            class_3965 hit = this.mc.field_1687.method_17742(new class_3959(eye, p, class_3959.class_3960.field_17558, class_3959.class_242.field_1348, (class_1297)this.mc.field_1724));
-            if (hit != null && hit.method_17783() == class_239.class_240.field_1332) break;
-            if (miss < bestMiss) { bestMiss = miss; bestTarget = rel; }
+            class_243 next = pearl[t - 1].method_1019(v);
+            if (this.blocked(pearl[t - 1], next)) { pearlTicks = t - 1; break; }
+            pearl[t] = next;
         }
-        if (bestTarget == null || bestMiss > 1.0) return null;
-        class_243 d = bestTarget.method_1029();
-        float yaw = (float)Math.toDegrees(Math.atan2(-d.field_1352, d.field_1350));
-        float pitch = (float)Math.toDegrees(-Math.asin(d.field_1351));
-        return new float[]{class_3532.method_15393(yaw), class_3532.method_15363(pitch, -90.0f, 90.0f)};
+        if (pearlTicks < 1) return null;
+
+        float range = this.maxTurn.getFloatValue();
+        float[] best = null;
+        double bestScore = 0;
+        for (float dy = -range; dy <= range + 1.0E-3f; dy += 0.25f) {
+            for (float dp = -range; dp <= range + 1.0E-3f; dp += 0.25f) {
+                float y = yaw + dy, x = class_3532.method_15363(pitch + dp, -90.0f, 90.0f);
+                class_243 windVel = directionOf(y, x).method_1021(THROW_SPEED).method_1019(inherit);
+                double score = this.simulate(eye, windVel, pearl, pearlTicks);
+                // prefer the least turn on equal score
+                score -= (Math.abs(dy) + Math.abs(dp)) * 1.0E-4;
+                if (score > bestScore) { bestScore = score; best = new float[]{class_3532.method_15393(y), x}; }
+            }
+        }
+        return best;
+    }
+
+    /** 0 = the pearl never lands on the charge; otherwise higher for an earlier, more centred catch. */
+    private double simulate(class_243 eye, class_243 windVel, class_243[] pearl, int pearlTicks) {
+        for (int t = 1; t <= pearlTicks; t++) {
+            class_243 wind = eye.method_1019(windVel.method_1021(t));
+            if (this.blocked(eye.method_1019(windVel.method_1021(t - 1)), wind)) return 0; // charge burst on a block first
+            class_238 box = new class_238(wind.field_1352 - WIND_HALF, wind.field_1351, wind.field_1350 - WIND_HALF,
+                    wind.field_1352 + WIND_HALF, wind.field_1351 + WIND_SIZE, wind.field_1350 + WIND_HALF).method_1014(HIT_MARGIN);
+            if (box.method_1006(pearl[t - 1])) continue; // a move starting inside never registers
+            if (box.method_992(pearl[t - 1], pearl[t]).isEmpty()) continue;
+            // room for the random spread: how close the move passes to the box centre
+            class_243 c = box.method_1005();
+            class_243 d = pearl[t].method_1020(pearl[t - 1]);
+            double len2 = d.method_1027();
+            double k = len2 < 1.0E-9 ? 0 : Math.max(0, Math.min(1, c.method_1020(pearl[t - 1]).method_1026(d) / len2));
+            double dist = pearl[t - 1].method_1019(d.method_1021(k)).method_1022(c);
+            double room = Math.max(0.0, WIND_HALF + HIT_MARGIN - dist);
+            return (pearlTicks + 1 - t) * 0.1 + room + 0.001;
+        }
+        return 0;
+    }
+
+    private boolean blocked(class_243 from, class_243 to) {
+        class_3965 hit = this.mc.field_1687.method_17742(new class_3959(from, to, class_3959.class_3960.field_17558, class_3959.class_242.field_1348, (class_1297)this.mc.field_1724));
+        return hit != null && hit.method_17783() == class_239.class_240.field_1332;
     }
 
     private static class_243 directionOf(float yaw, float pitch) {
