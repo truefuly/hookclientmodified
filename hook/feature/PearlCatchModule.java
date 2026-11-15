@@ -84,7 +84,15 @@ public final class PearlCatchModule extends Module {
         this.spawnVel = null;
         this.throwTime = System.currentTimeMillis(); // before the use packet goes out: its spawn packet comes after
         this.pearlArmed = true;
+        // same-tick mode: work the aim out BEFORE the pearl packet goes out, so both packets leave back to back and
+        // the server handles them in the same tick (searching after the throw can take long enough to slip a tick)
+        this.preAim = null;
+        if (this.delay.getIntValue() == 0 && !PearlCatchTest.TRACE) {
+            try { this.preAim = this.findAim(p.method_33571(), this.inherit(), 0); } catch (Throwable t) { this.preAim = null; }
+        }
     }
+
+    private float[] preAim;
 
     @EventListener
     public void onPostItemUse(PostItemUseEvent event) {
@@ -115,6 +123,7 @@ public final class PearlCatchModule extends Module {
         if (System.currentTimeMillis() - this.throwTime > 3000) return;
         this.spawnVel = add.method_73084();
         this.spawnPos = new class_243(add.method_11175(), add.method_11174(), add.method_11176());
+        if (PearlCatchTest.ENABLED) System.out.println("PEARLSPAWN pos=" + this.spawnPos + " vel=" + this.spawnVel);
     }
 
     /**
@@ -168,7 +177,9 @@ public final class PearlCatchModule extends Module {
         if (windSlot == -1 || p.method_7357().method_7904(p.method_31548().method_5438(windSlot))) {
             return;
         }
-        float[] aim = PearlCatchTest.TRACE ? new float[]{p.method_36454(), p.method_36455()} : this.findAim(p.method_33571(), this.inherit(), this.pendingDelay);
+        float[] aim = this.pendingDelay == 0 && this.preAim != null ? this.preAim : PearlCatchTest.TRACE ? new float[]{p.method_36454(), p.method_36455()} : this.findAim(p.method_33571(), this.inherit(), this.pendingDelay);
+        this.preAim = null;
+        if (PearlCatchTest.ENABLED) System.out.println("PEARLAIM yaw=" + (aim == null ? "-" : aim[0] + " pitch=" + aim[1]) + " pearlVel=" + this.pearlVel + " start=" + this.pearlStart + " eye=" + p.method_33571() + " pkt=" + (this.packetPearlPath(3) != null));
         if (aim != null) this.throwWind(windSlot, aim);
     }
 
