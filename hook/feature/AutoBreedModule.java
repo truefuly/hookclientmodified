@@ -48,9 +48,7 @@ public final class AutoBreedModule extends Module {
     private final NumberSetting range = new NumberSetting(EncryptedString.of("Range"), 0.0, 6.0, 4.5, 0.1).getValue(EncryptedString.of("How far away from the player you can breed animals"));
     private final ModeSetting<BreedHand> hand = new ModeSetting<BreedHand>(EncryptedString.of("Hand For Breeding"), BreedHand.MainHand, BreedHand.class).setDescription(EncryptedString.of("The hand that holds the breeding item"));
     private final ModeSetting<AgeFilter> ageFilter = new ModeSetting<AgeFilter>(EncryptedString.of("Mob Age Filter"), AgeFilter.Adult, AgeFilter.class).setDescription(EncryptedString.of("Adult: breed. Baby: feed babies so they grow up faster. Both: everything"));
-    private final BooleanSetting autoSwitch = new BooleanSetting(EncryptedString.of("Auto Switch"), true).setDescription(EncryptedString.of("Switches to the right food in your hotbar when the hand holds something the animal doesn't eat"));
-    private final BooleanSetting switchBack = new BooleanSetting(EncryptedString.of("Switch Back"), true).setDescription(EncryptedString.of("Switches back to your old hotbar slot when nothing is left to feed"));
-    private final BooleanSetting continuous = new BooleanSetting(EncryptedString.of("Continuous Breeding"), true).setDescription(EncryptedString.of("Feed the same animal again after the breeding interval"));
+    private final BooleanSetting continuous = new BooleanSetting(EncryptedString.of("Continuous Breeding"), false).setDescription(EncryptedString.of("Feed the same animal again after the breeding interval"));
     private final NumberSetting interval = new NumberSetting(EncryptedString.of("Breeding Interval"), 1.0, 24000.0, 6600.0, 20.0).getValue(EncryptedString.of("Ticks before the same animal is fed again (6600 = 30s love + 5 min cooldown)"));
 
     private final Map<UUID, Long> fed = new HashMap<>();
@@ -61,8 +59,7 @@ public final class AutoBreedModule extends Module {
     public AutoBreedModule() {
         super(EncryptedString.of("Auto Breed"), EncryptedString.of("Automatically breeds the selected animals around you"), -1, Category.MISC);
         this.entities.setDescription(EncryptedString.of("Animals that get bred"));
-        SettingVisibility.set(this.switchBack, this.autoSwitch::getValue);
-        this.addSettings(this.entities, this.range, this.hand, this.ageFilter, this.continuous, this.interval, this.autoSwitch, this.switchBack);
+        this.addSettings(this.entities, this.range, this.hand, this.ageFilter, this.continuous, this.interval);
         SettingVisibility.set(this.interval, this.continuous::getValue);
     }
 
@@ -140,7 +137,7 @@ public final class AutoBreedModule extends Module {
     private int foodFor(class_1429 animal, class_1268 useHand) {
         class_1799 held = this.mc.field_1724.method_5998(useHand);
         if (!held.method_7960() && animal.method_6481(held)) return -1;
-        if (!this.autoSwitch.getValue() || useHand != class_1268.field_5808) return -2;
+        if (true) return -2; // like Meteor: only the item already in the breeding hand
         for (int i = 0; i < 9; i++) {
             class_1799 stack = this.mc.field_1724.method_31548().method_5438(i);
             if (!stack.method_7960() && animal.method_6481(stack)) return i;
@@ -149,7 +146,7 @@ public final class AutoBreedModule extends Module {
     }
 
     private void restoreSlot() {
-        if (this.previousSlot >= 0 && this.switchBack.getValue() && this.mc.field_1724 != null) InventoryUtil.swap(this.previousSlot);
+
         this.previousSlot = -1;
     }
 
