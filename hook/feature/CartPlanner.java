@@ -437,6 +437,7 @@ final class CartPlanner {
                 // prediction only; the server decides
             }
             mc().method_1562().method_52787(new net.minecraft.class_2885(class_1268.field_5808, hit, seq));
+            if (result.method_23665()) p.method_6104(class_1268.field_5808); // arm swing like a real placement
         }
         return result;
     }

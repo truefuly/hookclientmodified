@@ -46,6 +46,8 @@ public final class BowCartModule extends Module {
     private final BooleanSetting swapBack = new BooleanSetting(EncryptedString.of("Swap Back"), true);
     private final hook.module.setting.NumberSetting quickDraw = new hook.module.setting.NumberSetting(EncryptedString.of("Quick Shot Below %"), 0.0, 100.0, 60.0, 5.0);
     private int lastPlace = Integer.MIN_VALUE / 2;
+    private final hook.module.setting.NumberSetting swapDelay = new hook.module.setting.NumberSetting(EncryptedString.of("Swap Back Delay (ticks)"), 0.0, 10.0, 2.0, 1.0);
+    private int swapBackAt = -1, swapBackSlot = -1;
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
     private int lastAge = Integer.MIN_VALUE;
@@ -63,7 +65,9 @@ public final class BowCartModule extends Module {
         this.skipIfCart.setDescription(EncryptedString.of("Does not place again where a minecart already stands."));
         this.swapBack.setDescription(EncryptedString.of("Switches back to the bow after placing."));
         this.quickDraw.setDescription(EncryptedString.of("Shots drawn less than this (quick taps) put rail + cart where the arrow will land instead of the crosshair."));
-        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.quickDraw, this.highlight, this.color, this.messages);
+        this.swapDelay.setDescription(EncryptedString.of("Stays on the minecart slot this many ticks before going back to the bow, like a real player."));
+        hook.module.setting.SettingVisibility.set(this.swapDelay, this.swapBack::getValue);
+        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
         instance = this;
     }
@@ -115,7 +119,10 @@ public final class BowCartModule extends Module {
         int slot = p.method_31548().method_67532();
         if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
         CartPlanner.placeCart(plan);
-        if (m.swapBack.getValue()) InventoryUtil.swap(slot);
+        if (m.swapBack.getValue()) {
+            if (m.swapDelay.getIntValue() <= 0) InventoryUtil.swap(slot);
+            else { m.swapBackSlot = slot; m.swapBackAt = p.field_6012 + m.swapDelay.getIntValue(); }
+        }
     }
 
     @EventListener
@@ -124,6 +131,10 @@ public final class BowCartModule extends Module {
         if (p == null) { this.preview = null; return; }
         if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = p.field_6012;
+        if (this.swapBackAt >= 0 && p.field_6012 >= this.swapBackAt) {
+            if (!p.method_6115()) InventoryUtil.swap(this.swapBackSlot);
+            this.swapBackAt = -1;
+        }
         if (!this.highlight.getValue()) { this.preview = null; return; }
         try { this.preview = this.plan(true); } catch (Throwable t) { this.preview = null; }
     }
