@@ -45,7 +45,7 @@ public final class PearlCatchModule extends Module {
     /** How long after the charge the pearl may still land on it. Big delays need a long flight (25-40 ticks). */
     private static final int SEARCH_TICKS = 80;
 
-    private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0.0, 20.0, 2.0, 1.0).getValue(EncryptedString.of("Ticks between the pearl and the wind charge"));
+    private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0.0, 20.0, 0.0, 1.0).getValue(EncryptedString.of("Ticks between the pearl and the wind charge"));
     private final NumberSetting maxPitch = new NumberSetting(EncryptedString.of("Max Pitch"), -90.0, 90.0, 90.0, 1.0).getValue(EncryptedString.of("Only catches pearls thrown at least this far up (90 = any direction, negative = only upwards)"));
 
     private class_243 pearlStart, pearlVel;
