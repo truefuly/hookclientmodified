@@ -47,6 +47,9 @@ public final class AntiScreenshareModule extends Module {
     private int hitCheckIn;
     private long lastPresent;
     private long presentPeriod = 1L;
+    private boolean singleBuffered;
+    /** Exclusive fullscreen was switched to borderless fullscreen (nothing can be drawn over exclusive fullscreen). */
+    private long borderlessMonitor;
     private boolean excluded;
     private int ox = Integer.MIN_VALUE, oy, ow, oh;
     private boolean failed;
@@ -203,10 +206,18 @@ public final class AntiScreenshareModule extends Module {
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
+        // single-buffered: the overlay never calls SwapBuffers, so stream hooks (Discord Go Live, OBS Game Capture)
+        // only ever see the real game window and its clean frame - no black frames, no client visuals
+        GLFW.glfwWindowHint(GLFW.GLFW_DOUBLEBUFFER, AntiScreenshareTest.FORCE_DOUBLE ? GLFW.GLFW_TRUE : GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_AUTO_ICONIFY, GLFW.GLFW_FALSE);
         int[] w = new int[1], h = new int[1];
         GLFW.glfwGetWindowSize(main, w, h);
         this.overlay = GLFW.glfwCreateWindow(Math.max(1, w[0]), Math.max(1, h[0]), "HookOverlay", 0L, main);
+        this.singleBuffered = this.overlay != 0L && !AntiScreenshareTest.FORCE_DOUBLE;
+        if (this.overlay == 0L) {
+            GLFW.glfwWindowHint(GLFW.GLFW_DOUBLEBUFFER, GLFW.GLFW_TRUE);
+            this.overlay = GLFW.glfwCreateWindow(Math.max(1, w[0]), Math.max(1, h[0]), "HookOverlay", 0L, main);
+        }
         GLFW.glfwDefaultWindowHints();
         if (this.overlay == 0L) throw new IllegalStateException("overlay window could not be created");
         this.overlayHwnd = GLFWNativeWin32.glfwGetWin32Window(this.overlay);
@@ -241,7 +252,45 @@ public final class AntiScreenshareModule extends Module {
         this.presentPeriod = presentPeriodNs();
         this.lastPresent = 0L;
         status = "on";
-        if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay created");
+        if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay created singleBuffered=" + this.singleBuffered);
+    }
+
+    /**
+     * Exclusive fullscreen owns the whole screen, no window can show on top of it. While the module is on, fullscreen
+     * is turned into borderless fullscreen (same look, covers the whole monitor) so the overlay can sit above it.
+     */
+    private void keepBorderless(long main) {
+        long mon = GLFW.glfwGetWindowMonitor(main);
+        if (mon != 0L) {
+            org.lwjgl.glfw.GLFWVidMode vm = GLFW.glfwGetVideoMode(mon);
+            if (vm == null) return;
+            int[] mx = new int[1], my = new int[1];
+            GLFW.glfwGetMonitorPos(mon, mx, my);
+            GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_FALSE);
+            GLFW.glfwSetWindowMonitor(main, 0L, mx[0], my[0], vm.width(), vm.height(), GLFW.GLFW_DONT_CARE);
+            this.borderlessMonitor = mon;
+            this.ox = Integer.MIN_VALUE;
+            if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST fullscreen -> borderless");
+        } else if (this.borderlessMonitor != 0L && !class_310.method_1551().method_22683().method_4498()) {
+            // the game left fullscreen itself (F11): give the window its frame back
+            GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
+            this.borderlessMonitor = 0L;
+        }
+    }
+
+    /** Back to real fullscreen when the module is turned off. */
+    private void restoreFullscreen() {
+        long mon = this.borderlessMonitor;
+        this.borderlessMonitor = 0L;
+        if (mon == 0L) return;
+        long main = this.mainHandle();
+        if (!class_310.method_1551().method_22683().method_4498()) {
+            GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
+            return;
+        }
+        org.lwjgl.glfw.GLFWVidMode vm = GLFW.glfwGetVideoMode(mon);
+        GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
+        if (vm != null) GLFW.glfwSetWindowMonitor(main, mon, 0, 0, vm.width(), vm.height(), vm.refreshRate());
     }
 
     /** The overlay is only updated as often as the fastest monitor can show it - more frames are never seen anyway. */
@@ -298,6 +347,7 @@ public final class AntiScreenshareModule extends Module {
             if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay hidden (iconified)");
             return;
         }
+        this.keepBorderless(main);
         if (this.overlay == 0L) this.create();
         // follow the game window's client area exactly
         int[] x = new int[1], y = new int[1], w = new int[1], h = new int[1];
@@ -339,7 +389,7 @@ public final class AntiScreenshareModule extends Module {
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
             back = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
             GL11.glFlush();
-            GLFW.glfwSwapBuffers(this.overlay);
+            if (this.singleBuffered) GL11.glFlush(); else GLFW.glfwSwapBuffers(this.overlay);
         } finally {
             GLFW.glfwMakeContextCurrent(prev);
             org.lwjgl.opengl.GL.setCapabilities(mainCaps);
@@ -351,6 +401,7 @@ public final class AntiScreenshareModule extends Module {
 
     private void destroy() {
         this.freeCache();
+        try { this.restoreFullscreen(); } catch (Throwable ignored) {}
         if (this.overlay == 0L) return;
         long prev = GLFW.glfwGetCurrentContext();
         org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();

@@ -6,6 +6,9 @@ import org.lwjgl.opengl.GL11;
 /** Dev harness (-Dhook.astest): opens the client GUI, turns Anti Screenshare on and off and prints markers for capture. */
 public final class AntiScreenshareTest {
     public static final boolean ENABLED = System.getProperty("hook.astest") != null;
+    static final boolean OBS = "obs".equals(System.getProperty("hook.astest"));
+    /** Test only: old double-buffered overlay, to compare. */
+    static final boolean FORCE_DOUBLE = System.getProperty("hook.asdouble") != null;
     private static int ticks = -1;
     private static long lastProbe;
     private static int frames;
@@ -33,6 +36,23 @@ public final class AntiScreenshareTest {
         if (m == null) return;
         hook.module.ModuleManager mm = hook.Hook.INSTANCE.getModuleManager();
         hook.module.Module hud = mm.getModuleByClass(HudModule.class), esp = mm.getModuleByClass(EntityEspModule.class);
+        if (OBS) {
+            try { org.lwjgl.glfw.GLFW.glfwSetWindowTitle(mc.method_22683().method_4490(), "HookASTest"); } catch (Throwable ignored) {}
+            if (ticks == 40) System.out.println("ASTEST OBS_START");
+            if (ticks == 60) {
+                if (!m.isEnabled()) m.toggle();
+                if (hud != null && !hud.isEnabled()) hud.toggle();
+                if (hook.Hook.INSTANCE.GUI != null) mc.method_1507(hook.Hook.INSTANCE.GUI);
+            }
+            if (ticks == 120) System.out.println("ASTEST OBS_PHASE gui");
+            if (ticks == 320) { mc.method_1507(null); }
+            if (ticks == 330) System.out.println("ASTEST OBS_PHASE hud");
+            if (ticks == 520 && esp != null && !esp.isEnabled()) esp.toggle();
+            if (ticks == 530) System.out.println("ASTEST OBS_PHASE esp");
+            if (ticks == 730) { System.out.println("ASTEST OBS_PHASE off"); if (m.isEnabled()) m.toggle(); }
+            if (ticks == 830) { System.out.println("ASTEST DONE"); mc.method_1592(); }
+            return;
+        }
         if (ticks == 60) {
             if (!m.isEnabled()) m.toggle();
             if (hud != null && !hud.isEnabled()) hud.toggle();
