@@ -8,6 +8,7 @@
     "EntityMixin"
   ],
   "client": [
+    "AntiScreenshareMixin",
     "AbstractClientPlayerSkinMixin",
     "CameraMixin",
     "ClientPlayerEntityMixin",

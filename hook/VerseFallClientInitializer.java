@@ -20,6 +20,8 @@ public final class VerseFallClientInitializer implements ClientModInitializer {
         thetruetrident.cartcore.CartcoreCore.cartConfig.save();
         Binds.openClickGui = () -> {};
         hook.feature.SwordcoreModuleSupport.initialize();
+        if (hook.feature.AntiScreenshareTest.ENABLED)
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.AntiScreenshareTest.tick());
         if (hook.feature.AutoBreedTest.ENABLED)
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.AutoBreedTest.tick());
     }

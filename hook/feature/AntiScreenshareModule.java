@@ -1,0 +1,200 @@
+package hook.feature;
+
+import hook.module.Category;
+import hook.module.Module;
+import hook.utils.EncryptedString;
+import net.minecraft.class_310;
+import org.lwjgl.glfw.GLFW;
+import org.lwjgl.glfw.GLFWNativeWin32;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL30;
+import org.lwjgl.opengl.GL32;
+import org.lwjgl.system.JNI;
+import org.lwjgl.system.windows.User32;
+
+/**
+ * Anti Screenshare. Every frame is drawn twice:
+ *  1. the normal frame (with everything from the client) goes into a second window that sits exactly on top of the
+ *     game window and is excluded from screen capture (Windows "WDA_EXCLUDEFROMCAPTURE") - that is what you see;
+ *  2. then the frame is drawn again with every client visual switched off, and that clean frame goes to the real
+ *     game window - that is what OBS, Discord, screenshots and screen shares see.
+ * Windows 10 (2004) or newer, windowed / borderless only. Costs about half the FPS while on.
+ */
+public final class AntiScreenshareModule extends Module {
+    static AntiScreenshareModule instance;
+    /** True while the clean (capture) frame is being drawn: client visuals must stay off. */
+    public static volatile boolean CLEAN_PASS = false;
+
+    private static final int WDA_NONE = 0, WDA_EXCLUDEFROMCAPTURE = 0x11;
+    private static final int GWL_EXSTYLE = -20, GWLP_HWNDPARENT = -8;
+    private static final long WS_EX_NOACTIVATE = 0x08000000L, WS_EX_TOOLWINDOW = 0x80L, WS_EX_LAYERED = 0x80000L, WS_EX_TRANSPARENT = 0x20L;
+
+    private long overlay;
+    private org.lwjgl.opengl.GLCapabilities overlayCaps;
+    private long overlayHwnd;
+    private int readFbo;
+    private boolean excluded;
+    private int ox = Integer.MIN_VALUE, oy, ow, oh;
+    private boolean failed;
+    public static String status = "off";
+
+    public AntiScreenshareModule() {
+        super(EncryptedString.of("Anti Screenshare"), EncryptedString.of("Screen recordings, screenshots and Discord/OBS shares only see the plain game - no client GUI, HUD, ESP or nametags. You still see everything. Windowed/borderless, Windows 10 2004+. About half the FPS while on."), -1, Category.MISC);
+        instance = this;
+    }
+
+    public static boolean active() {
+        AntiScreenshareModule m = instance;
+        return m != null && m.isEnabled() && !m.failed;
+    }
+
+    @Override
+    public void onEnable() {
+        this.failed = false;
+        super.onEnable();
+    }
+
+    @Override
+    public void onDisable() {
+        // the window is destroyed on the render thread at the next frame
+        super.onDisable();
+    }
+
+    /** Called on the render thread right after the normal frame was drawn into the main render target. */
+    public static void afterFullFrame(int colorTexId, int texW, int texH) {
+        AntiScreenshareModule m = instance;
+        if (m == null) return;
+        try {
+            if (!m.isEnabled() || m.failed) { m.destroy(); return; }
+            m.present(colorTexId, texW, texH);
+        } catch (Throwable t) {
+            m.failed = true;
+            status = "failed: " + t;
+            System.err.println("[AntiScreenshare] " + t);
+            try { m.destroy(); } catch (Throwable ignored) {}
+        }
+    }
+
+    /** Called every frame when the module is off, to clean up. */
+    public static void idle() {
+        AntiScreenshareModule m = instance;
+        if (m != null && m.overlay != 0L && (!m.isEnabled() || m.failed)) m.destroy();
+    }
+
+    private long mainHandle() {
+        return class_310.method_1551().method_22683().method_4490();
+    }
+
+    private void create() {
+        long main = this.mainHandle();
+        GLFW.glfwDefaultWindowHints();
+        GLFW.glfwWindowHint(GLFW.GLFW_CLIENT_API, GLFW.GLFW_OPENGL_API);
+        GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, 3);
+        GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MINOR, 2);
+        GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_PROFILE, GLFW.GLFW_OPENGL_CORE_PROFILE);
+        GLFW.glfwWindowHint(GLFW.GLFW_OPENGL_FORWARD_COMPAT, GLFW.GLFW_TRUE);
+        GLFW.glfwWindowHint(GLFW.GLFW_DECORATED, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
+        GLFW.glfwWindowHint(GLFW.GLFW_MOUSE_PASSTHROUGH, GLFW.GLFW_TRUE);
+        GLFW.glfwWindowHint(GLFW.GLFW_AUTO_ICONIFY, GLFW.GLFW_FALSE);
+        int[] w = new int[1], h = new int[1];
+        GLFW.glfwGetWindowSize(main, w, h);
+        this.overlay = GLFW.glfwCreateWindow(Math.max(1, w[0]), Math.max(1, h[0]), "HookOverlay", 0L, main);
+        GLFW.glfwDefaultWindowHints();
+        if (this.overlay == 0L) throw new IllegalStateException("overlay window could not be created");
+        this.overlayHwnd = GLFWNativeWin32.glfwGetWin32Window(this.overlay);
+        long mainHwnd = GLFWNativeWin32.glfwGetWin32Window(main);
+        // owned by the game window: stays right above it, minimises with it, never shows in the taskbar or takes focus
+        User32.SetWindowLongPtr(this.overlayHwnd, GWLP_HWNDPARENT, mainHwnd);
+        long ex = User32.GetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE);
+        User32.SetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+        User32.SetLayeredWindowAttributes(this.overlayHwnd, 0, (byte) 255, User32.LWA_ALPHA);
+        this.excluded = setAffinity(this.overlayHwnd, WDA_EXCLUDEFROMCAPTURE);
+        if (!this.excluded) throw new IllegalStateException("Windows refused to hide the overlay from capture (needs Windows 10 2004+)");
+        long prev = GLFW.glfwGetCurrentContext();
+        org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();
+        GLFW.glfwMakeContextCurrent(this.overlay);
+        this.overlayCaps = org.lwjgl.opengl.GL.createCapabilities();
+        GLFW.glfwSwapInterval(0);
+        this.readFbo = GL30.glGenFramebuffers();
+        GLFW.glfwMakeContextCurrent(prev);
+        org.lwjgl.opengl.GL.setCapabilities(mainCaps);
+        this.ox = Integer.MIN_VALUE;
+        status = "on";
+    }
+
+    private static boolean setAffinity(long hwnd, int affinity) {
+        long fn = User32.getLibrary().getFunctionAddress("SetWindowDisplayAffinity");
+        if (fn == 0L) return false;
+        return JNI.callPI(hwnd, affinity, fn) != 0;
+    }
+
+    private void present(int tex, int texW, int texH) {
+        long main = this.mainHandle();
+        if (GLFW.glfwGetWindowAttrib(main, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE) {
+            if (this.overlay != 0L) GLFW.glfwHideWindow(this.overlay);
+            return;
+        }
+        if (this.overlay == 0L) this.create();
+        // follow the game window's client area exactly
+        int[] x = new int[1], y = new int[1], w = new int[1], h = new int[1];
+        GLFW.glfwGetWindowPos(main, x, y);
+        GLFW.glfwGetWindowSize(main, w, h);
+        if (x[0] != this.ox || y[0] != this.oy || w[0] != this.ow || h[0] != this.oh) {
+            this.ox = x[0]; this.oy = y[0]; this.ow = w[0]; this.oh = h[0];
+            GLFW.glfwSetWindowPos(this.overlay, x[0], y[0]);
+            GLFW.glfwSetWindowSize(this.overlay, Math.max(1, w[0]), Math.max(1, h[0]));
+        }
+        if (GLFW.glfwGetWindowAttrib(this.overlay, GLFW.GLFW_VISIBLE) == GLFW.GLFW_FALSE) GLFW.glfwShowWindow(this.overlay);
+
+        // make sure the game's GL work on the frame is submitted before the other context reads it
+        long fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        GL11.glFlush();
+        long prev = GLFW.glfwGetCurrentContext();
+        org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();
+        GLFW.glfwMakeContextCurrent(this.overlay);
+        org.lwjgl.opengl.GL.setCapabilities(this.overlayCaps);
+        try {
+            GL32.glWaitSync(fence, 0, GL32.GL_TIMEOUT_IGNORED);
+            int[] fw = new int[1], fh = new int[1];
+            GLFW.glfwGetFramebufferSize(this.overlay, fw, fh);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, this.readFbo);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, tex, 0);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
+            GL11.glViewport(0, 0, fw[0], fh[0]);
+            GL30.glBlitFramebuffer(0, 0, texW, texH, 0, 0, fw[0], fh[0], GL11.GL_COLOR_BUFFER_BIT, texW == fw[0] && texH == fh[0] ? GL11.GL_NEAREST : GL11.GL_LINEAR);
+            if (AntiScreenshareTest.ENABLED) AntiScreenshareTest.overlayProbe(fw[0], fh[0]);
+            GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
+            GLFW.glfwSwapBuffers(this.overlay);
+        } finally {
+            GLFW.glfwMakeContextCurrent(prev);
+            org.lwjgl.opengl.GL.setCapabilities(mainCaps);
+            GL32.glDeleteSync(fence);
+        }
+    }
+
+    private void destroy() {
+        if (this.overlay == 0L) return;
+        long prev = GLFW.glfwGetCurrentContext();
+        org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();
+        try {
+            GLFW.glfwMakeContextCurrent(this.overlay);
+            if (this.overlayCaps != null) org.lwjgl.opengl.GL.setCapabilities(this.overlayCaps);
+            if (this.readFbo != 0) GL30.glDeleteFramebuffers(this.readFbo);
+        } catch (Throwable ignored) {
+        } finally {
+            GLFW.glfwMakeContextCurrent(prev);
+            org.lwjgl.opengl.GL.setCapabilities(mainCaps);
+        }
+        GLFW.glfwDestroyWindow(this.overlay);
+        this.overlay = 0L;
+        this.overlayHwnd = 0L;
+        this.readFbo = 0;
+        this.overlayCaps = null;
+        status = "off";
+    }
+}
