@@ -18,7 +18,7 @@ public final class QuickWheelScreen extends class_437 {
     record Slot(String name, String hint, UiIcon icon, Runnable action) {}
 
     static final Slot[] SLOTS = {
-        new Slot("Calculator", "Quick maths", UiIcon.GRID, () -> class_310.method_1551().method_1507((class_437) new CalculatorScreen())),
+        new Slot("Calculator", "Quick maths", UiIcon.CALCULATOR, () -> class_310.method_1551().method_1507((class_437) new CalculatorScreen())),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),

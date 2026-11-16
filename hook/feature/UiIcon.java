@@ -46,7 +46,8 @@ public enum UiIcon {
     EDIT,
     COPY,
     TRASH,
-    RESET;
+    RESET,
+    CALCULATOR;
 
     private static final Map<Long, UiTextureData> CACHE;
 
@@ -283,6 +284,25 @@ public enum UiIcon {
             case 28: {
                 var1.draw(new Arc2D.Double(5.0, 5.0, 15.0, 15.0, -80.0, 285.0, 0));
                 var1.draw(UiIcon.poly(4.0, 4.0, 4.0, 10.0, 10.0, 10.0));
+                break;
+            }
+            case 29: {
+                // calculator: body, display, 3x3 keys with a tall "=" key bottom right
+                var1.draw(new RoundRectangle2D.Double(4.5, 2.5, 15.0, 19.0, 4.0, 4.0));
+                var1.draw(new RoundRectangle2D.Double(7.5, 5.5, 9.0, 3.6, 1.6, 1.6));
+                double k = 2.5;
+                double[] xs = {8.75, 12.0, 15.25};
+                double[] ys = {12.6, 15.6, 18.6};
+                for (int r = 0; r < 3; ++r) {
+                    for (int c = 0; c < 3; ++c) {
+                        if (c == 2 && r == 2) continue;
+                        if (c == 2 && r == 1) {
+                            var1.fill(new RoundRectangle2D.Double(xs[c] - k / 2, ys[r] - k / 2, k, ys[2] - ys[1] + k, 1.6, 1.6));
+                            continue;
+                        }
+                        var1.fill(new RoundRectangle2D.Double(xs[c] - k / 2, ys[r] - k / 2, k, k, 1.2, 1.2));
+                    }
+                }
             }
         }
     }
