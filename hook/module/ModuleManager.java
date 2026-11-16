@@ -121,6 +121,7 @@ public final class ModuleManager {
         this.in(Category.MACROS, new XpShopModule());
         this.in(Category.MACROS, new CrateOpenerModule());
         // Utility: quality of life for the player
+        this.in(Category.MISC, new hook.feature.QuickUtilitiesModule());
         this.in(Category.MISC, new FastPlaceModule());
         this.in(Category.MISC, new FlyModule());
         this.in(Category.MISC, new AutoToolModule());
