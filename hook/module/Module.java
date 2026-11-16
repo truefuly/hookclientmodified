@@ -54,7 +54,10 @@ implements Serializable {
 
     public boolean isEnabled() {
         // Anti Screenshare clean frame: render / visual modules count as off, so their drawing (ESP, nametags...) is skipped
-        if (this.enabled && hook.feature.AntiScreenshareModule.CLEAN_PASS && (this.category == Category.RENDER || this.category == Category.VISUALS)) return false;
+        if (this.enabled && (this.category == Category.RENDER || this.category == Category.VISUALS)) {
+            if (hook.feature.AntiScreenshareModule.CLEAN_PASS) return false;
+            if (hook.feature.AntiScreenshareModule.FULL_PASS) hook.feature.AntiScreenshareModule.CLIENT_DREW = true;
+        }
         return this.enabled;
     }
 

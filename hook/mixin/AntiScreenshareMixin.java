@@ -19,12 +19,23 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class AntiScreenshareMixin {
     @WrapOperation(method = "method_1523", at = @At(value = "INVOKE", target = "Lnet/minecraft/class_757;method_3192(Lnet/minecraft/class_9779;Z)V"))
     private void hook$antiScreenshare(class_757 renderer, net.minecraft.class_9779 delta, boolean renderLevel, Operation<Void> original) {
-        original.call(renderer, delta, renderLevel);
-        if (!AntiScreenshareModule.active()) {
+        boolean on = AntiScreenshareModule.active();
+        AntiScreenshareModule.CLIENT_DREW = false;
+        AntiScreenshareModule.FULL_PASS = on;
+        try {
+            original.call(renderer, delta, renderLevel);
+        } finally {
+            AntiScreenshareModule.FULL_PASS = false;
+        }
+        if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.frame();
+        if (!on || !AntiScreenshareModule.active()) {
             AntiScreenshareModule.idle();
             return;
         }
         class_310 mc = (class_310) (Object) this;
+        class_437 screen = mc.field_1755;
+        boolean hideScreen = screen != null && isClientScreen(screen);
+        boolean alreadyClean = !AntiScreenshareModule.CLIENT_DREW && !hideScreen;
         class_276 target = mc.method_1522();
         try {
             var color = target.method_30277();
@@ -34,9 +45,27 @@ public abstract class AntiScreenshareMixin {
             return;
         }
         if (!AntiScreenshareModule.active()) return;
+        int w = target.field_1482, h = target.field_1481;
+        // nothing of the client was drawn this frame: the normal frame already is the clean one - no second pass
+        if (alreadyClean) {
+            if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.freeFrame();
+            try {
+                if (AntiScreenshareModule.wantsCleanFrame(w, h)) AntiScreenshareModule.storeClean(target.method_30277(), w, h);
+            } catch (Throwable ignored) {
+            }
+            return;
+        }
+        // between capture frames the last clean frame is reused - recorders only need ~30 FPS, you keep yours
+        if (!AntiScreenshareModule.wantsCleanFrame(w, h)) {
+            try {
+                AntiScreenshareModule.restoreClean(target.method_30277(), w, h);
+                return;
+            } catch (Throwable ignored) {
+                // fall through and draw a fresh clean frame
+            }
+        }
         // second pass: clean frame for the real window
-        class_437 screen = mc.field_1755;
-        boolean hideScreen = screen != null && isClientScreen(screen);
+        if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.cleanPass();
         AntiScreenshareModule.CLEAN_PASS = true;
         try {
             if (hideScreen) mc.field_1755 = null;
@@ -45,6 +74,10 @@ public abstract class AntiScreenshareMixin {
         } finally {
             if (hideScreen) mc.field_1755 = screen;
             AntiScreenshareModule.CLEAN_PASS = false;
+        }
+        try {
+            AntiScreenshareModule.storeClean(target.method_30277(), w, h);
+        } catch (Throwable ignored) {
         }
     }
 

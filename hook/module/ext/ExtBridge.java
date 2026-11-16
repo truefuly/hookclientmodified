@@ -133,6 +133,7 @@ public final class ExtBridge {
     public static void render3D(float var0, class_4604 var1) {
         if (hook.feature.AntiScreenshareModule.CLEAN_PASS) return;
         if (ExtBridge.wants(Render3DEvent.class)) {
+            if (hook.feature.AntiScreenshareModule.FULL_PASS) hook.feature.AntiScreenshareModule.CLIENT_DREW = true;
             ExtBridge.post(new Render3DEvent(var0, var1), Stage.PRE);
         }
     }

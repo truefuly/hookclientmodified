@@ -24,6 +24,8 @@ public final class AntiScreenshareModule extends Module {
     static AntiScreenshareModule instance;
     /** True while the clean (capture) frame is being drawn: client visuals must stay off. */
     public static volatile boolean CLEAN_PASS = false;
+    /** True while the normal frame is drawn with the module on; CLIENT_DREW records whether anything of the client showed up in it. */
+    public static volatile boolean FULL_PASS = false, CLIENT_DREW = false;
 
     private static final int WDA_NONE = 0, WDA_EXCLUDEFROMCAPTURE = 0x11;
     private static final int GWL_EXSTYLE = -20, GWLP_HWNDPARENT = -8;
@@ -38,9 +40,60 @@ public final class AntiScreenshareModule extends Module {
     private boolean failed;
     public static String status = "off";
 
+    final hook.module.setting.NumberSetting captureFps = new hook.module.setting.NumberSetting(EncryptedString.of("Capture FPS"), 10.0, 240.0, 30.0, 5.0);
+    /** Last clean frame, shown to recorders on frames where no new clean frame is drawn. */
+    private com.mojang.blaze3d.textures.GpuTexture cleanCache;
+    private long lastClean;
+
     public AntiScreenshareModule() {
-        super(EncryptedString.of("Anti Screenshare"), EncryptedString.of("Screen recordings, screenshots and Discord/OBS shares only see the plain game - no client GUI, HUD, ESP or nametags. You still see everything. Windowed/borderless, Windows 10 2004+. About half the FPS while on."), -1, Category.MISC);
+        super(EncryptedString.of("Anti Screenshare"), EncryptedString.of("Screen recordings, screenshots and Discord/OBS shares only see the plain game - no client GUI, HUD, ESP or nametags. You still see everything. Windowed/borderless, Windows 10 2004+. Capture FPS keeps the cost low."), -1, Category.MISC);
+        this.captureFps.setDescription(EncryptedString.of("How often the clean frame for recordings is drawn per second. Lower = more FPS for you. Discord streams at 30, OBS usually 60. 240 = every frame"));
+        this.addSettings(this.captureFps);
         instance = this;
+    }
+
+    /** True when this frame needs a fresh clean frame; otherwise the cached one is put back into the game window. */
+    public static boolean wantsCleanFrame(int w, int h) {
+        AntiScreenshareModule m = instance;
+        if (m == null) return true;
+        double fps = m.captureFps.getValue();
+        if (fps >= 240.0) return true;
+        var c = m.cleanCache;
+        if (c == null || c.isClosed() || c.getWidth(0) != w || c.getHeight(0) != h) return true;
+        return System.nanoTime() - m.lastClean >= (long) (1.0e9 / Math.max(1.0, fps));
+    }
+
+    /** Keeps a copy of the clean frame that was just drawn. */
+    public static void storeClean(com.mojang.blaze3d.textures.GpuTexture main, int w, int h) {
+        AntiScreenshareModule m = instance;
+        if (m == null) return;
+        // steady pacing: next capture frame is due one interval after the last one, without drifting
+        long now = System.nanoTime(), iv = (long) (1.0e9 / Math.max(1.0, m.captureFps.getValue()));
+        m.lastClean = now - m.lastClean > 2 * iv ? now : m.lastClean + iv;
+        if (m.captureFps.getValue() >= 240.0) { m.freeCache(); return; }
+        var dev = com.mojang.blaze3d.systems.RenderSystem.getDevice();
+        var c = m.cleanCache;
+        if (c == null || c.isClosed() || c.getWidth(0) != w || c.getHeight(0) != h) {
+            m.freeCache();
+            c = m.cleanCache = dev.createTexture(() -> "Hook AntiScreenshare clean frame",
+                com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_DST | com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_SRC,
+                com.mojang.blaze3d.textures.TextureFormat.RGBA8, w, h, 1, 1);
+        }
+        dev.createCommandEncoder().copyTextureToTexture(main, c, 0, 0, 0, 0, 0, w, h);
+    }
+
+    /** Puts the last clean frame back into the main target so the game window (what recorders see) stays clean. */
+    public static void restoreClean(com.mojang.blaze3d.textures.GpuTexture main, int w, int h) {
+        AntiScreenshareModule m = instance;
+        if (m == null || m.cleanCache == null) return;
+        com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(m.cleanCache, main, 0, 0, 0, 0, 0, w, h);
+    }
+
+    private void freeCache() {
+        if (this.cleanCache != null) {
+            try { this.cleanCache.close(); } catch (Throwable ignored) {}
+            this.cleanCache = null;
+        }
     }
 
     public static boolean active() {
@@ -157,6 +210,7 @@ public final class AntiScreenshareModule extends Module {
         org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();
         GLFW.glfwMakeContextCurrent(this.overlay);
         org.lwjgl.opengl.GL.setCapabilities(this.overlayCaps);
+        long back = 0L;
         try {
             GL32.glWaitSync(fence, 0, GL32.GL_TIMEOUT_IGNORED);
             int[] fw = new int[1], fh = new int[1];
@@ -169,15 +223,20 @@ public final class AntiScreenshareModule extends Module {
             if (AntiScreenshareTest.ENABLED) AntiScreenshareTest.overlayProbe(fw[0], fh[0]);
             GL30.glFramebufferTexture2D(GL30.GL_READ_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, 0, 0);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, 0);
+            back = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+            GL11.glFlush();
             GLFW.glfwSwapBuffers(this.overlay);
         } finally {
             GLFW.glfwMakeContextCurrent(prev);
             org.lwjgl.opengl.GL.setCapabilities(mainCaps);
             GL32.glDeleteSync(fence);
+            // the game must not overwrite the frame before the overlay has read it
+            if (back != 0L) { GL32.glWaitSync(back, 0, GL32.GL_TIMEOUT_IGNORED); GL32.glDeleteSync(back); }
         }
     }
 
     private void destroy() {
+        this.freeCache();
         if (this.overlay == 0L) return;
         long prev = GLFW.glfwGetCurrentContext();
         org.lwjgl.opengl.GLCapabilities mainCaps = org.lwjgl.opengl.GL.getCapabilities();

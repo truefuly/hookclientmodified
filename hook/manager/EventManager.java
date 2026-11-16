@@ -83,6 +83,8 @@ public final class EventManager {
     public static void b(Event var0) {
         // Anti Screenshare: the clean frame for screen recorders gets no client drawing at all
         if (hook.feature.AntiScreenshareModule.CLEAN_PASS && (var0 instanceof hook.event.events.Render2DEvent || var0 instanceof hook.event.events.Render3DEvent)) return;
+        if (hook.feature.AntiScreenshareModule.FULL_PASS && !hook.feature.AntiScreenshareModule.CLIENT_DREW
+            && (var0 instanceof hook.event.events.Render2DEvent || var0 instanceof hook.event.events.Render3DEvent) && hasActiveListener(var0.getClass())) hook.feature.AntiScreenshareModule.CLIENT_DREW = true;
         if (Hook.INSTANCE != null && Hook.INSTANCE.getEventBus() != null) {
             Hook.INSTANCE.getEventBus().a(var0);
         }
