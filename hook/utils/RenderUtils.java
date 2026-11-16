@@ -376,9 +376,14 @@ public final class RenderUtils {
     }
 
     public static void renderLines(class_4587 var0, Iterable<ColoredLine> var1) {
+        RenderUtils.renderLines(var0, var1, true);
+    }
+
+    /** throughWalls = false: lines are hidden behind blocks like normal world lines (depth tested). */
+    public static void renderLines(class_4587 var0, Iterable<ColoredLine> var1, boolean throughWalls) {
         if (var0 != null && var1 != null) {
             class_9801 var27;
-            class_1921 var2 = EspRenderLayers.LINES;
+            class_1921 var2 = throughWalls ? EspRenderLayers.LINES : EspRenderLayers.LINES_DEPTH;
             class_287 var3 = null;
             class_4587.class_4665 var4 = var0.method_23760();
             for (ColoredLine var6 : var1) {
@@ -447,6 +452,7 @@ public final class RenderUtils {
     private static final class EspRenderLayers {
         private static final class_1921 FILLED = EspRenderLayers.createFilled();
         private static final class_1921 LINES = EspRenderLayers.createLines();
+        private static final class_1921 LINES_DEPTH = EspRenderLayers.createDepthLines();
 
         private EspRenderLayers() {
         }
@@ -455,6 +461,12 @@ public final class RenderUtils {
             RenderPipeline var0 = RenderPipeline.builder((RenderPipeline.Snippet[])new RenderPipeline.Snippet[0]).withLocation(class_2960.method_60655((String)"hook", (String)"pipeline/esp_filled")).withUniform("DynamicTransforms", class_10789.field_60031).withUniform("Projection", class_10789.field_60031).withVertexShader("core/position_color").withFragmentShader("core/position_color").withBlend(BlendFunction.TRANSLUCENT).withCull(false).withDepthTestFunction(DepthTestFunction.NO_DEPTH_TEST).withDepthWrite(false).withVertexFormat(class_290.field_1576, VertexFormat.class_5596.field_27382).build();
             var0 = RenderPipelinesAccessor.hook$register(var0);
             return RenderLayerAccessor.hook$create("hook_esp_filled", class_12247.method_75927((RenderPipeline)var0).method_75937().method_75929(1536).method_75938());
+        }
+
+        private static class_1921 createDepthLines() {
+            RenderPipeline var0 = RenderPipeline.builder((RenderPipeline.Snippet[])new RenderPipeline.Snippet[0]).withLocation(class_2960.method_60655((String)"hook", (String)"pipeline/world_lines")).withUniform("DynamicTransforms", class_10789.field_60031).withUniform("Projection", class_10789.field_60031).withUniform("Globals", class_10789.field_60031).withVertexShader("core/rendertype_lines").withFragmentShader("core/rendertype_lines").withBlend(BlendFunction.TRANSLUCENT).withCull(false).withDepthTestFunction(DepthTestFunction.LEQUAL_DEPTH_TEST).withDepthWrite(false).withVertexFormat(class_290.field_63455, VertexFormat.class_5596.field_27377).build();
+            var0 = RenderPipelinesAccessor.hook$register(var0);
+            return RenderLayerAccessor.hook$create("hook_world_lines", class_12247.method_75927((RenderPipeline)var0).method_75937().method_75929(256).method_75938());
         }
 
         private static class_1921 createLines() {

@@ -19,6 +19,8 @@ public final class VerseFallClientInitializer implements ClientModInitializer {
         hook.feature.SwordcoreModuleSupport.initialize();
         if (hook.feature.AntiScreenshareTest.ENABLED)
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.AntiScreenshareTest.tick());
+        if (hook.feature.RenderModulesTest.ENABLED)
+            net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.RenderModulesTest.tick());
         if (hook.feature.AutoBreedTest.ENABLED)
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.AutoBreedTest.tick());
     }
