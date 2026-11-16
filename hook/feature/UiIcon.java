@@ -47,7 +47,9 @@ public enum UiIcon {
     COPY,
     TRASH,
     RESET,
-    CALCULATOR;
+    CALCULATOR,
+    HEAD,
+    KEY;
 
     private static final Map<Long, UiTextureData> CACHE;
 
@@ -303,6 +305,22 @@ public enum UiIcon {
                         var1.fill(new RoundRectangle2D.Double(xs[c] - k / 2, ys[r] - k / 2, k, k, 1.2, 1.2));
                     }
                 }
+                break;
+            }
+            case 30: {
+                // Minecraft head, front view: hair band, two eyes, mouth
+                var1.draw(new RoundRectangle2D.Double(3.5, 3.5, 17.0, 17.0, 3.5, 3.5));
+                UiIcon.line(var1, 4.2, 8.6, 19.8, 8.6);
+                var1.fill(new java.awt.geom.Rectangle2D.Double(6.6, 11.2, 3.4, 3.0));
+                var1.fill(new java.awt.geom.Rectangle2D.Double(14.0, 11.2, 3.4, 3.0));
+                var1.fill(new java.awt.geom.Rectangle2D.Double(9.6, 16.0, 4.8, 1.9));
+                break;
+            }
+            case 31: {
+                var1.draw(new Ellipse2D.Double(3.0, 12.0, 8.5, 8.5));
+                UiIcon.line(var1, 10.3, 13.7, 20.5, 3.5);
+                UiIcon.line(var1, 17.0, 7.0, 19.8, 9.8);
+                UiIcon.line(var1, 14.2, 9.8, 16.4, 12.0);
             }
         }
     }

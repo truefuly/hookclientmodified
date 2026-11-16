@@ -194,7 +194,7 @@ public final class CalculatorScreen extends class_437 {
             ui.pushTransform(sw / 2.0f * (1 - scl), sh / 2.0f * (1 - scl) + 14 * u * (1 - vis), scl);
 
             UiTheme.glass(ui, px, py, pw, ph, 22 * u, u, 3.3f);
-            UiTheme.header(ui, px, py, pw, UiIcon.GRID, "Calculator", "Type or click  ·  Enter = result", u);
+            UiTheme.header(ui, px, py, pw, UiIcon.CALCULATOR, "Calculator", "Type or click  ·  Enter = result", u);
             float cb = 32 * u, cxb = px + pw - 22 * u - cb, cyb = py + (78 * u - cb) / 2.0f;
             boolean chot = inside(mx, my, cxb, cyb, cb, cb);
             UiTheme.iconButton(ui, UiIcon.CLOSE, cxb, cyb, cb, this.anim("close", chot ? 1 : 0, 16), u);

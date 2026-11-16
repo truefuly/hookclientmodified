@@ -19,7 +19,7 @@ public final class QuickWheelScreen extends class_437 {
 
     static final Slot[] SLOTS = {
         new Slot("Calculator", "Quick maths", UiIcon.CALCULATOR, () -> class_310.method_1551().method_1507((class_437) new CalculatorScreen())),
-        new Slot("Empty", "More soon", UiIcon.PLUS, null),
+        new Slot("AuroraAFK", "AFK accounts", UiIcon.HEAD, () -> class_310.method_1551().method_1507((class_437) new AuroraScreen())),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
