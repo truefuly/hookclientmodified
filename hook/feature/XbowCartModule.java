@@ -40,7 +40,7 @@ import thetruetrident.cartcore.CartcoreCore;
 public final class XbowCartModule extends Module {
     public static XbowCartModule instance;
     private final BooleanSetting humanize = new BooleanSetting(EncryptedString.of("Humanize"), true);
-    private final NumberSetting turnSpeed = new NumberSetting(EncryptedString.of("Turn Speed"), 10.0, 180.0, 80.0, 5.0);
+    private final NumberSetting turnSpeed = new NumberSetting(EncryptedString.of("Speed %"), 50.0, 250.0, 100.0, 5.0);
     private final NumberSetting stepDelay = new NumberSetting(EncryptedString.of("Step Delay (ticks)"), 0.0, 5.0, 0.0, 1.0);
     private final BooleanSetting messages = new BooleanSetting(EncryptedString.of("Messages"), true);
     private final NumberSetting cooldown = new NumberSetting(EncryptedString.of("Cooldown (ticks)"), 0.0, 40.0, 10.0, 1.0);
@@ -65,7 +65,7 @@ public final class XbowCartModule extends Module {
         final class_2338 block;     // block the crosshair has to be on
         final class_2350 face;      // and its face (null = any)
         final class_3965 fallback;  // planned click if the crosshair never lands exactly
-        boolean started;
+        boolean started, preAimed;
         int startAge, clickAfter, searchedAt;
         float[] rot;
 
@@ -84,12 +84,13 @@ public final class XbowCartModule extends Module {
     private CartPlanner.Plan seqPlan;
     private class_1268 seqHand;
     private final CartHuman.Turner turner = new CartHuman.Turner();
-    private int restoreSlot = -1, swapBackAt = -1;
+    private int restoreSlot = -1, swapBackAt = -1, cartStillSince;
+    private class_238 lastCart;
 
     public XbowCartModule() {
         super(EncryptedString.of("Xbow Cart"), EncryptedString.of("Right-click a block with a loaded crossbow: rail, TNT minecart, fire and the shot - done like a real player. Needs rail, TNT minecart and flint and steel / fire charge / lava bucket in the hotbar."), -1, Category.COMBAT);
         this.humanize.setDescription(EncryptedString.of("Does it like a human: smooth mouse-like head movement, slot picked before each click, clicks only with the crosshair on the block, random pauses, one action per tick. Off = instant (easy to flag)."));
-        this.turnSpeed.setDescription(EncryptedString.of("How fast the head moves (about degrees per tick, a bit different every turn). Higher = faster."));
+        this.turnSpeed.setDescription(EncryptedString.of("How fast it all goes: head movement and slot timing. 100 = a fast player, higher = even faster (still smooth, one action per tick)."));
         this.stepDelay.setDescription(EncryptedString.of("Extra pause between the steps (randomised). 0 = like a very quick player."));
         this.messages.setDescription(EncryptedString.of("Tells you in the action bar why it could not cart."));
         this.usage = new ButtonSetting(EncryptedString.of("Anleitung"), () -> {
@@ -145,6 +146,7 @@ public final class XbowCartModule extends Module {
     public void onTick(TickEvent event) {
         class_746 p = this.mc.field_1724;
         if (p == null) return;
+        if (CartTest.ENABLED && this.mc.field_1755 instanceof net.minecraft.class_433) this.mc.method_1507(null); // self-test: never sit paused
         if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = p.field_6012;
         while (thetruetrident.cartcore.C.A.method_1436()) {
@@ -283,6 +285,7 @@ public final class XbowCartModule extends Module {
         this.stepIdx = 0;
         this.seqPlan = plan;
         this.seqHand = hand;
+        this.lastCart = null;
         if (plan.rampBlockClick != null) this.steps.add(click(() -> plan.rampBlockSlot, plan.rampBlockClick));
         if (plan.upperClick != null) this.steps.add(click(CartPlanner::railSlot, plan.upperClick));
         if (plan.railClick != null) this.steps.add(click(CartPlanner::railSlot, plan.railClick));
@@ -321,7 +324,8 @@ public final class XbowCartModule extends Module {
                 swapped = true;
             }
             // a real player needs a moment between the hotbar key and the click
-            s.clickAfter = age + (swapped ? CartHuman.ticks(1.15, 0.45, 1) : 0);
+            // fast players press the slot key and right-click almost together (vanilla handles both in the same tick)
+            s.clickAfter = age + (swapped ? CartHuman.ticks(0.45 / this.mul(), 0.4, 0) : 0);
             if (s.kind == SHOOT) {
                 s.rot = this.shotAim(p);
                 s.searchedAt = age;
@@ -329,18 +333,26 @@ public final class XbowCartModule extends Module {
             } else {
                 s.rot = CartPlanner.aimAt(p.method_33571(), s.point);
             }
-            this.turner.aim(p, s.rot[0], s.rot[1], this.turnSpeed.getValue(), true);
+            if (!s.preAimed) this.turner.aim(p, s.rot[0], s.rot[1], 110.0 * this.mul(), true);
+            else this.turner.retarget(s.rot[0], s.rot[1]);
         }
         if (age < s.clickAfter) return;
         int waited = age - s.startAge;
         double dist = this.turner.dist(p);
 
         if (s.kind == SHOOT) {
+            if (!CartPlanner.loadedCrossbow(p.method_5998(this.seqHand))) { this.abort("crossbow not loaded any more"); return; }
             class_238 cart = this.cartBox();
             if (cart == null) {
-                if (waited > 30) this.abort("the cart did not appear");
+                if (waited > 60) this.abort("the cart did not appear"); // high ping: the cart shows up late
                 return;
             }
+            // the cart must stand still (on a ramp it may still slide / its position may still be interpolating)
+            if (this.lastCart == null || this.lastCart.method_1005().method_1022(cart.method_1005()) > 0.01) {
+                this.lastCart = cart;
+                this.cartStillSince = age;
+            }
+            if (age - this.cartStillSince < 1 && waited < 60) return;
             // what the server will use is your real rotation right now: it has to hit the cart through the fire
             class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
             CartPlanner.Trace tr = CartPlanner.trace(start, CartPlanner.dir(p.method_36454(), p.method_36455()).method_1021(3.15), cart);
@@ -349,6 +361,12 @@ public final class XbowCartModule extends Module {
                 this.mc.field_1761.method_2919((class_1657) p, this.seqHand);
                 if (CartTest.ENABLED) CartTest.shot();
                 this.next(age);
+                return;
+            }
+            // very high sensitivity: one mouse step is bigger than the window that hits - land the last bit exactly
+            if (!good && dist <= CartHuman.gcd() * 0.75 + 0.05 && waited > 2) {
+                p.method_36456(p.method_36454() + net.minecraft.class_3532.method_15393(s.rot[0] - p.method_36454()));
+                p.method_36457(s.rot[1]);
                 return;
             }
             // arrived but it would miss (you moved, the cart sits a bit different): aim again
@@ -360,7 +378,7 @@ public final class XbowCartModule extends Module {
                     this.turner.retarget(a[0], a[1]);
                 }
             }
-            if (waited > 45) this.abort("no clear shot at the cart");
+            if (waited > 75) this.abort("no clear shot at the cart");
             return;
         }
 
@@ -369,8 +387,8 @@ public final class XbowCartModule extends Module {
         boolean on = ch instanceof class_3965 bh && bh.method_17783() == class_239.class_240.field_1332
             && bh.method_17777().equals(s.block) && (s.face == null || bh.method_17780() == s.face);
         class_3965 hit = null;
-        if (on && dist < 2.5) hit = (class_3965) ch; // fast players click as soon as the crosshair is on it
-        else if (waited > 16 && dist < 2.5) hit = s.fallback; // crosshair never landed exactly (odd shapes): planned click
+        if (on && dist < 3.0) hit = (class_3965) ch; // fast players click as soon as the crosshair is on it
+        else if (waited > 14 && dist < 3.0) hit = s.fallback; // crosshair never landed exactly (odd shapes): planned click
         else if (waited > 45) { this.abort("could not reach the spot"); return; }
         if (hit == null) return;
         if (s.kind == BUCKET) {
@@ -382,6 +400,10 @@ public final class XbowCartModule extends Module {
     }
 
     private void next(int age) {
+        if (CartTest.ENABLED) {
+            Step s = this.steps.get(this.stepIdx);
+            CartTest.stepLog = (CartTest.stepLog == null ? "" : CartTest.stepLog + " ") + "k" + s.kind + ":" + (age - s.startAge) + "t/fps" + this.mc.method_47599();
+        }
         this.stepIdx++;
         if (this.stepIdx >= this.steps.size()) {
             this.steps.clear();
@@ -391,6 +413,18 @@ public final class XbowCartModule extends Module {
         }
         // next action starts the tick after (slot + flick overlap like a fast player), never two actions in one tick
         this.readyAt = age + 1 + (this.stepDelay.getValue() > 0 ? CartHuman.ticks(this.stepDelay.getValue(), 0.5, 0) : 0);
+        // the eyes go to the next spot right away (the hand follows next tick), like a fast player
+        Step n = this.steps.get(this.stepIdx);
+        class_746 p = this.mc.field_1724;
+        if (p != null) {
+            float[] r = n.kind == SHOOT ? new float[]{this.seqPlan.aim[0], this.seqPlan.aim[1]} : CartPlanner.aimAt(p.method_33571(), n.point);
+            this.turner.aim(p, r[0], r[1], 110.0 * this.mul(), true);
+            n.preAimed = true;
+        }
+    }
+
+    private double mul() {
+        return this.turnSpeed.getValue() / 100.0;
     }
 
     /** The TNT minecart that is really standing on the rail now, or null. */

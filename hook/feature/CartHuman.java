@@ -98,7 +98,7 @@ final class CartHuman {
             double dy = class_3532.method_15393(yaw - p.method_36454()), dp = this.tPitch - p.method_36455();
             this.startDist = Math.sqrt(dy * dy + dp * dp);
             this.waypoint = false;
-            if (mayOvershoot && this.startDist > 16 && RNG.nextFloat() < 0.65f) {
+            if (mayOvershoot && this.startDist > 20 && RNG.nextFloat() < 0.4f) {
                 double over = Math.min(3.2, this.startDist * gauss(0.045, 0.015, 0.015, 0.08));
                 this.wYaw = (float) (yaw + dy / this.startDist * over);
                 this.wPitch = class_3532.method_15363((float) (this.tPitch + dp / this.startDist * over), -90.0f, 90.0f);
@@ -106,7 +106,7 @@ final class CartHuman {
             }
             this.curve = gauss(0, 0.11, -0.24, 0.24);
             this.maxSpeed = speed * 20.0 * gauss(1.0, 0.1, 0.8, 1.2);
-            this.gain = gauss(13.0, 2.0, 9.0, 18.0);
+            this.gain = gauss(26.0, 3.0, 19.0, 34.0) * Math.sqrt(Math.max(0.5, speed / 110.0));
             if (fresh) {
                 this.vel = 0;
                 this.lastNs = 0;
@@ -132,7 +132,7 @@ final class CartHuman {
             if (!this.active || p == null) return;
             double dt = this.lastNs == 0 ? 1.0 / 60.0 : (now - this.lastNs) / 1.0e9;
             this.lastNs = now;
-            dt = Math.max(0.001, Math.min(0.05, dt));
+            dt = Math.max(0.001, Math.min(0.1, dt)); // low FPS: bigger steps, same speed
             float gy = this.waypoint ? this.wYaw : this.tYaw, gp = this.waypoint ? this.wPitch : this.tPitch;
             double dy = class_3532.method_15393(gy - p.method_36454()), dp = gp - p.method_36455();
             double d = Math.sqrt(dy * dy + dp * dp);
@@ -148,7 +148,7 @@ final class CartHuman {
             }
             // ease in (velocity builds up), ease out (proportional to what is left), capped at the top speed
             double want = Math.min(this.maxSpeed, Math.max(d * this.gain, 4.0));
-            this.vel += (want - this.vel) * Math.min(1.0, dt * 16.0);
+            this.vel += (want - this.vel) * Math.min(1.0, dt * 24.0);
             double step = Math.min(d, this.vel * dt);
             double ux = dy / d, uy = dp / d;
             // slight arc that fades out near the target, plus a tiny tremor while moving

@@ -144,7 +144,7 @@ public final class BowCartModule extends Module {
             // look back up to where you aimed, a moment later and not perfectly exact
             m.backYaw = yaw0 + (float) CartHuman.gauss(0, 1.2, -3, 3);
             m.backPitch = pitch0 + (float) CartHuman.gauss(0, 1.0, -3, 3);
-            m.lookBackAt = p.field_6012 + CartHuman.ticks(1.4, 0.6, 1);
+            m.lookBackAt = p.field_6012 + CartHuman.ticks(0.9, 0.4, 1);
             m.lookBackEnd = m.lookBackAt + 20;
         }
         if (m.swapBack.getValue()) {
@@ -211,7 +211,7 @@ public final class BowCartModule extends Module {
         if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = p.field_6012;
         if (this.lookBackAt >= 0 && p.field_6012 >= this.lookBackAt) {
-            this.turner.aim(p, this.backYaw, this.backPitch, 55.0, false);
+            this.turner.aim(p, this.backYaw, this.backPitch, 90.0, false);
             this.lookBackAt = -1;
         }
         if (this.turner.active()) {

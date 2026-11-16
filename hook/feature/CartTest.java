@@ -38,7 +38,7 @@ final class CartTest {
     // server observation
     private static volatile int cartSeenAt = -1, cartGoneAt = -1;
     private static volatile boolean cartNow;
-    static volatile String planInfo, fireResult;
+    static volatile String planInfo, fireResult, stepLog;
     static volatile net.minecraft.class_2338 planFire;
     static volatile net.minecraft.class_2338 planRail;
     private static volatile boolean railGone, railWas, railNow;
@@ -102,6 +102,7 @@ final class CartTest {
             p.method_36457(t.kind.equals("bowup") ? -60.0f : a[1]);
             lastFail = null;
             planInfo = null;
+            stepLog = null;
             planRail = null;
             explosions = 0;
             planFire = null;
@@ -151,7 +152,7 @@ final class CartTest {
                 boolean expectNothing = t.kind.equals("bownorm") || t.kind.equals("bowup");
                 if (expectNothing) res = (cartSeenAt < 0 && explosions == 0 && planInfo == null ? "NOTHING(ok)" : "PLACED(bad) " + res);
                 if (res.startsWith("BOOM") || res.startsWith("NOTHING")) ok++;
-                System.out.println("CARTTEST " + t.kind + " d=" + t.dist + " yaw=" + t.yaw + " h=" + t.height + " -> " + res + (lastFail != null ? " fail=" + lastFail : "") + " arrow=" + arrowSeen + " burning=" + arrowBurning + " fire=" + fireSeen + " plan=" + planInfo + " fireUse=" + fireResult + " railGone=" + railGone);
+                System.out.println("CARTTEST " + t.kind + " d=" + t.dist + " yaw=" + t.yaw + " h=" + t.height + " -> " + res + " steps[" + stepLog + "]" + (lastFail != null ? " fail=" + lastFail : "") + " arrow=" + arrowSeen + " burning=" + arrowBurning + " fire=" + fireSeen + " plan=" + planInfo + " fireUse=" + fireResult + " railGone=" + railGone);
                 phase = 0;
                 clock = 140;
             }

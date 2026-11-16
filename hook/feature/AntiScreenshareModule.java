@@ -267,7 +267,9 @@ public final class AntiScreenshareModule extends Module {
             int[] mx = new int[1], my = new int[1];
             GLFW.glfwGetMonitorPos(mon, mx, my);
             GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_FALSE);
-            GLFW.glfwSetWindowMonitor(main, 0L, mx[0], my[0], vm.width(), vm.height(), GLFW.GLFW_DONT_CARE);
+            // 1 px taller than the monitor: a window that covers the monitor exactly is turned back into exclusive
+            // fullscreen by many GPU drivers (NVIDIA OpenGL, fullscreen optimisations) and then nothing can show above it
+            GLFW.glfwSetWindowMonitor(main, 0L, mx[0], my[0], vm.width(), vm.height() + 1, GLFW.GLFW_DONT_CARE);
             this.borderlessMonitor = mon;
             this.ox = Integer.MIN_VALUE;
             if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST fullscreen -> borderless");
