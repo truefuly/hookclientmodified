@@ -19,15 +19,29 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class AntiScreenshareMixin {
     @WrapOperation(method = "method_1523", at = @At(value = "INVOKE", target = "Lnet/minecraft/class_757;method_3192(Lnet/minecraft/class_9779;Z)V"))
     private void hook$antiScreenshare(class_757 renderer, net.minecraft.class_9779 delta, boolean renderLevel, Operation<Void> original) {
+        long t0 = System.nanoTime();
+        try {
+            this.hook$asFrame(renderer, delta, renderLevel, original);
+        } finally {
+            if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.frameTime(System.nanoTime() - t0);
+        }
+    }
+
+    private void hook$asFrame(class_757 renderer, net.minecraft.class_9779 delta, boolean renderLevel, Operation<Void> original) {
         boolean on = AntiScreenshareModule.active();
         AntiScreenshareModule.CLIENT_DREW = false;
         AntiScreenshareModule.WORLD_SNAP = false;
         AntiScreenshareModule.WORLD_DIRTY = false;
+        class_310 mc0 = (class_310) (Object) this;
+        if (on) {
+            try { AntiScreenshareModule.beginFrame(mc0.method_1522()); } catch (Throwable ignored) {}
+        }
         AntiScreenshareModule.FULL_PASS = on;
         try {
             original.call(renderer, delta, renderLevel);
         } finally {
             AntiScreenshareModule.FULL_PASS = false;
+            AntiScreenshareModule.popLayer();
         }
         if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.frame();
         if (!on || !AntiScreenshareModule.active()) {
@@ -52,13 +66,13 @@ public abstract class AntiScreenshareMixin {
         if (alreadyClean) {
             if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.freeFrame();
             try {
-                if (AntiScreenshareModule.wantsCleanFrame(w, h)) AntiScreenshareModule.storeClean(target.method_30277(), w, h);
+                if (AntiScreenshareModule.CLEAN_DUE) AntiScreenshareModule.storeClean(target.method_30277(), w, h);
             } catch (Throwable ignored) {
             }
             return;
         }
         // between capture frames the last clean frame is reused - recorders only need ~30 FPS, you keep yours
-        if (!AntiScreenshareModule.wantsCleanFrame(w, h)) {
+        if (!AntiScreenshareModule.CLEAN_DUE) {
             try {
                 AntiScreenshareModule.restoreClean(target.method_30277(), w, h);
                 return;
@@ -66,8 +80,9 @@ public abstract class AntiScreenshareMixin {
                 // fall through and draw a fresh clean frame
             }
         }
-        // second pass: clean frame for the real window. If the client drew nothing into the world, the world image
-        // of the normal frame is reused and only the HUD is drawn again (almost free); otherwise the whole frame.
+        // second pass: clean frame for the real window. The clean world image was saved before any client 3D drawing
+        // (that went into its own layer), so normally only the hand and the HUD are drawn again (almost free). Only
+        // when a visual changed the world itself (x-ray like mixins) the whole world is rendered again.
         boolean guiOnly = false;
         if (AntiScreenshareModule.WORLD_SNAP && !AntiScreenshareModule.WORLD_DIRTY) {
             try { guiOnly = AntiScreenshareModule.restoreWorld(target.method_30277(), w, h); } catch (Throwable ignored) {}

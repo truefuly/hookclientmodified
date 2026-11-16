@@ -127,7 +127,7 @@ final class GpuQuadMesh {
                 modelView.mul((Matrix4fc)matrices.method_23760().method_23761());
                 GpuBufferSlice transforms = RenderSystem.getDynamicUniforms().method_71106((Matrix4fc)modelView, (Vector4fc)new Vector4f(1.0f, 1.0f, 1.0f, alpha), (Vector3fc)new Vector3f(), (Matrix4fc)new Matrix4f());
                 class_276 framebuffer = class_310.method_1551().method_1522();
-                try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> this.label, framebuffer.method_71639(), OptionalInt.empty(), framebuffer.method_71640(), OptionalDouble.empty());){
+                try (RenderPass pass = RenderSystem.getDevice().createCommandEncoder().createRenderPass(() -> this.label, RenderSystem.outputColorTextureOverride != null ? RenderSystem.outputColorTextureOverride : framebuffer.method_71639(), OptionalInt.empty(), framebuffer.method_71640(), OptionalDouble.empty());){
                     pass.setPipeline(this.pipeline);
                     RenderSystem.bindDefaultUniforms((RenderPass)pass);
                     pass.setUniform("DynamicTransforms", transforms);

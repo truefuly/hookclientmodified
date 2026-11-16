@@ -56,7 +56,16 @@ implements Serializable {
         // Anti Screenshare clean frame: render / visual modules count as off, so their drawing (ESP, nametags...) is skipped
         if (this.enabled && (this.category == Category.RENDER || this.category == Category.VISUALS)) {
             if (hook.feature.AntiScreenshareModule.CLEAN_PASS) return false;
-            if (hook.feature.AntiScreenshareModule.FULL_PASS) hook.feature.AntiScreenshareModule.CLIENT_DREW = true;
+            if (hook.feature.AntiScreenshareModule.FULL_PASS) {
+                hook.feature.AntiScreenshareModule.CLIENT_DREW = true;
+                // asked while the world itself is drawn (not into the client layer): it may change the world image,
+                // so the clean frame has to render the world again
+                if (!hook.feature.AntiScreenshareModule.LAYER_ON && !hook.feature.AntiScreenshareModule.PAST_WORLD)
+                {
+                    hook.feature.AntiScreenshareModule.WORLD_DIRTY = true;
+                    if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.dirtyBy(String.valueOf(this.getName()));
+                }
+            }
         }
         return this.enabled;
     }

@@ -50,6 +50,7 @@ public final class AntiScreenshareModule extends Module {
     private boolean singleBuffered;
     /** Exclusive fullscreen was switched to borderless fullscreen (nothing can be drawn over exclusive fullscreen). */
     private long borderlessMonitor;
+    private int coverCheck;
     private boolean excluded;
     private int ox = Integer.MIN_VALUE, oy, ow, oh;
     private boolean failed;
@@ -104,14 +105,76 @@ public final class AntiScreenshareModule extends Module {
         com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(m.cleanCache, main, 0, 0, 0, 0, 0, w, h);
     }
 
-    /** Called right after the world (before the HUD) was drawn in the normal frame. */
-    public static void afterWorld(net.minecraft.class_276 target) {
+    // ------------------------------------------------------------------ client layer
+    // Everything the client draws into the world (ESP, lines, hitboxes, mod visuals) is drawn into this separate,
+    // transparent layer instead of the world image. The world image right before it is the clean one (saved for
+    // recorders), the layer is then laid on top for your own view. So the world is only rendered once.
+
+    /** A clean frame is due this frame (decided once at frame start). */
+    public static boolean CLEAN_DUE = false;
+    /** The world image was saved; from here on client drawing no longer dirties it. */
+    public static boolean PAST_WORLD = false;
+    /** Client drawing currently goes into the layer. */
+    public static boolean LAYER_ON = false;
+    private static boolean layerReady, layerUsed, layerCleared;
+    private static com.mojang.blaze3d.textures.GpuTextureView layerPrev;
+    private net.minecraft.class_6367 layer;
+    private static com.mojang.blaze3d.pipeline.RenderPipeline layerBlit;
+
+    /** Frame start (normal pass): clears the client layer. */
+    public static void beginFrame(net.minecraft.class_276 target) {
+        layerReady = false;
+        layerUsed = false;
+        PAST_WORLD = false;
+        LAYER_ON = false;
+        AntiScreenshareModule m = instance;
+        if (m == null || !active()) return;
+        int w = target.field_1482, h = target.field_1481;
+        CLEAN_DUE = wantsCleanFrame(w, h);
+        try {
+            if (m.layer == null) m.layer = new net.minecraft.class_6367("Hook client layer", w, h, false);
+            else if (m.layer.field_1482 != w || m.layer.field_1481 != h) m.layer.method_1234(w, h);
+            layerCleared = false; // cleared on first use only - frames without client 3D drawing cost nothing
+            layerReady = true;
+        } catch (Throwable t) {
+            layerReady = false;
+        }
+    }
+
+    /** Client drawing starts: send it into the layer. */
+    public static boolean pushLayer() {
+        AntiScreenshareModule m = instance;
+        if (!FULL_PASS || !layerReady || LAYER_ON || m == null || m.layer == null) return false;
+        if (!layerCleared) {
+            try {
+                com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().clearColorTexture(m.layer.method_30277(), 0);
+            } catch (Throwable t) {
+                layerReady = false;
+                return false;
+            }
+            layerCleared = true;
+        }
+        layerPrev = com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride;
+        com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride = m.layer.method_71639();
+        LAYER_ON = true;
+        layerUsed = true;
+        return true;
+    }
+
+    public static void popLayer() {
+        if (!LAYER_ON) return;
+        com.mojang.blaze3d.systems.RenderSystem.outputColorTextureOverride = layerPrev;
+        layerPrev = null;
+        LAYER_ON = false;
+    }
+
+    /** At the client-3D point (world done, before the hand): save the clean world image when one is needed. */
+    public static void worldDone(net.minecraft.class_276 target) {
         AntiScreenshareModule m = instance;
         if (m == null || !FULL_PASS) return;
-        WORLD_DIRTY = CLIENT_DREW;
-        if (WORLD_DIRTY) return; // ESP & co. are in the world image, the clean frame needs the full world again
+        PAST_WORLD = true;
+        if (WORLD_DIRTY || !CLEAN_DUE) return; // a world-changing visual is on: the clean frame needs a full render
         int w = target.field_1482, h = target.field_1481;
-        if (!wantsCleanFrame(w, h)) return;
         var main = target.method_30277();
         if (main == null) return;
         var dev = com.mojang.blaze3d.systems.RenderSystem.getDevice();
@@ -126,6 +189,30 @@ public final class AntiScreenshareModule extends Module {
         WORLD_SNAP = true;
     }
 
+    /** Lays the client layer over the world (your own view only). */
+    public static void compositeLayer(net.minecraft.class_276 target) {
+        AntiScreenshareModule m = instance;
+        if (m == null || !layerUsed || m.layer == null) return;
+        if (layerBlit == null) {
+            com.mojang.blaze3d.pipeline.RenderPipeline p = com.mojang.blaze3d.pipeline.RenderPipeline.builder(new com.mojang.blaze3d.pipeline.RenderPipeline.Snippet[0])
+                .withLocation(net.minecraft.class_2960.method_60655("hook", "pipeline/client_layer_blit"))
+                .withVertexShader("core/screenquad").withFragmentShader("core/blit_screen").withSampler("InSampler")
+                .withBlend(com.mojang.blaze3d.pipeline.BlendFunction.TRANSLUCENT_PREMULTIPLIED_ALPHA)
+                .withDepthWrite(false).withDepthTestFunction(com.mojang.blaze3d.platform.DepthTestFunction.NO_DEPTH_TEST)
+                .withColorWrite(true, false)
+                .withVertexFormat(net.minecraft.class_290.field_60033, com.mojang.blaze3d.vertex.VertexFormat.class_5596.field_27379).build();
+            layerBlit = hook.mixin.RenderPipelinesAccessor.hook$register(p);
+        }
+        try (com.mojang.blaze3d.systems.RenderPass pass = com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder()
+                .createRenderPass(() -> "Hook client layer", target.method_71639(), java.util.OptionalInt.empty())) {
+            pass.setPipeline(layerBlit);
+            com.mojang.blaze3d.systems.RenderSystem.bindDefaultUniforms(pass);
+            pass.bindTexture("InSampler", m.layer.method_71639(), com.mojang.blaze3d.systems.RenderSystem.getSamplerCache().method_75294(com.mojang.blaze3d.textures.FilterMode.NEAREST));
+            pass.draw(0, 3);
+        }
+        layerUsed = false;
+    }
+
     /** Puts the saved world image back so the clean pass only has to draw the HUD on top. */
     public static boolean restoreWorld(com.mojang.blaze3d.textures.GpuTexture main, int w, int h) {
         AntiScreenshareModule m = instance;
@@ -138,6 +225,15 @@ public final class AntiScreenshareModule extends Module {
     static void testVisible(boolean visible) {
         AntiScreenshareModule m = instance;
         if (m != null && m.overlayHwnd != 0L) setAffinity(m.overlayHwnd, visible ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE);
+    }
+
+    private void freeLayer() {
+        popLayer();
+        layerReady = false;
+        if (this.layer != null) {
+            try { this.layer.method_1238(); } catch (Throwable ignored) {}
+            this.layer = null;
+        }
     }
 
     private void freeCache() {
@@ -273,6 +369,28 @@ public final class AntiScreenshareModule extends Module {
             this.borderlessMonitor = mon;
             this.ox = Integer.MIN_VALUE;
             if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST fullscreen -> borderless");
+        } else if (this.borderlessMonitor == 0L && ++this.coverCheck >= 60) {
+            // borderless fullscreen from Windows / another mod: a frameless window that covers a monitor exactly is
+            // also promoted to exclusive fullscreen by the driver - make it 1 px taller too
+            this.coverCheck = 0;
+            if (GLFW.glfwGetWindowAttrib(main, GLFW.GLFW_DECORATED) == GLFW.GLFW_FALSE) {
+                int[] wx = new int[1], wy = new int[1], ww = new int[1], wh = new int[1];
+                GLFW.glfwGetWindowPos(main, wx, wy);
+                GLFW.glfwGetWindowSize(main, ww, wh);
+                org.lwjgl.PointerBuffer mons = GLFW.glfwGetMonitors();
+                if (mons != null) for (int i = 0; i < mons.limit(); i++) {
+                    org.lwjgl.glfw.GLFWVidMode vm = GLFW.glfwGetVideoMode(mons.get(i));
+                    if (vm == null) continue;
+                    int[] mx = new int[1], my = new int[1];
+                    GLFW.glfwGetMonitorPos(mons.get(i), mx, my);
+                    if (wx[0] == mx[0] && wy[0] == my[0] && ww[0] == vm.width() && wh[0] == vm.height()) {
+                        GLFW.glfwSetWindowSize(main, vm.width(), vm.height() + 1);
+                        this.ox = Integer.MIN_VALUE;
+                        if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST borderless cover -> +1px");
+                        break;
+                    }
+                }
+            }
         } else if (this.borderlessMonitor != 0L && !class_310.method_1551().method_22683().method_4498()) {
             // the game left fullscreen itself (F11): give the window its frame back
             GLFW.glfwSetWindowAttrib(main, GLFW.GLFW_DECORATED, GLFW.GLFW_TRUE);
@@ -403,6 +521,7 @@ public final class AntiScreenshareModule extends Module {
 
     private void destroy() {
         this.freeCache();
+        this.freeLayer();
         try { this.restoreFullscreen(); } catch (Throwable ignored) {}
         if (this.overlay == 0L) return;
         long prev = GLFW.glfwGetCurrentContext();

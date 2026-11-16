@@ -50,8 +50,11 @@ public abstract class ExtWorldRendererMixin {
     private class_4604 hook$extRender3D(class_4604 var1, @Local(argsOnly=true, ordinal=0) Matrix4f var2, @Local(argsOnly=true, ordinal=1) Matrix4f var3) {
         float var4 = class_310.method_1551().method_61966().method_60637(false);
         TracerEngine.beginFrame((Matrix4fc)var2, (Matrix4fc)var3);
+        boolean layer = hook.feature.AntiScreenshareModule.pushLayer();
         try (class_12180.class_12181 var5 = ShaderOverlay.capture();){
             ExtBridge.render3D(var4, var1);
+        } finally {
+            if (layer) hook.feature.AntiScreenshareModule.popLayer();
         }
         return var1;
     }
@@ -59,7 +62,12 @@ public abstract class ExtWorldRendererMixin {
     @Inject(method={"render"}, at={@At(value="TAIL")})
     private void hook$extOverlayAfterShaderPack(CallbackInfo var1, @Local(argsOnly=true) GpuBufferSlice var2, @Local(argsOnly=true) class_4184 var3, @Local(argsOnly=true, ordinal=0) Matrix4f var4, @Local(argsOnly=true, ordinal=1) Matrix4f var5) {
         if (ShaderOverlay.pending()) {
-            ShaderOverlay.render(var3, var4, var5, var2, ExtWorldRendererMixin.hook$onTopFog(var2, var3));
+            boolean layer = hook.feature.AntiScreenshareModule.pushLayer();
+            try {
+                ShaderOverlay.render(var3, var4, var5, var2, ExtWorldRendererMixin.hook$onTopFog(var2, var3));
+            } finally {
+                if (layer) hook.feature.AntiScreenshareModule.popLayer();
+            }
         }
     }
 

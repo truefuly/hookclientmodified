@@ -66,7 +66,24 @@ public abstract class GameRendererMixin {
     @Inject(method={"renderWorld"}, at={@At(value="INVOKE_STRING", target="Lnet/minecraft/util/profiler/Profiler;swap(Ljava/lang/String;)V", args={"ldc=hand"})})
     private void onWorldRender(class_9779 var1, CallbackInfo var2, @Local(ordinal=0) Matrix4f var3, @Local(ordinal=1) Matrix4f var4) {
         RenderUtils.updateScreenCenter(var3, var4);
-        EventManager.b(new Render3DEvent(new class_4587(), new Matrix4f((Matrix4fc)var3), var1.method_60637(true)));
+        if (hook.feature.AntiScreenshareModule.FULL_PASS) {
+            try {
+                net.minecraft.class_276 t = net.minecraft.class_310.method_1551().method_1522();
+                hook.feature.AntiScreenshareModule.worldDone(t);
+                hook.feature.AntiScreenshareModule.compositeLayer(t);
+            } catch (Throwable ignored) {
+            }
+        }
+        if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.r3d++;
+        boolean asLayer = hook.feature.AntiScreenshareTest.LAYER3D && hook.feature.AntiScreenshareModule.pushLayer();
+        try {
+            EventManager.b(new Render3DEvent(new class_4587(), new Matrix4f((Matrix4fc)var3), var1.method_60637(true)));
+        } finally {
+            if (asLayer) {
+                hook.feature.AntiScreenshareModule.popLayer();
+                try { hook.feature.AntiScreenshareModule.compositeLayer(net.minecraft.class_310.method_1551().method_1522()); } catch (Throwable ignored) {}
+            }
+        }
     }
 
     @Inject(method={"shouldRenderBlockOutline"}, at={@At(value="HEAD")}, cancellable=true)

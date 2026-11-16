@@ -10,6 +10,7 @@
   "client": [
     "AntiScreenshareMixin",
     "AntiScreenshareGameRendererMixin",
+    "AntiScreenshareLevelMixin",
     "AbstractClientPlayerSkinMixin",
     "CameraMixin",
     "ClientPlayerEntityMixin",
