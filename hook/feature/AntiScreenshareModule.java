@@ -33,13 +33,20 @@ public final class AntiScreenshareModule extends Module {
     private com.mojang.blaze3d.textures.GpuTexture worldCache;
 
     private static final int WDA_NONE = 0, WDA_EXCLUDEFROMCAPTURE = 0x11;
-    private static final int GWL_EXSTYLE = -20, GWLP_HWNDPARENT = -8;
+    private static final int GWL_EXSTYLE = -20, GWLP_HWNDPARENT = -8, GWLP_WNDPROC = -4;
     private static final long WS_EX_NOACTIVATE = 0x08000000L, WS_EX_TOOLWINDOW = 0x80L, WS_EX_LAYERED = 0x80000L, WS_EX_TRANSPARENT = 0x20L;
 
     private long overlay;
     private org.lwjgl.opengl.GLCapabilities overlayCaps;
     private long overlayHwnd;
     private int readFbo;
+    /** Window procedure that makes the overlay invisible to the mouse (clicks go to the game window below). */
+    private org.lwjgl.system.windows.WindowProc hitProc;
+    private long prevProc;
+    private boolean layeredFallback;
+    private int hitCheckIn;
+    private long lastPresent;
+    private long presentPeriod = 1L;
     private boolean excluded;
     private int ox = Integer.MIN_VALUE, oy, ow, oh;
     private boolean failed;
@@ -124,6 +131,12 @@ public final class AntiScreenshareModule extends Module {
         return true;
     }
 
+    /** Test only: lets the overlay show up in screen captures, to check what the player sees. */
+    static void testVisible(boolean visible) {
+        AntiScreenshareModule m = instance;
+        if (m != null && m.overlayHwnd != 0L) setAffinity(m.overlayHwnd, visible ? WDA_NONE : WDA_EXCLUDEFROMCAPTURE);
+    }
+
     private void freeCache() {
         if (this.worldCache != null) {
             try { this.worldCache.close(); } catch (Throwable ignored) {}
@@ -190,7 +203,6 @@ public final class AntiScreenshareModule extends Module {
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
-        GLFW.glfwWindowHint(GLFW.GLFW_MOUSE_PASSTHROUGH, GLFW.GLFW_TRUE);
         GLFW.glfwWindowHint(GLFW.GLFW_AUTO_ICONIFY, GLFW.GLFW_FALSE);
         int[] w = new int[1], h = new int[1];
         GLFW.glfwGetWindowSize(main, w, h);
@@ -202,8 +214,19 @@ public final class AntiScreenshareModule extends Module {
         // owned by the game window: stays right above it, minimises with it, never shows in the taskbar or takes focus
         User32.SetWindowLongPtr(this.overlayHwnd, GWLP_HWNDPARENT, mainHwnd);
         long ex = User32.GetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE);
-        User32.SetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED | WS_EX_TRANSPARENT);
-        User32.SetLayeredWindowAttributes(this.overlayHwnd, 0, (byte) 255, User32.LWA_ALPHA);
+        // a normal (not layered) window: OpenGL in layered windows flickers / goes black on many drivers at high FPS
+        User32.SetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+        // mouse goes straight through to the game window (same thread -> HTTRANSPARENT forwards the hit test)
+        this.prevProc = User32.GetWindowLongPtr(this.overlayHwnd, GWLP_WNDPROC);
+        final long prevProcF = this.prevProc;
+        this.hitProc = org.lwjgl.system.windows.WindowProc.create((hwnd, msg, wParam, lParam) -> {
+            if (msg == 0x0084) return -1L;          // WM_NCHITTEST -> HTTRANSPARENT
+            if (msg == 0x0021) return 3L;           // WM_MOUSEACTIVATE -> MA_NOACTIVATE
+            return User32.nCallWindowProc(prevProcF, hwnd, msg, wParam, lParam);
+        });
+        User32.SetWindowLongPtr(this.overlayHwnd, GWLP_WNDPROC, this.hitProc.address());
+        this.layeredFallback = false;
+        this.hitCheckIn = 5;
         this.excluded = setAffinity(this.overlayHwnd, WDA_EXCLUDEFROMCAPTURE);
         if (!this.excluded) throw new IllegalStateException("Windows refused to hide the overlay from capture (needs Windows 10 2004+)");
         long prev = GLFW.glfwGetCurrentContext();
@@ -215,7 +238,51 @@ public final class AntiScreenshareModule extends Module {
         GLFW.glfwMakeContextCurrent(prev);
         org.lwjgl.opengl.GL.setCapabilities(mainCaps);
         this.ox = Integer.MIN_VALUE;
+        this.presentPeriod = presentPeriodNs();
+        this.lastPresent = 0L;
         status = "on";
+        if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay created");
+    }
+
+    /** The overlay is only updated as often as the fastest monitor can show it - more frames are never seen anyway. */
+    private static long presentPeriodNs() {
+        int hz = 60;
+        try {
+            org.lwjgl.PointerBuffer mons = GLFW.glfwGetMonitors();
+            if (mons != null) for (int i = 0; i < mons.limit(); i++) {
+                org.lwjgl.glfw.GLFWVidMode vm = GLFW.glfwGetVideoMode(mons.get(i));
+                if (vm != null) hz = Math.max(hz, vm.refreshRate());
+            }
+        } catch (Throwable ignored) {
+        }
+        // a bit faster than the refresh rate so every refresh gets a fresh frame
+        return (long) (1.0e9 / (hz * 1.5));
+    }
+
+    /** Checks once (from the game's own thread) that a click on the overlay really lands on the game window. */
+    private void checkClickThrough(long mainHwnd) {
+        if (--this.hitCheckIn != 0) return;
+        try (org.lwjgl.system.MemoryStack st = org.lwjgl.system.MemoryStack.stackPush()) {
+            int[] x = new int[1], y = new int[1], w = new int[1], h = new int[1];
+            GLFW.glfwGetWindowPos(this.overlay, x, y);
+            GLFW.glfwGetWindowSize(this.overlay, w, h);
+            long pt = ((long) (y[0] + h[0] / 2) << 32) | ((x[0] + w[0] / 2) & 0xFFFFFFFFL);
+            long fn = User32.getLibrary().getFunctionAddress("WindowFromPoint");
+            long hit = fn == 0L ? 0L : JNI.callPP(pt, fn);
+            if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST clickthrough hit=" + (hit == mainHwnd ? "game" : hit == this.overlayHwnd ? "OVERLAY" : "other"));
+            if (hit == this.overlayHwnd) this.useLayeredFallback();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Old way of letting clicks through, only if the normal way does not work on this PC. */
+    private void useLayeredFallback() {
+        if (this.layeredFallback) return;
+        this.layeredFallback = true;
+        long ex = User32.GetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE);
+        User32.SetWindowLongPtr(this.overlayHwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT);
+        User32.SetLayeredWindowAttributes(this.overlayHwnd, 0, (byte) 255, User32.LWA_ALPHA);
+        System.err.println("[AntiScreenshare] click-through needed the layered fallback");
     }
 
     private static boolean setAffinity(long hwnd, int affinity) {
@@ -228,6 +295,7 @@ public final class AntiScreenshareModule extends Module {
         long main = this.mainHandle();
         if (GLFW.glfwGetWindowAttrib(main, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE) {
             if (this.overlay != 0L) GLFW.glfwHideWindow(this.overlay);
+            if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay hidden (iconified)");
             return;
         }
         if (this.overlay == 0L) this.create();
@@ -235,12 +303,19 @@ public final class AntiScreenshareModule extends Module {
         int[] x = new int[1], y = new int[1], w = new int[1], h = new int[1];
         GLFW.glfwGetWindowPos(main, x, y);
         GLFW.glfwGetWindowSize(main, w, h);
+        boolean moved = false;
         if (x[0] != this.ox || y[0] != this.oy || w[0] != this.ow || h[0] != this.oh) {
+            moved = true;
             this.ox = x[0]; this.oy = y[0]; this.ow = w[0]; this.oh = h[0];
             GLFW.glfwSetWindowPos(this.overlay, x[0], y[0]);
             GLFW.glfwSetWindowSize(this.overlay, Math.max(1, w[0]), Math.max(1, h[0]));
         }
-        if (GLFW.glfwGetWindowAttrib(this.overlay, GLFW.GLFW_VISIBLE) == GLFW.GLFW_FALSE) GLFW.glfwShowWindow(this.overlay);
+        if (GLFW.glfwGetWindowAttrib(this.overlay, GLFW.GLFW_VISIBLE) == GLFW.GLFW_FALSE) { GLFW.glfwShowWindow(this.overlay); moved = true; }
+        if (this.hitCheckIn > 0) this.checkClickThrough(GLFWNativeWin32.glfwGetWin32Window(main));
+        // only as often as the monitor can show (saves FPS, steadier frame pacing)
+        long nowNs = System.nanoTime();
+        if (!moved && nowNs - this.lastPresent < this.presentPeriod) return;
+        this.lastPresent = nowNs - this.lastPresent > 4 * this.presentPeriod ? nowNs : this.lastPresent + this.presentPeriod;
 
         // make sure the game's GL work on the frame is submitted before the other context reads it
         long fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -288,7 +363,12 @@ public final class AntiScreenshareModule extends Module {
             GLFW.glfwMakeContextCurrent(prev);
             org.lwjgl.opengl.GL.setCapabilities(mainCaps);
         }
+        if (AntiScreenshareTest.ENABLED) System.out.println("ASTEST overlay destroyed");
+        if (this.hitProc != null) {
+            try { User32.SetWindowLongPtr(this.overlayHwnd, GWLP_WNDPROC, this.prevProc); } catch (Throwable ignored) {}
+        }
         GLFW.glfwDestroyWindow(this.overlay);
+        if (this.hitProc != null) { this.hitProc.free(); this.hitProc = null; }
         this.overlay = 0L;
         this.overlayHwnd = 0L;
         this.readFbo = 0;

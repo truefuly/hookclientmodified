@@ -31,24 +31,33 @@ public final class AntiScreenshareTest {
         ticks++;
         AntiScreenshareModule m = AntiScreenshareModule.instance;
         if (m == null) return;
+        hook.module.ModuleManager mm = hook.Hook.INSTANCE.getModuleManager();
+        hook.module.Module hud = mm.getModuleByClass(HudModule.class), esp = mm.getModuleByClass(EntityEspModule.class);
         if (ticks == 60) {
             if (!m.isEnabled()) m.toggle();
+            if (hud != null && !hud.isEnabled()) hud.toggle();
             if (hook.Hook.INSTANCE.GUI != null) mc.method_1507(hook.Hook.INSTANCE.GUI);
         }
-        if (ticks == 89) m.captureFps.getValue(10.0);
         if (ticks == 90) begin();
-        if (ticks == 150) report("on capture=" + Math.round(m.captureFps.getValue()));
-        if (ticks == 160) System.out.println("ASTEST READY_ON status=" + AntiScreenshareModule.status);
-        if (ticks == 170) m.captureFps.getValue(240.0);
-        if (ticks == 190) begin();
-        if (ticks == 250) { report("on capture=every-frame"); m.captureFps.getValue(30.0); mc.method_1507(null); }
-        if (ticks == 252) begin();
-        if (ticks == 259) report("on no-gui");
-        if (ticks == 260 && m.isEnabled()) m.toggle();
-        if (ticks == 265) begin();
-        if (ticks == 315) report("off");
-        if (ticks == 320) System.out.println("ASTEST READY_OFF status=" + AntiScreenshareModule.status);
-        if (ticks == 400) { System.out.println("ASTEST DONE"); mc.method_1592(); }
+        if (ticks == 100) { report("gui"); burst("REC_GUI"); }
+        if (ticks == 185) AntiScreenshareModule.testVisible(true);
+        if (ticks == 190) { begin(); burst("USER_GUI"); }
+        if (ticks == 275) { report("user-gui"); AntiScreenshareModule.testVisible(false); mc.method_1507(null); }
+        if (ticks == 290) begin();
+        if (ticks == 300) { report("play-hud"); burst("REC_HUD"); }
+        if (ticks == 385) AntiScreenshareModule.testVisible(true);
+        if (ticks == 390) { begin(); burst("USER_HUD"); }
+        if (ticks == 470) { report("user-hud"); AntiScreenshareModule.testVisible(false); if (esp != null && !esp.isEnabled()) esp.toggle(); }
+        if (ticks == 480) begin();
+        if (ticks == 490) { report("play-esp"); burst("REC_ESP"); }
+        if (ticks == 575) AntiScreenshareModule.testVisible(true);
+        if (ticks == 580) { begin(); burst("USER_ESP"); }
+        if (ticks == 665) { report("user-esp"); AntiScreenshareModule.testVisible(false); if (m.isEnabled()) m.toggle(); }
+        if (ticks == 680) { System.out.println("ASTEST DONE"); mc.method_1592(); }
+    }
+
+    private static void burst(String name) {
+        System.out.println("ASTEST BURST " + name + " status=" + AntiScreenshareModule.status);
     }
 
     /** Reads a few pixels of what the overlay shows (to prove it gets the full frame). */
