@@ -7,6 +7,7 @@ import org.lwjgl.opengl.GL11;
 public final class AntiScreenshareTest {
     public static final boolean ENABLED = System.getProperty("hook.astest") != null;
     static final boolean OBS = "obs".equals(System.getProperty("hook.astest"));
+    static final boolean QUICK = "quick".equals(System.getProperty("hook.astest"));
     /** Test only: old double-buffered overlay, to compare. */
     static final boolean FORCE_DOUBLE = System.getProperty("hook.asdouble") != null;
     private static int ticks = -1;
@@ -36,6 +37,25 @@ public final class AntiScreenshareTest {
         if (m == null) return;
         hook.module.ModuleManager mm = hook.Hook.INSTANCE.getModuleManager();
         hook.module.Module hud = mm.getModuleByClass(HudModule.class), esp = mm.getModuleByClass(EntityEspModule.class);
+        if (QUICK) {
+            QuickUtilitiesModule q = QuickUtilitiesModule.instance;
+            if (ticks == 240 && q != null) {
+                q.releaseToSelect.setValue(false);
+                QuickWheelScreen.testHover = -1;
+                mc.method_1507(new QuickWheelScreen());
+            }
+            if (ticks == 260) shot(mc, "wheel_idle");
+            if (ticks == 280) QuickWheelScreen.testHover = 0;
+            if (ticks == 300) shot(mc, "wheel_calc");
+            if (ticks == 320) QuickWheelScreen.testHover = 3;
+            if (ticks == 340) shot(mc, "wheel_empty");
+            if (ticks == 360) { QuickWheelScreen.testHover = -1; mc.method_1507(new CalculatorScreen()); }
+            if (ticks == 380) shot(mc, "calc_empty");
+            if (ticks == 390 && mc.field_1755 instanceof CalculatorScreen c) { for (String k : new String[]{"1","2","*","(","3","+","4",")","="}) c.press(k); for (String k : new String[]{"/","8"}) c.press(k); }
+            if (ticks == 410) shot(mc, "calc_result");
+            if (ticks == 440) { System.out.println("ASTEST DONE"); mc.method_1592(); }
+            return;
+        }
         if (OBS) {
             try { org.lwjgl.glfw.GLFW.glfwSetWindowTitle(mc.method_22683().method_4490(), "HookASTest"); } catch (Throwable ignored) {}
             if (ticks == 40) System.out.println("ASTEST OBS_START");
@@ -74,6 +94,11 @@ public final class AntiScreenshareTest {
         if (ticks == 580) { begin(); burst("USER_ESP"); }
         if (ticks == 665) { report("user-esp"); AntiScreenshareModule.testVisible(false); if (m.isEnabled()) m.toggle(); }
         if (ticks == 680) { System.out.println("ASTEST DONE"); mc.method_1592(); }
+    }
+
+    private static void shot(class_310 mc, String name) {
+        net.minecraft.class_318.method_22690(mc.field_1697, "q_" + name + ".png", mc.method_1522(), 1, msg -> {});
+        System.out.println("ASTEST SHOT " + name);
     }
 
     private static void burst(String name) {

@@ -11,7 +11,7 @@ import net.minecraft.class_310;
 import net.minecraft.class_332;
 import net.minecraft.class_437;
 
-/** Calculator utility in the client's glass style. Click the buttons or type; Enter = result, Esc closes. */
+/** Calculator utility, drawn with the client menu's own glass / card style ({@link UiTheme}). Click the buttons or type; Enter = result, Esc closes. */
 public final class CalculatorScreen extends class_437 {
     private static final String[][] KEYS = {
         {"C", "(", ")", "/"},
@@ -70,7 +70,7 @@ public final class CalculatorScreen extends class_437 {
         return UiEasing.out(UiEasing.clamp((now - this.openedAt) / 1.0e6f / 170f, 0, 1));
     }
 
-    private void press(String k) {
+    void press(String k) {
         this.flash = k;
         this.flashAt = System.nanoTime();
         cue(UiAudio.Cue.TICK);
@@ -182,54 +182,60 @@ public final class CalculatorScreen extends class_437 {
         ctx.method_51448().scale(1.0f / s, 1.0f / s);
         try {
             MinecraftUiRenderer ui = new MinecraftUiRenderer(ctx, s);
-            ui.rect(0, 0, sw, sh, UiRenderer.argb(0.30f * vis, 0, 0, 0));
-            float pw = this.d(380), gap = this.d(10), bh = this.d(58);
-            float ph = this.d(180) + KEYS.length * (bh + gap) + this.d(14);
+            float u = UiTheme.unit(sw, sh);
+            UiTheme.backdrop(ui, sw, sh, vis);
+            float pw = 400 * u, pad = 22 * u, gap = 10 * u, bh = 56 * u;
+            float dispH = 104 * u;
+            float ph = 78 * u + 18 * u + dispH + 18 * u + KEYS.length * (bh + gap) - gap + pad;
             float px = (sw - pw) / 2.0f, py = (sh - ph) / 2.0f;
-            float scl = 0.82f + 0.18f * vis;
+            // opens like the client menu: grows in slightly from below
+            float scl = 0.94f + 0.06f * vis;
             ui.pushAlpha(vis);
-            ui.pushTransform(sw / 2.0f * (1 - scl), sh / 2.0f * (1 - scl), scl);
+            ui.pushTransform(sw / 2.0f * (1 - scl), sh / 2.0f * (1 - scl) + 14 * u * (1 - vis), scl);
 
-            ui.shadow(px, py, pw, ph, this.d(22), this.d(30), UiRenderer.argb(0.45f, 0, 0, 0));
-            ui.round(px, py, pw, ph, this.d(22), UiEasing.mix(UiPalette.glass(0.97f), UiRenderer.argb(0.97f, 14, 15, 19), 0.5f));
-            ui.outline(px, py, pw, ph, this.d(22), Math.max(1.0f, this.d(1)), UiRenderer.white(0.08f));
-            ui.text("Calculator", px + this.d(24), py + this.d(20), this.d(18), 1, UiRenderer.white(0.96f));
-            // close button
-            float cxb = px + pw - this.d(44), cyb = py + this.d(16);
-            boolean chot = inside(mx, my, cxb, cyb, this.d(28), this.d(28));
-            ui.round(cxb, cyb, this.d(28), this.d(28), this.d(9), UiRenderer.white(0.04f + 0.08f * this.anim("close", chot ? 1 : 0, 16)));
-            ui.icon(UiIcon.CLOSE, cxb + this.d(8), cyb + this.d(8), this.d(12), UiRenderer.white(0.7f));
-            this.hits.add(new float[]{cxb, cyb, this.d(28), this.d(28)});
+            UiTheme.glass(ui, px, py, pw, ph, 22 * u, u, 3.3f);
+            UiTheme.header(ui, px, py, pw, UiIcon.GRID, "Calculator", "Type or click  ·  Enter = result", u);
+            float cb = 32 * u, cxb = px + pw - 22 * u - cb, cyb = py + (78 * u - cb) / 2.0f;
+            boolean chot = inside(mx, my, cxb, cyb, cb, cb);
+            UiTheme.iconButton(ui, UiIcon.CLOSE, cxb, cyb, cb, this.anim("close", chot ? 1 : 0, 16), u);
+            this.hits.add(new float[]{cxb, cyb, cb, cb});
             this.hitKeys.add("#close");
 
-            // display
-            float dx = px + this.d(20), dy = py + this.d(60), dw = pw - this.d(40), dh = this.d(100);
-            ui.round(dx, dy, dw, dh, this.d(16), UiRenderer.argb(0.9f, 8, 9, 12));
-            ui.outline(dx, dy, dw, dh, this.d(16), Math.max(1.0f, this.d(1)), UiPalette.accent(0.35f));
-            ui.textRight(ui.ellipsize(this.result, dw - this.d(30), this.d(13), 0), dx + dw - this.d(16), dy + this.d(16), this.d(13), 0, this.result.equals("Error") ? UiRenderer.argb(0.9f, 240, 90, 90) : UiRenderer.white(0.45f));
-            boolean caret = (System.currentTimeMillis() / 500L) % 2L == 0L;
-            String shown = this.expr.isEmpty() ? "0" : this.expr;
-            float big = this.d(34);
-            while (big > this.d(16) && ui.textWidth(shown, big, 1) > dw - this.d(32)) big -= this.d(1);
-            ui.textRight(shown + (caret ? "" : ""), dx + dw - this.d(16), dy + dh - big - this.d(16), big, 1, UiRenderer.white(0.96f));
+            // display: a card like the module cards, result line above, big number below
+            float dx = px + pad, dy = py + 78 * u + 18 * u, dw = pw - 2 * pad, dh = dispH;
+            boolean err = this.result.equals("Error");
+            UiTheme.card(ui, dx, dy, dw, dh, 18 * u, 0f, this.result.isEmpty() || err ? 0f : 1f, u);
+            if (!this.result.isEmpty() && !err) UiTheme.accentDot(ui, dx + 20 * u, dy + 25 * u, u, 1f);
+            ui.textRight(ui.ellipsize(this.result.isEmpty() ? "Calculator" : this.result, dw - 60 * u, 12 * u, 0), dx + dw - 18 * u, dy + 18 * u, 12 * u, 0,
+                err ? UiRenderer.argb(0.9f, 240, 90, 90) : this.result.isEmpty() ? UiTheme.FAINT : UiTheme.SUB);
+            String shown = this.expr.isEmpty() ? "0" : this.expr.replace("*", "×");
+            float big = 34 * u;
+            while (big > 16 * u && ui.textWidth(shown, big, 1) > dw - 36 * u) big -= u;
+            ui.textRight(shown, dx + dw - 18 * u, dy + dh - big - 18 * u, big, 1, UiTheme.TEXT);
 
-            // keys
-            float kw = (pw - this.d(40) - gap * 3) / 4.0f;
-            float ky = dy + dh + this.d(20);
+            // keys: cards; operators get the accent text, "=" is the "enabled" card
+            float kw = (pw - 2 * pad - gap * 3) / 4.0f;
+            float ky = dy + dh + 18 * u;
             for (int r = 0; r < KEYS.length; r++) {
                 for (int c = 0; c < 4; c++) {
                     String k = KEYS[r][c];
-                    float kx = px + this.d(20) + c * (kw + gap), y = ky + r * (bh + gap);
-                    boolean op = "/*-+=".contains(k) && k.length() == 1;
+                    float kx = px + pad + c * (kw + gap), y = ky + r * (bh + gap);
+                    boolean op = "/*-+".contains(k);
+                    boolean eq = k.equals("=");
                     boolean hot = inside(mx, my, kx, y, kw, bh);
-                    float h = this.anim("k" + k, hot ? 1 : 0, 16);
-                    float f = k.equals(this.flash) ? Math.max(0f, 1f - (now - this.flashAt) / 1.0e6f / 180f) : 0f;
-                    int base = k.equals("=") ? UiPalette.accent(0.85f) : op ? UiPalette.accent(0.18f + 0.12f * h) : UiRenderer.white(0.05f + 0.06f * h);
-                    ui.round(kx, y, kw, bh, this.d(14), UiEasing.mix(base, UiPalette.accent(0.9f), f * 0.7f));
-                    ui.outline(kx, y, kw, bh, this.d(14), Math.max(1.0f, this.d(1)), UiRenderer.white(0.05f + 0.07f * h));
-                    String label = k.equals("*") ? "×" : k.equals("/") ? "÷" : k;
-                    int col = k.equals("=") ? UiRenderer.argb(0.95f, 14, 15, 19) : op ? UiPalette.accent(1.0f) : UiRenderer.white(0.92f);
-                    ui.textCentered(label, kx + kw / 2.0f, y + (bh - this.d(20)) / 2.0f - this.d(1), this.d(20), 1, col);
+                    float h = this.anim("k" + k, hot ? 1 : 0, 13);
+                    float f = k.equals(this.flash) ? Math.max(0f, 1f - (now - this.flashAt) / 1.0e6f / 220f) : 0f;
+                    UiTheme.card(ui, kx, y, kw, bh, 16 * u, Math.max(h, f), eq ? 1f : f, u);
+                    if (eq) ui.round(kx, y, kw, bh, 16 * u, UiPalette.accent(0.10f + 0.08f * h));
+                    if (h > 0.01f) {
+                        ui.pushClip(kx, y, kw, bh);
+                        ui.glow((float) UiEasing.clamp((float) mx, kx, kx + kw), y + bh * 0.15f, kw * 0.6f, UiRenderer.white(0.045f * h));
+                        ui.popClip();
+                    }
+                    String label = k.equals("*") ? "×" : k;
+                    int col = eq || op ? UiEasing.mix(UiPalette.accent(0.95f), UiTheme.TEXT, 0.15f * h) : k.equals("C") ? UiTheme.SUB : UiTheme.TEXT;
+                    float ts = 19 * u;
+                    ui.textCentered(label, kx + kw / 2.0f, y + (bh - ts) / 2.0f - u, ts, 1, col);
                     this.hits.add(new float[]{kx, y, kw, bh});
                     this.hitKeys.add(k);
                 }
