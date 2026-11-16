@@ -38,6 +38,11 @@ public final class XbowCartModule extends Module {
     private final ButtonSetting usage;
 
     private final ArrayDeque<Runnable> queue = new ArrayDeque<>();
+    /** Where the head turns before each queued step (empty array = no turn). */
+    private final ArrayDeque<float[]> turns = new ArrayDeque<>();
+    private final BooleanSetting rotate = new BooleanSetting(EncryptedString.of("Rotate Head"), true);
+    private final NumberSetting turnSpeed = new NumberSetting(EncryptedString.of("Turn Speed"), 10.0, 180.0, 45.0, 5.0);
+    private final java.util.Random rng = new java.util.Random();
     private int nextAt;
     private int restoreSlot = -1;
 
@@ -55,7 +60,10 @@ public final class XbowCartModule extends Module {
         this.skipIfCart.setDescription(EncryptedString.of("Never places a second cart where one already stands."));
         this.useFire.setDescription(EncryptedString.of("Puts fire in the arrow's path (needed unless the crossbow has Flame-like ignition)."));
         this.swapBack.setDescription(EncryptedString.of("Switches back to the crossbow slot afterwards."));
-        this.addSettings(this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
+        this.rotate.setDescription(EncryptedString.of("Really turns your head to each spot (smoothly) instead of only sending rotation packets - looks human, fewer anticheat flags."));
+        this.turnSpeed.setDescription(EncryptedString.of("Degrees per tick the head turns (slightly randomised). Higher = faster."));
+        hook.module.setting.SettingVisibility.set(this.turnSpeed, this.rotate::getValue);
+        this.addSettings(this.rotate, this.turnSpeed, this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
         instance = this;
         disableLegacy();
     }
@@ -74,11 +82,13 @@ public final class XbowCartModule extends Module {
     public void onEnable() {
         disableLegacy();
         this.queue.clear();
+        this.turns.clear();
     }
 
     @Override
     public void onDisable() {
         this.queue.clear();
+        this.turns.clear();
         this.restoreSlot = -1;
     }
 
@@ -92,7 +102,11 @@ public final class XbowCartModule extends Module {
         }
         if (CartTest.ENABLED) CartTest.tick();
         if (!this.queue.isEmpty() && p.field_6012 >= this.nextAt) {
-            this.queue.poll().run();
+            float[] t = this.turns.isEmpty() ? new float[0] : this.turns.peek();
+            if (this.rotate.getValue() && t.length == 2 && !this.turnToward(p, t)) return;
+            if (!this.turns.isEmpty()) this.turns.poll();
+            CartPlanner.REAL_ROTATE = this.rotate.getValue();
+            try { this.queue.poll().run(); } finally { CartPlanner.REAL_ROTATE = false; }
             this.nextAt = p.field_6012 + this.stepDelay.getIntValue();
             if (this.queue.isEmpty()) this.finish();
         }
@@ -198,12 +212,20 @@ public final class XbowCartModule extends Module {
         final class_1268 shootHand = hand;
         final int crossbowSlot = hand == class_1268.field_5808 ? p.method_31548().method_67532() : -1;
         this.queue.clear();
+        this.turns.clear();
+        net.minecraft.class_3965 firstClick = fp.rampBlockClick != null ? fp.rampBlockClick : fp.upperClick != null ? fp.upperClick : fp.railClick;
         this.queue.add(() -> CartPlanner.placeRail(fp));
+        this.turns.add(firstClick != null ? angleTo(p, firstClick.method_17784()) : new float[0]);
         this.queue.add(() -> CartPlanner.placeCart(fp));
-        if (plan.fire != null) this.queue.add(() -> CartPlanner.placeFire(fp));
+        this.turns.add(fp.cartClick != null ? angleTo(p, fp.cartClick.method_17784()) : new float[0]);
+        if (plan.fire != null) {
+            this.queue.add(() -> CartPlanner.placeFire(fp));
+            this.turns.add(angleTo(p, new class_243(fp.fire.method_10263() + 0.5, fp.fire.method_10264(), fp.fire.method_10260() + 0.5)));
+        }
         this.queue.add(() -> this.shoot(fp, shootHand, crossbowSlot));
+        this.turns.add(new float[]{fp.aim[0], fp.aim[1]});
         this.nextAt = p.field_6012;
-        if (this.stepDelay.getIntValue() == 0) {
+        if (this.stepDelay.getIntValue() == 0 && !this.rotate.getValue()) {
             while (!this.queue.isEmpty()) this.queue.poll().run();
             this.finish();
         }
@@ -220,6 +242,25 @@ public final class XbowCartModule extends Module {
         this.mc.field_1761.method_2919((class_1657) p, hand);
         p.method_36456(yaw);
         p.method_36457(pitch);
+    }
+
+    /** Turns the camera a step toward the target like a mouse flick that slows down at the end; true once there. */
+    private boolean turnToward(class_746 p, float[] t) {
+        float dy = net.minecraft.class_3532.method_15393(t[0] - p.method_36454());
+        float dp = t[1] - p.method_36455();
+        float far = Math.max(Math.abs(dy), Math.abs(dp));
+        if (far < 1.0f) { p.method_36456(p.method_36454() + dy); p.method_36457(t[1]); return true; }
+        float step = this.turnSpeed.getFloatValue() * (0.85f + 0.3f * this.rng.nextFloat());
+        step = Math.max(Math.min(step, far * 0.75f + 1.5f), 1.0f); // ease out near the target
+        float k = Math.min(1.0f, step / far);
+        p.method_36456(p.method_36454() + dy * k);
+        p.method_36457(net.minecraft.class_3532.method_15363(p.method_36455() + dp * k, -90.0f, 90.0f));
+        if (k >= 1.0f) return true;
+        return false;
+    }
+
+    private static float[] angleTo(class_746 p, class_243 at) {
+        return CartPlanner.aimAt(p.method_33571(), at);
     }
 
     private void finish() {

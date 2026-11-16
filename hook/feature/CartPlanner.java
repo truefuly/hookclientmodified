@@ -443,9 +443,13 @@ final class CartPlanner {
     }
 
     /** Server-side look (rotation packet only, your camera does not move). */
+    /** When set, look() also turns the real camera (legit-looking head movement). */
+    static boolean REAL_ROTATE = false;
+
     static void look(class_243 at) {
         class_746 p = mc().field_1724;
         float[] a = aimAt(p.method_33571(), at);
+        if (REAL_ROTATE) { p.method_36456(a[0]); p.method_36457(a[1]); } // the camera really looks there too
         mc().method_1562().method_52787(new class_2828.class_2831(a[0], a[1], p.method_24828(), p.field_5976));
     }
 

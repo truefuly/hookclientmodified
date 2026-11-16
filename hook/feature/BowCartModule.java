@@ -48,6 +48,7 @@ public final class BowCartModule extends Module {
     private int lastPlace = Integer.MIN_VALUE / 2;
     private final hook.module.setting.NumberSetting swapDelay = new hook.module.setting.NumberSetting(EncryptedString.of("Swap Back Delay (ticks)"), 0.0, 10.0, 2.0, 1.0);
     private int swapBackAt = -1, swapBackSlot = -1;
+    private final BooleanSetting rotate = new BooleanSetting(EncryptedString.of("Rotate Head"), true);
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
     private int lastAge = Integer.MIN_VALUE;
@@ -67,7 +68,8 @@ public final class BowCartModule extends Module {
         this.quickDraw.setDescription(EncryptedString.of("Shots drawn less than this (quick taps) put rail + cart where the arrow will land instead of the crosshair."));
         this.swapDelay.setDescription(EncryptedString.of("Stays on the minecart slot this many ticks before going back to the bow, like a real player."));
         hook.module.setting.SettingVisibility.set(this.swapDelay, this.swapBack::getValue);
-        this.addSettings(this.crosshair, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
+        this.rotate.setDescription(EncryptedString.of("Your head really looks at the rail / cart spot when placing, not only packets."));
+        this.addSettings(this.crosshair, this.rotate, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
         instance = this;
     }
@@ -117,8 +119,13 @@ public final class BowCartModule extends Module {
         if (m.skipIfCart.getValue() && m.hasCart(plan.rail)) return;
         m.lastPlace = p.field_6012;
         int slot = p.method_31548().method_67532();
-        if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
-        CartPlanner.placeCart(plan);
+        CartPlanner.REAL_ROTATE = m.rotate.getValue(); // the head really looks at what it clicks
+        try {
+            if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
+            CartPlanner.placeCart(plan);
+        } finally {
+            CartPlanner.REAL_ROTATE = false;
+        }
         if (m.swapBack.getValue()) {
             if (m.swapDelay.getIntValue() <= 0) InventoryUtil.swap(slot);
             else { m.swapBackSlot = slot; m.swapBackAt = p.field_6012 + m.swapDelay.getIntValue(); }
