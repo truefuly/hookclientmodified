@@ -442,15 +442,51 @@ final class CartPlanner {
         return result;
     }
 
-    /** Server-side look (rotation packet only, your camera does not move). */
-    /** When set, look() also turns the real camera (legit-looking head movement). */
+    /**
+     * When set, look() turns the real head like a mouse does (whole mouse counts, no extra packet: the normal movement
+     * packet of this tick carries it, after the click - exactly the vanilla order). Otherwise a rotation packet only.
+     */
     static boolean REAL_ROTATE = false;
 
     static void look(class_243 at) {
         class_746 p = mc().field_1724;
         float[] a = aimAt(p.method_33571(), at);
-        if (REAL_ROTATE) { p.method_36456(a[0]); p.method_36457(a[1]); } // the camera really looks there too
+        if (REAL_ROTATE) { CartHuman.turnTo(p, a); return; }
         mc().method_1562().method_52787(new class_2828.class_2831(a[0], a[1], p.method_24828(), p.field_5976));
+    }
+
+    /** A burning cell on the arrow's way that it really goes into. */
+    static boolean passesFire(Trace t) {
+        for (class_2338 c : t.cells) if (t.depth.getOrDefault(c, 0.0) >= 0.05 && isFire(c)) return true;
+        return false;
+    }
+
+    /**
+     * Dense search over a cart box for a crossbow aim (arrow from {@code start}, speed 3.15) that the given test
+     * accepts; middle of the box first. Returns {yaw, pitch} or null.
+     */
+    static float[] searchAim(class_243 start, class_238 box, java.util.function.Predicate<Trace> accept) {
+        double cx = (box.field_1323 + box.field_1320) / 2, cz = (box.field_1321 + box.field_1324) / 2;
+        double h = box.field_1325 - box.field_1322;
+        try {
+            for (double inset : new double[]{0.15, 0.06}) {
+                INSET = inset;
+                for (int iy = 0; iy <= 12; iy++) {
+                    double fy = h * (0.5 + ((iy % 2 == 0) ? 1 : -1) * ((iy + 1) / 2) * 0.075);
+                    if (fy < 0.03 || fy > h - 0.03) continue;
+                    for (int ix = 0; ix <= 12; ix++) for (int iz = 0; iz <= 12; iz++) {
+                        double ox = ((ix % 2 == 0) ? 1 : -1) * ((ix + 1) / 2) * 0.07;
+                        double oz = ((iz % 2 == 0) ? 1 : -1) * ((iz + 1) / 2) * 0.07;
+                        float[] a = aimAt(start, new class_243(cx + ox, box.field_1322 + fy, cz + oz));
+                        Trace tr = trace(start, dir(a[0], a[1]).method_1021(3.15), box);
+                        if (tr.hitsCart && accept.test(tr)) return a;
+                    }
+                }
+            }
+        } finally {
+            INSET = 0.06;
+        }
+        return null;
     }
 
     static void placeRail(Plan plan) {
@@ -458,26 +494,22 @@ final class CartPlanner {
             InventoryUtil.swap(plan.rampBlockSlot);
             look(plan.rampBlockClick.method_17784());
             useOn(plan.rampBlockClick);
-            mc().field_1724.method_6104(class_1268.field_5808);
         }
         if (plan.upperClick != null) {
             InventoryUtil.swap(railSlot());
             look(plan.upperClick.method_17784());
             useOn(plan.upperClick);
-            mc().field_1724.method_6104(class_1268.field_5808);
         }
         if (plan.railClick == null) return;
         InventoryUtil.swap(railSlot());
         look(plan.railClick.method_17784());
         useOn(plan.railClick);
-        mc().field_1724.method_6104(class_1268.field_5808);
     }
 
     static void placeCart(Plan plan) {
         InventoryUtil.swap(cartSlot());
         look(plan.cartClick.method_17784());
         useOn(plan.cartClick);
-        mc().field_1724.method_6104(class_1268.field_5808);
     }
 
     static void placeFire(Plan plan) {
@@ -487,17 +519,21 @@ final class CartPlanner {
             InventoryUtil.swap(plan.supportSlot);
             look(plan.supportClick.method_17784());
             useOn(plan.supportClick);
-            p.method_6104(class_1268.field_5808);
         }
         InventoryUtil.swap(plan.igniterSlot);
         class_2338 below = plan.fire.method_10074();
         class_243 top = new class_243(plan.fire.method_10263() + 0.5, plan.fire.method_10264(), plan.fire.method_10260() + 0.5);
         if (plan.igniterIsBucket) {
             float[] a = aimAt(p.method_33571(), top);
+            if (REAL_ROTATE) {
+                CartHuman.turnTo(p, a);
+                if (mc().field_1761.method_2919((class_1657) p, class_1268.field_5808).method_23665()) p.method_6104(class_1268.field_5808);
+                return;
+            }
             float yaw = p.method_36454(), pitch = p.method_36455();
             p.method_36456(a[0]);
             p.method_36457(a[1]);
-            mc().field_1761.method_2919((class_1657) p, class_1268.field_5808);
+            if (mc().field_1761.method_2919((class_1657) p, class_1268.field_5808).method_23665()) p.method_6104(class_1268.field_5808);
             p.method_36456(yaw);
             p.method_36457(pitch);
         } else {
@@ -506,6 +542,5 @@ final class CartPlanner {
             var r = useOn(new class_3965(top, class_2350.field_11036, below, false));
             if (CartTest.ENABLED) CartTest.fireResult = r + pre + " clientFire=" + isFire(plan.fire) + " held=" + p.method_6047().method_7909();
         }
-        p.method_6104(class_1268.field_5808);
     }
 }

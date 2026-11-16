@@ -30,7 +30,6 @@ import hook.feature.AutoMinerModule;
 import hook.feature.AutoBreedModule;
 import hook.feature.AutoTpaModule;
 import hook.feature.XbowCartModule;
-import hook.feature.InstaCartModule;
 import hook.feature.BedrockEspModule;
 import hook.feature.BlockEspModule;
 import hook.feature.TunnelEspModule;
@@ -115,7 +114,6 @@ public final class ModuleManager {
         this.in(Category.COMBAT, new PearlCatchModule());
         this.in(Category.COMBAT, new XbowCartModule());
         this.in(Category.COMBAT, new hook.feature.BowCartModule());
-        this.in(Category.COMBAT, new InstaCartModule());
         this.in(Category.COMBAT, new AutoClickerModule());
         this.in(Category.MACROS, new AutoTpaModule());
         this.in(Category.MACROS, new XpShopModule());

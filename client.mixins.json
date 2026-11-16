@@ -83,7 +83,6 @@
     "ItemFxFloatingMixin",
     "FreecamInputMixin",
     "CartcorePitchMixin",
-    "CartcoreBowMixin",
     "MenuSpriteMixin",
     "MenuBackgroundMixin",
     "MenuSplashMixin",

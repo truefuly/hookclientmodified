@@ -11,12 +11,9 @@ public final class VerseFallClientInitializer implements ClientModInitializer {
         new SpotifyModClient().onInitializeClient();
         new thetruetrident.cartcore.CartcoreClient().onInitializeClient();
         new thetruetrident.cartcore.crossCartin().onInitializeClient();
-        var modules = hook.Hook.INSTANCE.getModuleManager();
-        var xbow = modules.getModuleByClass(hook.feature.XbowCartModule.class);
-        var insta = modules.getModuleByClass(hook.feature.InstaCartModule.class);
         // the old CartCore crossbow logic stays off: Xbow Cart / Bow Cart replace it (its use-block hook blocked their clicks)
         thetruetrident.cartcore.CartcoreCore.cartConfig.crossbowCarting = false;
-        thetruetrident.cartcore.CartcoreCore.cartConfig.instaCarting = insta != null && insta.isEnabled() && !hook.feature.BowCartModule.active() && !(hook.feature.XbowCartModule.instance != null && hook.feature.XbowCartModule.instance.isEnabled());
+        thetruetrident.cartcore.CartcoreCore.cartConfig.instaCarting = false; // Insta Cart is gone for good
         thetruetrident.cartcore.CartcoreCore.cartConfig.save();
         Binds.openClickGui = () -> {};
         hook.feature.SwordcoreModuleSupport.initialize();

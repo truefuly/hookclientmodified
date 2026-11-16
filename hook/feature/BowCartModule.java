@@ -48,7 +48,11 @@ public final class BowCartModule extends Module {
     private int lastPlace = Integer.MIN_VALUE / 2;
     private final hook.module.setting.NumberSetting swapDelay = new hook.module.setting.NumberSetting(EncryptedString.of("Swap Back Delay (ticks)"), 0.0, 10.0, 2.0, 1.0);
     private int swapBackAt = -1, swapBackSlot = -1;
-    private final BooleanSetting rotate = new BooleanSetting(EncryptedString.of("Rotate Head"), true);
+    private final BooleanSetting humanize = new BooleanSetting(EncryptedString.of("Humanize"), true);
+    private final BooleanSetting lookBack = new BooleanSetting(EncryptedString.of("Look Back"), true);
+    private final CartHuman.Turner turner = new CartHuman.Turner();
+    private int lookBackAt = -1, lookBackEnd = -1;
+    private float backYaw, backPitch;
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
     private int lastAge = Integer.MIN_VALUE;
@@ -68,8 +72,10 @@ public final class BowCartModule extends Module {
         this.quickDraw.setDescription(EncryptedString.of("Shots drawn less than this (quick taps) put rail + cart where the arrow will land instead of the crosshair."));
         this.swapDelay.setDescription(EncryptedString.of("Stays on the minecart slot this many ticks before going back to the bow, like a real player."));
         hook.module.setting.SettingVisibility.set(this.swapDelay, this.swapBack::getValue);
-        this.rotate.setDescription(EncryptedString.of("Your head really looks at the rail / cart spot when placing, not only packets."));
-        this.addSettings(this.crosshair, this.rotate, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
+        this.humanize.setDescription(EncryptedString.of("Places like a player: one real mouse-like look at the spot (no extra rotation packets), click points on that view line instead of the exact centre, one arm swing per placement, random swap-back pause. Off = rotation packets only."));
+        this.lookBack.setDescription(EncryptedString.of("After placing, the head moves smoothly back to where you were aiming, like you would."));
+        hook.module.setting.SettingVisibility.set(this.lookBack, this.humanize::getValue);
+        this.addSettings(this.crosshair, this.humanize, this.lookBack, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
         instance = this;
     }
@@ -92,6 +98,8 @@ public final class BowCartModule extends Module {
     public void onDisable() {
         this.preview = null;
         this.pending = null;
+        this.turner.stop();
+        this.lookBackAt = -1;
         super.onDisable();
     }
 
@@ -119,17 +127,81 @@ public final class BowCartModule extends Module {
         if (m.skipIfCart.getValue() && m.hasCart(plan.rail)) return;
         m.lastPlace = p.field_6012;
         int slot = p.method_31548().method_67532();
-        CartPlanner.REAL_ROTATE = m.rotate.getValue(); // the head really looks at what it clicks
+        float yaw0 = p.method_36454(), pitch0 = p.method_36455();
+        boolean human = m.humanize.getValue();
+        boolean turned = true;
+        CartPlanner.REAL_ROTATE = human; // the head really looks at what it clicks (mouse-like, no extra packets)
         try {
-            if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
-            CartPlanner.placeCart(plan);
+            if (human && plan.rampBlockClick == null && plan.upperClick == null) turned = m.placeFlat(p, plan);
+            else {
+                if (!(plan.railClick == null && CartPlanner.isRailBlock(plan.rail))) CartPlanner.placeRail(plan);
+                CartPlanner.placeCart(plan);
+            }
         } finally {
             CartPlanner.REAL_ROTATE = false;
         }
-        if (m.swapBack.getValue()) {
-            if (m.swapDelay.getIntValue() <= 0) InventoryUtil.swap(slot);
-            else { m.swapBackSlot = slot; m.swapBackAt = p.field_6012 + m.swapDelay.getIntValue(); }
+        if (human && m.lookBack.getValue() && turned && CartHuman.angle(p, yaw0, pitch0) > 1.0) {
+            // look back up to where you aimed, a moment later and not perfectly exact
+            m.backYaw = yaw0 + (float) CartHuman.gauss(0, 1.2, -3, 3);
+            m.backPitch = pitch0 + (float) CartHuman.gauss(0, 1.0, -3, 3);
+            m.lookBackAt = p.field_6012 + CartHuman.ticks(1.4, 0.6, 1);
+            m.lookBackEnd = m.lookBackAt + 20;
         }
+        if (m.swapBack.getValue()) {
+            int delay = human ? CartHuman.ticks(m.swapDelay.getValue() + 0.5, 0.7, Math.max(1, m.swapDelay.getIntValue())) : m.swapDelay.getIntValue();
+            if (delay <= 0) InventoryUtil.swap(slot);
+            else { m.swapBackSlot = slot; m.swapBackAt = p.field_6012 + delay; }
+        }
+    }
+
+    /**
+     * Flat rail spot: one look at a random point on the rail spot, then both clicks lie on that one view line (rail
+     * on the floor where the line meets it, cart where it meets the rail's top) - exactly what a player looking there
+     * and clicking twice would send.
+     */
+    private boolean placeFlat(class_746 p, CartPlanner.Plan plan) {
+        class_2338 r = plan.rail;
+        class_243 eye = p.method_33571();
+        class_243 dir = CartPlanner.dir(p.method_36454(), p.method_36455());
+        // already looking at the spot (crosshair mode): no head movement at all, the clicks lie on your own view line
+        boolean turned = !looksInto(eye, dir, r);
+        if (turned) {
+            class_243 aim = new class_243(r.method_10263() + 0.5 + CartHuman.jitter(0.26), r.method_10264() + 0.125, r.method_10260() + 0.5 + CartHuman.jitter(0.26));
+            CartHuman.turnTo(p, CartPlanner.aimAt(eye, aim));
+            dir = CartPlanner.dir(p.method_36454(), p.method_36455());
+        }
+        boolean floorClick = plan.railClick != null && plan.railClick.method_17780() == class_2350.field_11036 && plan.railClick.method_17777().equals(r.method_10074());
+        if (plan.railClick != null) {
+            InventoryUtil.swap(CartPlanner.railSlot());
+            CartPlanner.useOn(floorClick ? new net.minecraft.class_3965(onLine(eye, dir, r, r.method_10264()), class_2350.field_11036, r.method_10074(), false) : plan.railClick);
+        }
+        InventoryUtil.swap(CartPlanner.cartSlot());
+        CartPlanner.useOn(new net.minecraft.class_3965(onLine(eye, dir, r, r.method_10264() + 0.125), class_2350.field_11036, r, false));
+        return turned;
+    }
+
+    /** True if the view line goes down into the rail cell's floor (both at the floor and at the rail's top). */
+    private static boolean looksInto(class_243 eye, class_243 dir, class_2338 r) {
+        if (dir.field_1351 > -1.0e-3) return false;
+        for (double y : new double[]{r.method_10264(), r.method_10264() + 0.125}) {
+            double t = (y - eye.field_1351) / dir.field_1351;
+            double x = eye.field_1352 + dir.field_1352 * t - r.method_10263(), z = eye.field_1350 + dir.field_1350 * t - r.method_10260();
+            if (x < 0.04 || x > 0.96 || z < 0.04 || z > 0.96) return false;
+        }
+        return true;
+    }
+
+    /** Where the view line crosses height y, kept inside the block column of r. */
+    private static class_243 onLine(class_243 eye, class_243 dir, class_2338 r, double y) {
+        double x = r.method_10263() + 0.5, z = r.method_10260() + 0.5;
+        if (dir.field_1351 < -1.0e-3) {
+            double t = (y - eye.field_1351) / dir.field_1351;
+            x = eye.field_1352 + dir.field_1352 * t;
+            z = eye.field_1350 + dir.field_1350 * t;
+        }
+        x = Math.max(r.method_10263() + 0.02, Math.min(r.method_10263() + 0.98, x));
+        z = Math.max(r.method_10260() + 0.02, Math.min(r.method_10260() + 0.98, z));
+        return new class_243(x, y, z);
     }
 
     @EventListener
@@ -138,6 +210,14 @@ public final class BowCartModule extends Module {
         if (p == null) { this.preview = null; return; }
         if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = p.field_6012;
+        if (this.lookBackAt >= 0 && p.field_6012 >= this.lookBackAt) {
+            this.turner.aim(p, this.backYaw, this.backPitch, 55.0, false);
+            this.lookBackAt = -1;
+        }
+        if (this.turner.active()) {
+            this.turner.tickFallback(p);
+            if (p.field_6012 > this.lookBackEnd || this.turner.dist(p) < 0.3 || p.method_6115()) this.turner.stop();
+        }
         if (this.swapBackAt >= 0 && p.field_6012 >= this.swapBackAt) {
             if (!p.method_6115()) InventoryUtil.swap(this.swapBackSlot);
             this.swapBackAt = -1;
@@ -148,6 +228,7 @@ public final class BowCartModule extends Module {
 
     @EventListener
     public void onRender3D(Render3DEvent event) {
+        if (this.turner.active()) this.turner.frame(this.mc.field_1724);
         CartPlanner.Plan plan = this.preview;
         if (plan == null || !this.highlight.getValue()) return;
         class_4184 camera = RenderUtils.getCamera();

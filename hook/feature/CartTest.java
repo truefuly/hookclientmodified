@@ -23,11 +23,11 @@ final class CartTest {
     private static final List<Trial> TRIALS = new ArrayList<>();
     static {
         float[] yaws = {0, 45, 90, 180, -30, -135};
-        for (String k : new String[]{"xbow", "bowflame", "bownorm", "bowup"})
+        for (String k : new String[]{"xbow", "bowflame", "bownorm", "bowup", "xbowmob", "bowmob"})
             for (int d : new int[]{2, 3, 4})
                 for (float y : yaws)
                     for (int h : k.equals("bowflame") ? new int[]{0, 1, 3} : k.equals("xbow") ? new int[]{0, 1} : new int[]{0})
-                        if ((k.equals("xbow") || k.equals("bowflame") || d == 3) && (!k.equals("bowup") || y == 0) && (ONLY == null || java.util.Arrays.asList(ONLY.split(",")).contains(k))) TRIALS.add(new Trial(k, d, y, h));
+                        if ((k.equals("xbow") || k.equals("bowflame") || k.endsWith("mob") || d == 3) && (!k.endsWith("mob") || h == 0) && (!k.equals("bowup") || y == 0) && (ONLY == null || java.util.Arrays.asList(ONLY.split(",")).contains(k))) TRIALS.add(new Trial(k, d, y, h));
     }
 
     private static int lastAge = -1, clock, trial = -1, phase;
@@ -75,13 +75,15 @@ final class CartTest {
             cmd("item replace entity @s hotbar.0 with crossbow[charged_projectiles=[{id:\"minecraft:arrow\",count:1}]]");
             cmd("item replace entity @s hotbar.1 with rail 64");
             cmd("item replace entity @s hotbar.2 with tnt_minecart 1");
-            cmd(t.kind.equals("bow") ? "item replace entity @s hotbar.3 with flint_and_steel" : t.kind.equals("xbow") ? "item replace entity @s hotbar.3 with flint_and_steel" : "item replace entity @s hotbar.3 with air");
+            cmd(t.kind.equals("bow") ? "item replace entity @s hotbar.3 with flint_and_steel" : t.kind.startsWith("xbow") ? "item replace entity @s hotbar.3 with flint_and_steel" : "item replace entity @s hotbar.3 with air");
             cmd(t.kind.equals("bownorm") ? "item replace entity @s hotbar.4 with bow" : "item replace entity @s hotbar.4 with bow[enchantments={flame:1}]");
             cmd("item replace entity @s inventory.0 with arrow 64");
             cmd("item replace entity @s hotbar.5 with cobblestone 64");
             double r = Math.toRadians(t.yaw);
             int tx = (int) Math.floor(0.5 - Math.sin(r) * t.dist), tz = (int) Math.floor(0.5 + Math.cos(r) * t.dist);
             if (t.height >= 1) cmd("setblock " + tx + " 151 " + tz + " obsidian");
+            // an enemy standing right on the spot (rails and carts can go under / next to players in vanilla)
+            if (t.kind.endsWith("mob")) cmd("summon zombie " + (tx + 0.5) + " 151 " + (tz + 0.5) + " {NoAI:1b,Silent:1b,PersistenceRequired:1b}");
             cmd("tp @s 0.5 151 0.5 " + t.yaw + " 0");
             phase = 1;
             clock = 140;
@@ -105,7 +107,7 @@ final class CartTest {
             planFire = null;
             fireResult = null;
             mc.method_1576().execute(CartTest::resetObserve);
-            if (t.kind.equals("xbow")) {
+            if (t.kind.startsWith("xbow")) {
                 InventoryUtil.swap(0);
                 phase = 2; // let the crosshair update for a tick
             } else {
@@ -137,9 +139,10 @@ final class CartTest {
         }
         if (phase == 4) {
             mc.method_1576().execute(CartTest::observe);
-            if (clock >= 300 + 30) {
+            if (clock >= 300 + (t.kind.startsWith("xbow") ? 90 : 30)) {
                 String res;
                 if (explosions > 0 && (cartSeenAt < 0 || cartGoneAt >= 0 && cartGoneAt - cartSeenAt <= 6)) res = "BOOM";
+                else if (shotAt >= 0 && cartGoneAt >= 0 && cartGoneAt - shotAt <= 6) res = "BOOM(shot+" + (cartGoneAt - shotAt) + "t, seq " + (shotAt - startAt) + "t)";
                 else if (cartSeenAt < 0) res = "NOCART";
                 else if (cartGoneAt >= 0 && cartGoneAt - cartSeenAt <= 6) res = "BOOM(" + (cartGoneAt - cartSeenAt) + "t)";
                 else if (cartGoneAt >= 0) res = "LATE(" + (cartGoneAt - cartSeenAt) + "t)";
@@ -155,7 +158,17 @@ final class CartTest {
         }
     }
 
+    private static volatile int shotAt = -1, startAt = -1;
+
+    /** Xbow Cart fired the crossbow (humanized sequence): explosion is measured from here. */
+    static void shot() {
+        var server = class_310.method_1551().method_1576();
+        if (server != null) server.execute(() -> shotAt = server.method_3780());
+    }
+
     private static void resetObserve() {
+        shotAt = -1;
+        startAt = class_310.method_1551().method_1576().method_3780();
         cartSeenAt = -1;
         cartGoneAt = -1;
         cartNow = false;
