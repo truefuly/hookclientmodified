@@ -21,6 +21,8 @@ public abstract class AntiScreenshareMixin {
     private void hook$antiScreenshare(class_757 renderer, net.minecraft.class_9779 delta, boolean renderLevel, Operation<Void> original) {
         boolean on = AntiScreenshareModule.active();
         AntiScreenshareModule.CLIENT_DREW = false;
+        AntiScreenshareModule.WORLD_SNAP = false;
+        AntiScreenshareModule.WORLD_DIRTY = false;
         AntiScreenshareModule.FULL_PASS = on;
         try {
             original.call(renderer, delta, renderLevel);
@@ -64,16 +66,26 @@ public abstract class AntiScreenshareMixin {
                 // fall through and draw a fresh clean frame
             }
         }
-        // second pass: clean frame for the real window
-        if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.cleanPass();
+        // second pass: clean frame for the real window. If the client drew nothing into the world, the world image
+        // of the normal frame is reused and only the HUD is drawn again (almost free); otherwise the whole frame.
+        boolean guiOnly = false;
+        if (AntiScreenshareModule.WORLD_SNAP && !AntiScreenshareModule.WORLD_DIRTY) {
+            try { guiOnly = AntiScreenshareModule.restoreWorld(target.method_30277(), w, h); } catch (Throwable ignored) {}
+        }
+        if (hook.feature.AntiScreenshareTest.ENABLED) hook.feature.AntiScreenshareTest.cleanPass(guiOnly);
         AntiScreenshareModule.CLEAN_PASS = true;
         try {
             if (hideScreen) mc.field_1755 = null;
-            com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(target.method_30277(), 0, target.method_30278(), 1.0);
+            if (guiOnly) {
+                AntiScreenshareModule.GUI_ONLY = true;
+            } else {
+                com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().clearColorAndDepthTextures(target.method_30277(), 0, target.method_30278(), 1.0);
+            }
             original.call(renderer, delta, renderLevel);
         } finally {
             if (hideScreen) mc.field_1755 = screen;
             AntiScreenshareModule.CLEAN_PASS = false;
+            AntiScreenshareModule.GUI_ONLY = false;
         }
         try {
             AntiScreenshareModule.storeClean(target.method_30277(), w, h);

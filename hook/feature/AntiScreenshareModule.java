@@ -26,6 +26,11 @@ public final class AntiScreenshareModule extends Module {
     public static volatile boolean CLEAN_PASS = false;
     /** True while the normal frame is drawn with the module on; CLIENT_DREW records whether anything of the client showed up in it. */
     public static volatile boolean FULL_PASS = false, CLIENT_DREW = false;
+    /** Clean pass that reuses the world image of the normal frame and only redraws the HUD / screens. */
+    public static volatile boolean GUI_ONLY = false;
+    /** Set when the world image of this frame was saved and whether the client drew into the world (ESP...). */
+    public static boolean WORLD_SNAP = false, WORLD_DIRTY = false;
+    private com.mojang.blaze3d.textures.GpuTexture worldCache;
 
     private static final int WDA_NONE = 0, WDA_EXCLUDEFROMCAPTURE = 0x11;
     private static final int GWL_EXSTYLE = -20, GWLP_HWNDPARENT = -8;
@@ -89,7 +94,41 @@ public final class AntiScreenshareModule extends Module {
         com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(m.cleanCache, main, 0, 0, 0, 0, 0, w, h);
     }
 
+    /** Called right after the world (before the HUD) was drawn in the normal frame. */
+    public static void afterWorld(net.minecraft.class_276 target) {
+        AntiScreenshareModule m = instance;
+        if (m == null || !FULL_PASS) return;
+        WORLD_DIRTY = CLIENT_DREW;
+        if (WORLD_DIRTY) return; // ESP & co. are in the world image, the clean frame needs the full world again
+        int w = target.field_1482, h = target.field_1481;
+        if (!wantsCleanFrame(w, h)) return;
+        var main = target.method_30277();
+        if (main == null) return;
+        var dev = com.mojang.blaze3d.systems.RenderSystem.getDevice();
+        var c = m.worldCache;
+        if (c == null || c.isClosed() || c.getWidth(0) != w || c.getHeight(0) != h) {
+            if (c != null) try { c.close(); } catch (Throwable ignored) {}
+            c = m.worldCache = dev.createTexture(() -> "Hook AntiScreenshare world",
+                com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_DST | com.mojang.blaze3d.textures.GpuTexture.USAGE_COPY_SRC,
+                com.mojang.blaze3d.textures.TextureFormat.RGBA8, w, h, 1, 1);
+        }
+        dev.createCommandEncoder().copyTextureToTexture(main, c, 0, 0, 0, 0, 0, w, h);
+        WORLD_SNAP = true;
+    }
+
+    /** Puts the saved world image back so the clean pass only has to draw the HUD on top. */
+    public static boolean restoreWorld(com.mojang.blaze3d.textures.GpuTexture main, int w, int h) {
+        AntiScreenshareModule m = instance;
+        if (m == null || m.worldCache == null || m.worldCache.isClosed()) return false;
+        com.mojang.blaze3d.systems.RenderSystem.getDevice().createCommandEncoder().copyTextureToTexture(m.worldCache, main, 0, 0, 0, 0, 0, w, h);
+        return true;
+    }
+
     private void freeCache() {
+        if (this.worldCache != null) {
+            try { this.worldCache.close(); } catch (Throwable ignored) {}
+            this.worldCache = null;
+        }
         if (this.cleanCache != null) {
             try { this.cleanCache.close(); } catch (Throwable ignored) {}
             this.cleanCache = null;

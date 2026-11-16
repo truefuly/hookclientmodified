@@ -14,14 +14,15 @@ public final class AntiScreenshareTest {
     /** Counted once per real frame (from the render mixin). */
     public static void frame() { frames++; }
     private static int cleans, frees;
-    public static void cleanPass() { cleans++; }
+    private static int guiOnly;
+    public static void cleanPass(boolean hudOnly) { cleans++; if (hudOnly) guiOnly++; }
     public static void freeFrame() { frees++; }
 
-    private static void begin() { frames = 0; cleans = 0; frees = 0; measureStart = System.nanoTime(); }
+    private static void begin() { frames = 0; cleans = 0; frees = 0; guiOnly = 0; measureStart = System.nanoTime(); }
 
     private static void report(String label) {
         double sec = (System.nanoTime() - measureStart) / 1.0e9;
-        System.out.println("ASTEST FPS " + label + " = " + Math.round(frames / sec) + " frames=" + frames + " cleanPasses=" + cleans + " alreadyClean=" + frees);
+        System.out.println("ASTEST FPS " + label + " = " + Math.round(frames / sec) + " frames=" + frames + " cleanPasses=" + cleans + " hudOnly=" + guiOnly + " alreadyClean=" + frees);
     }
 
     public static void tick() {
