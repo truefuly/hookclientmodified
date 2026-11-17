@@ -1777,6 +1777,8 @@ public final class HookUiController {
             }
             this.hitClip = null;
             var1.popClip();
+            // the item list scrolls with a draggable bar too, like every other list in the client
+            if (this.picking != null) this.scrollbar(var1, var16 + var18 + this.d(6.0f), var17, var19, var29, this.pickMax, var28, this.pickScroll);
             if (var31 != null) {
                 var1.textRight(var31, var6 + var4 - this.d(22.0f), var7 + this.d(24.0f), this.d(12.0f), 0, SUB);
             }

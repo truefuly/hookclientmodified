@@ -36,8 +36,18 @@ public final class AuroraTest {
             case 710 -> { if (screen != null) screen.testClick("#pay-cancel"); }
             case 720 -> mc.method_1507(null);
             case 750 -> mc.method_1507((class_437) new AuroraScreen());
+            case 800 -> { if (screen != null) screen.testClick("tab:connect"); }
             case 830 -> shot(mc, "reopen");
-            case 840 -> {
+            case 835 -> System.out.println("AURORATEST LIVE v=" + AuroraClient.INSTANCE.liveVersion() + " listMax=" + (screen == null ? -1 : screen.testListMax()));
+            case 840 -> { if (screen != null) System.out.println("AURORATEST DRAG grabbed=" + screen.testDragList() + " pos=" + screen.testListPos() + " max=" + screen.testListMax()); }
+            case 870 -> shot(mc, "scrolled");
+            case 880 -> { if (screen != null) screen.testClick("flt:online"); }
+            case 910 -> shot(mc, "filter");
+            case 920 -> { if (screen != null) { screen.testClick("flt:all"); screen.testClick("#allprof"); } }
+            case 950 -> shot(mc, "allprof");
+            case 960 -> { if (screen != null) screen.testClick("#allprof"); }
+            case 1100 -> {
+                System.out.println("AURORATEST LIVE v=" + AuroraClient.INSTANCE.liveVersion());
                 System.out.println("AURORATEST STATUS " + AuroraClient.INSTANCE.status + " accounts=" + AuroraClient.INSTANCE.accounts.size() + " servers=" + AuroraClient.INSTANCE.servers.size() + " active=" + AuroraClient.INSTANCE.activeServers.size() + " rewards=" + AuroraClient.INSTANCE.rewards.size() + " heads=" + AuroraClient.INSTANCE.heads.size());
                 System.out.println("AURORATEST DONE");
                 mc.method_1592();
@@ -57,7 +67,7 @@ public final class AuroraTest {
                 mc.method_1507(new QuickWheelScreen());
             }
             case 280 -> shot(mc, "wheel_idle");
-            case 290 -> QuickWheelScreen.testHover = 4;
+            case 290 -> QuickWheelScreen.testHover = 4; // MinecraftAFK
             case 320 -> shot(mc, "wheel_aurora");
             case 330 -> QuickWheelScreen.testHover = 0;
             case 360 -> shot(mc, "wheel_calc");

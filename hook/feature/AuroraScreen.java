@@ -17,7 +17,7 @@ import net.minecraft.class_437;
  * AuroraAFK inside Minecraft, built like the AuroraAFK app: server profiles on the left (only the ones where accounts
  * are or were connected), and for the selected profile the tabs Connect, Chat and Actions. Drawn in the HookVisuals
  * glass style and theme colour. The first time it asks for a key; the key is checked by the AuroraAFK VPS and then
- * stored encrypted on this PC. While open it refreshes from the VPS every 7 seconds (and right after every action).
+ * stored encrypted on this PC. While open the VPS pushes every change right away (long-poll), so it is always live.
  */
 public final class AuroraScreen extends class_437 {
     private static final int GREEN = UiRenderer.argb(1f, 92, 214, 140), AMBER = UiRenderer.argb(1f, 240, 184, 76), RED = UiRenderer.argb(1f, 240, 96, 96);
@@ -39,9 +39,13 @@ public final class AuroraScreen extends class_437 {
     private boolean chatFocus;
     private String serverId, accountId;
     private static String tab = "connect", section = "rewards";
-    private float listScroll, listScrollTarget, chatScroll, chatScrollTarget;
-    private float listMax, chatMax;
-    private float[] listArea = new float[4], chatArea = new float[4];
+    private static String connectFilter = "all";
+    private static boolean showAllProfiles;
+    // every scrolling area has its own draggable scrollbar (UiScrollbar), like everywhere in HookVisuals
+    private final UiScrollbar listBar = new UiScrollbar(), chatBar = new UiScrollbar(true), sideBar = new UiScrollbar(), tileBar = new UiScrollbar();
+    private float[] listArea = new float[4], chatArea = new float[4], sideArea = new float[4], tileArea = new float[4];
+    /** While set, new hit boxes are cut to this rect, so rows scrolled out of a list can't be clicked. */
+    private float[] clip;
 
     public AuroraScreen() {
         super((class_2561) class_2561.method_43473());
@@ -78,6 +82,12 @@ public final class AuroraScreen extends class_437 {
     }
 
     private void hit(String key, float x, float y, float w, float h) {
+        if (this.clip != null) {
+            float nx = Math.max(x, this.clip[0]), ny = Math.max(y, this.clip[1]);
+            float nw = Math.min(x + w, this.clip[0] + this.clip[2]) - nx, nh = Math.min(y + h, this.clip[1] + this.clip[3]) - ny;
+            if (nw <= 0 || nh <= 0) return;
+            x = nx; y = ny; w = nw; h = nh;
+        }
         this.hits.add(new float[]{x, y, w, h});
         this.hitKeys.add(key);
     }
@@ -165,14 +175,14 @@ public final class AuroraScreen extends class_437 {
     private void drawKey(UiRenderer ui, int sw, int sh, float u, double mx, double my) {
         boolean checking = this.api.status == AuroraClient.Status.CHECKING;
         float pw = 500 * u, pad = 24 * u;
-        String info = "Paste the access key you got. The AuroraAFK server checks it, then it is saved encrypted on this PC so you only enter it once.";
+        String info = "Paste the access key you got. The MinecraftAFK server checks it, then it is saved encrypted on this PC so you only enter it once.";
         List<String> infoLines = wrap(ui, info, pw - 2 * pad, 12.5f * u, 0);
         String msg = this.api.message;
         List<String> msgLines = msg.isEmpty() ? List.of() : wrap(ui, msg, pw - 2 * pad - 22 * u, 12 * u, 0);
         float ph = 78 * u + 20 * u + infoLines.size() * 18 * u + 16 * u + 54 * u + 14 * u + (msgLines.isEmpty() ? 0 : msgLines.size() * 17 * u + 10 * u) + 46 * u + pad;
         float px = (sw - pw) / 2, py = (sh - ph) / 2;
         UiTheme.glass(ui, px, py, pw, ph, 22 * u, u, 5.1f);
-        UiTheme.header(ui, px, py, pw, UiIcon.HEAD, "AuroraAFK", checking ? "Checking your key…" : "Unlock with your access key", u);
+        UiTheme.header(ui, px, py, pw, UiIcon.HEAD, "MinecraftAFK", checking ? "Checking your key…" : "Unlock with your access key", u);
         this.closeButton(ui, px, py, pw, u, mx, my);
 
         float y = py + 78 * u + 20 * u;
@@ -211,7 +221,7 @@ public final class AuroraScreen extends class_437 {
     private List<AuroraClient.Server> visibleServers() {
         List<AuroraClient.Server> out = new ArrayList<>();
         java.util.Set<String> active = this.api.activeServers;
-        for (AuroraClient.Server v : this.api.servers) if (active.contains(v.id())) out.add(v);
+        for (AuroraClient.Server v : this.api.servers) if (showAllProfiles || active.contains(v.id())) out.add(v);
         return out;
     }
 
@@ -233,7 +243,7 @@ public final class AuroraScreen extends class_437 {
         float px = (sw - pw) / 2, py = (sh - ph) / 2;
         UiTheme.glass(ui, px, py, pw, ph, 22 * u, u, 2.4f);
         String sub = (this.api.keyName.isEmpty() ? "" : this.api.keyName + "  ·  ") + online + " of " + total + " online" + (this.api.reachable && this.api.live ? "  ·  live" : "  ·  reconnecting…");
-        UiTheme.header(ui, px, py, pw, UiIcon.HEAD, "AuroraAFK", sub, u);
+        UiTheme.header(ui, px, py, pw, UiIcon.HEAD, "MinecraftAFK", sub, u);
         this.closeButton(ui, px, py, pw, u, mx, my);
         float kb = 32 * u, kx = px + pw - 22 * u - 32 * u - 10 * u - kb, ky = py + (78 * u - kb) / 2;
         UiTheme.iconButton(ui, UiIcon.KEY, kx, ky, kb, this.anim("keybtn", inside(mx, my, kx, ky, kb, kb) ? 1 : 0, 16), u);
@@ -244,19 +254,31 @@ public final class AuroraScreen extends class_437 {
         float sideW = Math.max(190 * u, Math.min(250 * u, pw * 0.2f));
         float sx = px + 20 * u, cx = sx + sideW + 18 * u, cw = px + pw - 20 * u - cx;
 
-        // -- server profiles (only where accounts are or were online)
+        // -- server profiles (only where accounts are or were online, unless "show all" is on); scrolls with its own bar
         ui.text("SERVER PROFILES", sx + 4 * u, top, 11 * u, 1, UiTheme.FAINT);
-        float y = top + 22 * u;
+        int hidden = 0;
+        for (AuroraClient.Server v : this.api.servers) if (!this.api.activeServers.contains(v.id())) hidden++;
+        float allH = hidden > 0 || showAllProfiles ? 34 * u : 0;
+        float sTop = top + 22 * u, sBottom = bottom - (allH > 0 ? allH + 10 * u : 0), sH = Math.max(0, sBottom - sTop);
+        float y = sTop;
         if (servers.isEmpty()) {
-            for (String line : wrap(ui, "No accounts are connected anywhere right now. Profiles show up here as soon as an account joins.", sideW - 8 * u, 12 * u, 0)) {
+            for (String line : wrap(ui, "No accounts are connected anywhere right now." + (hidden > 0 ? " Show all profiles below to connect accounts." : " Profiles show up here as soon as an account joins."), sideW - 8 * u, 12 * u, 0)) {
                 ui.text(line, sx + 4 * u, y, 12 * u, 0, UiTheme.SUB);
                 y += 17 * u;
             }
         }
-        for (AuroraClient.Server v : servers) {
-            float h = 60 * u;
-            if (y + h > bottom) break;
-            boolean sel = v.id().equals(this.serverId), hot = inside(mx, my, sx, y, sideW, h);
+        float cardH = 60 * u, cardGap = 8 * u;
+        this.sideArea = new float[]{sx - 4 * u, sTop, sideW + 8 * u, sH};
+        this.sideBar.update(sH, servers.size() * (cardH + cardGap) - cardGap, this.dt);
+        ui.pushClip(sx - 4 * u, sTop, sideW + 8 * u, sH);
+        this.clip = this.sideArea;
+        boolean inSide = inside(mx, my, sx - 4 * u, sTop, sideW + 8 * u, sH);
+        for (int si = 0; si < servers.size(); si++) {
+            AuroraClient.Server v = servers.get(si);
+            float h = cardH;
+            y = sTop + si * (cardH + cardGap) - this.sideBar.pos;
+            if (y + h < sTop || y > sBottom) continue;
+            boolean sel = v.id().equals(this.serverId), hot = inSide && inside(mx, my, sx, y, sideW, h);
             UiTheme.card(ui, sx, y, sideW, h, 14 * u, this.anim("s" + v.id(), hot ? 1 : 0, 14), this.anim("ss" + v.id(), sel ? 1 : 0, 12), u);
             if (sel) ui.round(sx + 6 * u, y + 16 * u, 3 * u, h - 32 * u, 1.5f * u, UiPalette.accent(0.95f));
             long on = onlineOn(accounts, sessions, v.id()), all = accounts.stream().filter(a -> a.servers().contains(v.id())).count();
@@ -267,8 +289,11 @@ public final class AuroraScreen extends class_437 {
             ui.text(ui.ellipsize(v.name(), sideW - cwid - 38 * u, 14 * u, 1), sx + 18 * u, y + 12 * u, 14 * u, 1, UiTheme.TEXT);
             ui.text(ui.ellipsize(v.address(), sideW - 30 * u, 11 * u, 0), sx + 18 * u, y + 34 * u, 11 * u, 0, UiTheme.SUB);
             this.hit("s:" + v.id(), sx, y, sideW, h);
-            y += h + 8 * u;
         }
+        this.clip = null;
+        ui.popClip();
+        this.sideBar.draw(ui, sx + sideW + 7 * u, sTop, sH, u, mx, my, this.dt);
+        if (allH > 0) this.button(ui, "#allprof", showAllProfiles ? "Only active profiles" : "Show all profiles  ·  " + hidden, sx, bottom - allH, sideW, allH, false, true, u, mx, my);
 
         AuroraClient.Server cur = servers.stream().filter(v -> v.id().equals(this.serverId)).findFirst().orElse(null);
         if (cur == null) {
@@ -331,36 +356,89 @@ public final class AuroraScreen extends class_437 {
         }
     }
 
-    private void scrollList(float viewH, float content) {
-        this.listMax = Math.max(0, content - viewH);
-        this.listScrollTarget = UiEasing.clamp(this.listScrollTarget, 0, this.listMax);
-        this.listScroll += (this.listScrollTarget - this.listScroll) * (1 - (float) Math.exp(-18 * this.dt));
-    }
-
-    private void scrollbar(UiRenderer ui, float x, float y, float h, float u) {
-        if (this.listMax <= 0) return;
-        float tr = h * h / (h + this.listMax), tY = y + (h - tr) * (this.listScroll / this.listMax);
-        ui.round(x, tY, 3 * u, tr, 1.5f * u, UiRenderer.white(0.14f));
-    }
-
-    // ---- Connect tab: every account of the profile with connect / disconnect (two columns when wide)
+    // ---- Connect tab: overview line (filter by status, counts, total balance) and every account with connect / disconnect
     private void drawConnect(UiRenderer ui, List<AuroraClient.Account> shown, Map<String, AuroraClient.Session> sessions, float x, float y, float w, float h, float u, double mx, double my) {
+        int nOn = 0, nWait = 0, nOff = 0;
+        double money = 0;
+        for (AuroraClient.Account a : shown) {
+            AuroraClient.Session s = sessions.get(a.id() + "@" + this.serverId);
+            String stt = st(s);
+            if ("online".equals(stt)) { nOn++; if (s != null) money += parseMoney(s.money()); }
+            else if (isUp(stt)) nWait++;
+            else nOff++;
+        }
+        String[][] chips = {{"all", "All", String.valueOf(shown.size())}, {"online", "Online", String.valueOf(nOn)}, {"busy", "Connecting", String.valueOf(nWait)}, {"offline", "Offline", String.valueOf(nOff)}};
+        float chH = 30 * u, chx = x;
+        for (String[] c : chips) {
+            float tw = ui.textWidth(c[1], 12.5f * u, 1), nw = ui.textWidth(c[2], 11 * u, 1) + 12 * u;
+            float cwid = 14 * u + tw + 8 * u + nw + 8 * u;
+            boolean sel = connectFilter.equals(c[0]), hot = inside(mx, my, chx, y, cwid, chH);
+            float hv = this.anim("flt" + c[0], hot ? 1 : 0, 14), sv = this.anim("flts" + c[0], sel ? 1 : 0, 12);
+            ui.round(chx, y, cwid, chH, chH / 2, UiEasing.mix(UiRenderer.white(0.035f + 0.04f * hv), UiPalette.accent(0.16f), sv));
+            ui.text(c[1], chx + 14 * u, y + (chH - 12.5f * u) / 2 - u, 12.5f * u, 1, UiEasing.mix(UiTheme.SUB, UiTheme.TEXT, Math.max(sv, hv)));
+            int dot = switch (c[0]) { case "online" -> GREEN; case "busy" -> AMBER; case "offline" -> UiTheme.FAINT; default -> UiTheme.SUB; };
+            float bx = chx + 14 * u + tw + 8 * u;
+            ui.round(bx, y + 6 * u, nw, chH - 12 * u, (chH - 12 * u) / 2, UiRenderer.white(0.07f));
+            ui.textCentered(c[2], bx + nw / 2, y + (chH - 11 * u) / 2 - u, 11 * u, 1, c[0].equals("all") ? UiTheme.TEXT : dot);
+            this.hit("flt:" + c[0], chx, y, cwid, chH);
+            chx += cwid + 8 * u;
+        }
+        if (money > 0 && chx + 160 * u < x + w) {
+            String tot = fmtMoney(money);
+            ui.textRight(tot, x + w, y + (chH - 15 * u) / 2 - u, 15 * u, 1, UiPalette.accent(1f));
+            ui.textRight("Total balance", x + w - ui.textWidth(tot, 15 * u, 1) - 10 * u, y + (chH - 11.5f * u) / 2, 11.5f * u, 0, UiTheme.SUB);
+        }
+        y += chH + 12 * u;
+        h -= chH + 12 * u;
+
+        List<AuroraClient.Account> list = new ArrayList<>();
+        for (AuroraClient.Account a : shown) {
+            String stt = st(sessions.get(a.id() + "@" + this.serverId));
+            boolean keep = switch (connectFilter) {
+                case "online" -> "online".equals(stt);
+                case "busy" -> isUp(stt) && !"online".equals(stt);
+                case "offline" -> !isUp(stt);
+                default -> true;
+            };
+            if (keep) list.add(a);
+        }
         int cols = w >= 760 * u ? 2 : 1;
-        float gap = 8 * u, rowH = 58 * u, colW = (w - (cols - 1) * 10 * u) / cols;
-        int rows = (shown.size() + cols - 1) / cols;
-        this.listArea = new float[]{x, y, w, h};
-        this.scrollList(h, rows * (rowH + gap) - gap);
+        float gap = 8 * u, rowH = 58 * u, colW = (w - (cols - 1) * 10 * u - 12 * u) / cols;
+        int rows = (list.size() + cols - 1) / cols;
+        this.listArea = new float[]{x - 4 * u, y, w + 8 * u, h};
+        this.listBar.update(h, rows * (rowH + gap) - gap, this.dt);
         ui.pushClip(x - 4 * u, y, w + 8 * u, h);
-        if (shown.isEmpty()) ui.textCentered("No accounts in this profile.", x + w / 2, y + h / 2 - 8 * u, 13 * u, 0, UiTheme.SUB);
+        this.clip = this.listArea;
+        if (list.isEmpty()) ui.textCentered(shown.isEmpty() ? "No accounts in this profile." : "No accounts match this filter.", x + w / 2, y + h / 2 - 8 * u, 13 * u, 0, UiTheme.SUB);
         boolean inList = inside(mx, my, x, y, w, h);
-        for (int i = 0; i < shown.size(); i++) {
-            float rx = x + (i % cols) * (colW + 10 * u), ry = y + (i / cols) * (rowH + gap) - this.listScroll;
+        for (int i = 0; i < list.size(); i++) {
+            float rx = x + (i % cols) * (colW + 10 * u), ry = y + (i / cols) * (rowH + gap) - this.listBar.pos;
             if (ry + rowH < y || ry > y + h) continue;
-            AuroraClient.Account a = shown.get(i);
+            AuroraClient.Account a = list.get(i);
             this.drawRow(ui, a, sessions.get(a.id() + "@" + this.serverId), rx, ry, colW, rowH, u, mx, my, inList);
         }
+        this.clip = null;
         ui.popClip();
-        this.scrollbar(ui, x + w + 5 * u, y, h, u);
+        this.listBar.draw(ui, x + w - 4 * u, y, h, u, mx, my, this.dt);
+    }
+
+    /** "$85.72M" -> 85720000; unknown -> 0. */
+    static double parseMoney(String m) {
+        if (m == null) return 0;
+        String t = m.replaceAll("[$,\\s]", "").toUpperCase(java.util.Locale.ROOT);
+        if (t.isEmpty()) return 0;
+        double mul = 1;
+        char last = t.charAt(t.length() - 1);
+        if (last == 'K') mul = 1e3; else if (last == 'M') mul = 1e6; else if (last == 'B') mul = 1e9; else if (last == 'T') mul = 1e12;
+        if (mul > 1) t = t.substring(0, t.length() - 1);
+        try { return Double.parseDouble(t) * mul; } catch (NumberFormatException e) { return 0; }
+    }
+
+    static String fmtMoney(double v) {
+        String[] suf = {"", "K", "M", "B", "T"};
+        int i = 0;
+        while (v >= 1000 && i < suf.length - 1) { v /= 1000; i++; }
+        return "$" + String.format(java.util.Locale.US, i == 0 ? "%.0f" : "%.2f", v) + suf[i];
     }
 
     private void drawRow(UiRenderer ui, AuroraClient.Account a, AuroraClient.Session s, float x, float y, float w, float h, float u, double mx, double my, boolean inList) {
@@ -402,12 +480,13 @@ public final class AuroraScreen extends class_437 {
         float rowH = 46 * u, pad = 8 * u, iy = y + pad, ih = h - 2 * pad;
         int n = shown.size() + (allRow ? 1 : 0);
         this.listArea = new float[]{x, iy, w, ih};
-        this.scrollList(ih, n * (rowH + 4 * u));
+        this.listBar.update(ih, n * (rowH + 4 * u) - 4 * u, this.dt);
         ui.pushClip(x, iy, w, ih);
+        this.clip = this.listArea;
         boolean inList = inside(mx, my, x, iy, w, ih);
-        float ry = iy - this.listScroll;
+        float ry = iy - this.listBar.pos;
         if (allRow) {
-            this.pickerRow(ui, null, "All accounts", "Write as every online account", UiTheme.SUB, x + pad, ry, w - 2 * pad, rowH, u, mx, my, inList, null);
+            this.pickerRow(ui, null, "All accounts", "Write as every online account", UiTheme.SUB, x + pad, ry, w - 2 * pad - 8 * u, rowH, u, mx, my, inList, null);
             ry += rowH + 4 * u;
         }
         for (AuroraClient.Account a : shown) {
@@ -415,12 +494,13 @@ public final class AuroraScreen extends class_437 {
                 AuroraClient.Session s = sessions.get(a.id() + "@" + this.serverId);
                 String status = st(s);
                 String info = label(status) + (s != null && !s.money().isEmpty() && "online".equals(status) ? "  ·  " + s.money() : "");
-                this.pickerRow(ui, a, a.name(), info, colorOf(status), x + pad, ry, w - 2 * pad, rowH, u, mx, my, inList, status);
+                this.pickerRow(ui, a, a.name(), info, colorOf(status), x + pad, ry, w - 2 * pad - 8 * u, rowH, u, mx, my, inList, status);
             }
             ry += rowH + 4 * u;
         }
+        this.clip = null;
         ui.popClip();
-        this.scrollbar(ui, x + w - 6 * u, iy, ih, u);
+        this.listBar.draw(ui, x + w - 7 * u, iy, ih, u, mx, my, this.dt);
     }
 
     private void pickerRow(UiRenderer ui, AuroraClient.Account a, String name, String info, int infoCol, float x, float y, float w, float h, float u, double mx, double my, boolean inList, String status) {
@@ -475,12 +555,10 @@ public final class AuroraScreen extends class_437 {
             for (int i = 0; i < parts.size(); i++) lines.add(new Object[]{parts.get(i), col, i == 0 ? prefix : ""});
         }
         float content = lines.size() * lineH;
-        this.chatMax = Math.max(0, content - lh);
-        this.chatScrollTarget = UiEasing.clamp(this.chatScrollTarget, 0, this.chatMax);
-        this.chatScroll += (this.chatScrollTarget - this.chatScroll) * (1 - (float) Math.exp(-18 * this.dt));
+        this.chatBar.update(lh, content, this.dt);
         ui.pushClip(x, ly, w, lh);
         if (lines.isEmpty()) ui.textCentered("No messages yet", x + w / 2, ly + lh / 2 - 8 * u, 12 * u, 0, UiTheme.FAINT);
-        float base = ly + lh - content + this.chatScroll;
+        float base = ly + lh - content + this.chatBar.pos;
         for (int i = 0; i < lines.size(); i++) {
             float ty = base + i * lineH;
             if (ty + lineH < ly || ty > ly + lh) continue;
@@ -492,6 +570,7 @@ public final class AuroraScreen extends class_437 {
             } else ui.text(text, x + 18 * u, ty, ts, 0, (int) ln[1]);
         }
         ui.popClip();
+        this.chatBar.draw(ui, x + w - 9 * u, ly, lh, u, mx, my, this.dt);
 
         float ix = x + 14 * u, iy = y + h - 14 * u - inH, iw = w - 28 * u;
         boolean can = this.api.canChat && (target != null || onlineCount > 0);
@@ -562,14 +641,21 @@ public final class AuroraScreen extends class_437 {
         float ty = cy + ch + 14 * u, th = y + h - pad - ty;
         List<Tile> tiles = this.tiles(a, s, r, online);
         int cols = iw >= 560 * u ? 2 : 1;
-        float tg = 10 * u, tw = (iw - (cols - 1) * tg) / cols, tileH = Math.min(150 * u, (th - tg) / 2);
-        if (cols == 1) tileH = Math.min(140 * u, th / Math.max(1, tiles.size()) - tg);
+        float tg = 10 * u, tw = (iw - (cols - 1) * tg - 10 * u) / cols;
+        float tileH = cols == 2 ? Math.max(124 * u, Math.min(150 * u, (th - tg) / 2)) : 132 * u;
+        int trows = (tiles.size() + cols - 1) / cols;
+        this.tileArea = new float[]{ix - 4 * u, ty, iw + 8 * u, th};
+        this.tileBar.update(th, trows * (tileH + tg) - tg, this.dt);
         ui.pushClip(ix - 4 * u, ty, iw + 8 * u, th);
+        this.clip = this.tileArea;
         for (int i = 0; i < tiles.size(); i++) {
-            float tx0 = ix + (i % cols) * (tw + tg), ty0 = ty + (i / cols) * (tileH + tg);
+            float tx0 = ix + (i % cols) * (tw + tg), ty0 = ty + (i / cols) * (tileH + tg) - this.tileBar.pos;
+            if (ty0 + tileH < ty || ty0 > ty + th) continue;
             this.drawTile(ui, tiles.get(i), a, tx0, ty0, tw, tileH, u, mx, my);
         }
+        this.clip = null;
         ui.popClip();
+        this.tileBar.draw(ui, x + w - 9 * u, ty, th, u, mx, my, this.dt);
     }
 
     /** One action card: icon, title, text, status line and its buttons / switch. */
@@ -728,7 +814,7 @@ public final class AuroraScreen extends class_437 {
     }
 
     private static boolean isUp(String status) {
-        return !"offline".equals(status) && !"error".equals(status) && !status.isEmpty();
+        return switch (status) { case "online", "connecting", "authenticating", "reconnecting", "waiting" -> true; default -> false; };
     }
 
     private static String st(AuroraClient.Session s) {
@@ -819,7 +905,7 @@ public final class AuroraScreen extends class_437 {
             this.api.chatAll(this.serverId, text);
         } else this.api.action("chat", this.accountId, this.serverId, text);
         this.chatInput = "";
-        this.chatScrollTarget = 0;
+        this.chatBar.reset();
         cue(UiAudio.Cue.TICK);
     }
 
@@ -833,16 +919,34 @@ public final class AuroraScreen extends class_437 {
         double s = this.scale();
         double x = click.comp_4798() * s, y = click.comp_4799() * s;
         boolean wasFocus = this.chatFocus;
+        if (this.api.status == AuroraClient.Status.READY && !this.payoutOpen) {
+            for (UiScrollbar bar : this.bars()) if (bar.press(x, y)) return true;
+        }
         this.chatFocus = false;
         for (int i = this.hits.size() - 1; i >= 0; i--) {
             float[] r = this.hits.get(i);
             if (!inside(x, y, r[0], r[1], r[2], r[3])) continue;
             String k = this.hitKeys.get(i);
-            boolean inScroll = k.startsWith("p:") || k.startsWith("start:") || k.startsWith("stop:");
-            if (inScroll && !inside(x, y, this.listArea[0], this.listArea[1], this.listArea[2], this.listArea[3])) continue;
             this.click(k, wasFocus);
             return true;
         }
+        return true;
+    }
+
+    private UiScrollbar[] bars() {
+        return new UiScrollbar[]{this.sideBar, this.listBar, this.chatBar, this.tileBar};
+    }
+
+    @Override
+    public boolean method_25403(class_11909 click, double dx, double dy) {
+        double y = click.comp_4799() * this.scale();
+        for (UiScrollbar bar : this.bars()) bar.drag(y);
+        return true;
+    }
+
+    @Override
+    public boolean method_25406(class_11909 click) {
+        for (UiScrollbar bar : this.bars()) bar.release();
         return true;
     }
 
@@ -863,6 +967,7 @@ public final class AuroraScreen extends class_437 {
             case "#pay-check", "#pay-again" -> { if (this.payoutName.length() >= 3) this.api.payoutQuote(this.serverId, this.payoutName); cue(UiAudio.Cue.TICK); }
             case "#pay-send" -> { this.api.payoutSend(); this.payoutOpen = false; cue(UiAudio.Cue.TICK); }
             case "#eggsall" -> { this.api.claimEggsAll(this.serverId); cue(UiAudio.Cue.TICK); }
+            case "#allprof" -> { showAllProfiles = !showAllProfiles; this.sideBar.reset(); cue(UiAudio.Cue.TICK); }
             case "#startall", "#stopall" -> {
                 boolean start = k.equals("#startall");
                 for (AuroraClient.Account a : this.api.accounts) {
@@ -875,19 +980,25 @@ public final class AuroraScreen extends class_437 {
             default -> {
                 if (k.startsWith("s:")) {
                     String id = k.substring(2);
-                    if (!id.equals(this.serverId)) { this.serverId = id; this.accountId = null; this.listScrollTarget = this.listScroll = 0; this.chatScrollTarget = this.chatScroll = 0; }
+                    if (!id.equals(this.serverId)) { this.serverId = id; this.accountId = null; this.listBar.reset(); this.chatBar.reset(); this.tileBar.reset(); }
                     cue(UiAudio.Cue.TICK);
                 } else if (k.startsWith("tab:")) {
                     String t = k.substring(4);
-                    if (!t.equals(tab)) { tab = t; this.listScrollTarget = this.listScroll = 0; if (t.equals("chat")) this.accountId = null; }
+                    if (!t.equals(tab)) { tab = t; this.listBar.reset(); this.tileBar.reset(); if (t.equals("chat")) this.accountId = null; }
+                    cue(UiAudio.Cue.TICK);
+                } else if (k.startsWith("flt:")) {
+                    connectFilter = k.substring(4);
+                    this.listBar.reset();
                     cue(UiAudio.Cue.TICK);
                 } else if (k.startsWith("sec:")) {
                     section = k.substring(4);
+                    this.tileBar.reset();
                     cue(UiAudio.Cue.TICK);
                 } else if (k.startsWith("p:")) {
                     String id = k.substring(2);
                     this.accountId = id.isEmpty() ? null : id;
-                    this.chatScrollTarget = this.chatScroll = 0;
+                    this.chatBar.reset();
+                    this.tileBar.reset();
                     this.chatFocus = tab.equals("chat") && this.api.canChat;
                     cue(UiAudio.Cue.TICK);
                 } else if (k.startsWith("start:") || k.startsWith("stop:")) {
@@ -912,8 +1023,11 @@ public final class AuroraScreen extends class_437 {
         double s = this.scale();
         double px = x * s, py = y * s;
         float step = 70 * UiTheme.unit(class_310.method_1551().method_22683().method_4489(), class_310.method_1551().method_22683().method_4506());
-        if (tab.equals("chat") && inside(px, py, this.chatArea[0], this.chatArea[1], this.chatArea[2], this.chatArea[3])) this.chatScrollTarget = UiEasing.clamp(this.chatScrollTarget + (float) v * step, 0, this.chatMax);
-        else this.listScrollTarget = UiEasing.clamp(this.listScrollTarget - (float) v * step, 0, this.listMax);
+        if (this.payoutOpen) return true;
+        if (inside(px, py, this.sideArea[0], this.sideArea[1], this.sideArea[2], this.sideArea[3])) this.sideBar.wheel(-(float) v * step);
+        else if (tab.equals("chat") && inside(px, py, this.chatArea[0], this.chatArea[1], this.chatArea[2], this.chatArea[3])) this.chatBar.wheel((float) v * step);
+        else if (tab.equals("actions") && inside(px, py, this.tileArea[0], this.tileArea[1], this.tileArea[2], this.tileArea[3])) this.tileBar.wheel(-(float) v * step);
+        else this.listBar.wheel(-(float) v * step);
         return true;
     }
 
@@ -976,6 +1090,21 @@ public final class AuroraScreen extends class_437 {
     void testClick(String key) { this.click(key, false); }
 
     void testPayoutName(String name) { this.payoutName = name; }
+
+    /** Grabs the list scrollbar at its top and drags it past the bottom, like a user would. */
+    boolean testDragList() {
+        float bx = this.listBar.testBarX() + 1, ty = this.listBar.testTrackY() + 2;
+        if (!this.listBar.press(bx, ty)) return false;
+        this.listBar.drag(ty + this.listBar.testTrackH() + 40);
+        this.listBar.release();
+        return true;
+    }
+
+    float testListPos() { return this.listBar.pos; }
+
+    float testListMax() { return this.listBar.max; }
+
+
 
     void testSelectFirst() {
         for (AuroraClient.Account a : this.api.accounts) if (a.servers().contains(this.serverId)) { this.click("p:" + a.id(), false); return; }

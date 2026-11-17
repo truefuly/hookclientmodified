@@ -40,8 +40,8 @@ public final class ColorListEditorScreen extends class_437 {
     private final Map<String, Object[]> original = new LinkedHashMap<>();
     private String search = "";
     private Filter filter = Filter.ALL;
-    private float scroll;
-    private float scrollTarget;
+    private final UiScrollbar bar = new UiScrollbar();
+    private float[] gridArea = new float[4];
     private final Map<String, float[]> anims = new java.util.HashMap<>();
     private long last;
     private float dt = 0.016f;
@@ -154,7 +154,7 @@ public final class ColorListEditorScreen extends class_437 {
             if (!this.search.isEmpty()) {
                 float cx = fx + fw - this.d(28);
                 ui.icon(UiIcon.CLOSE, cx, fy + (fh - this.d(12)) / 2.0f, this.d(12), UiRenderer.white(0.5f));
-                this.hit(cx - this.d(6), fy, this.d(28), fh, 0, () -> { this.search = ""; this.scrollTarget = 0; });
+                this.hit(cx - this.d(6), fy, this.d(28), fh, 0, () -> { this.search = ""; this.bar.reset(); });
             }
 
             // filter tabs
@@ -167,7 +167,7 @@ public final class ColorListEditorScreen extends class_437 {
                 float a = this.anim("tab:" + f, active ? 1 : 0, 12), hv = this.anim("tabh:" + f, hot ? 1 : 0, 14);
                 ui.round(tx, ty, tw, this.d(30), this.d(15), UiEasing.mix(UiRenderer.white(0.04f + 0.04f * hv), UiPalette.accent(0.85f), a));
                 ui.textCentered(label, tx + tw / 2.0f, ty + this.d(8), this.d(12), 1, active ? UiRenderer.argb(0.95f, 14, 15, 19) : UiRenderer.white(0.8f));
-                this.hit(tx, ty, tw, this.d(30), 0, () -> { this.filter = f; this.scrollTarget = 0; });
+                this.hit(tx, ty, tw, this.d(30), 0, () -> { this.filter = f; this.bar.reset(); });
                 tx += tw + this.d(8);
             }
 
@@ -181,16 +181,15 @@ public final class ColorListEditorScreen extends class_437 {
             List<StorageBlocksSetting.Entry> entries = this.visibleEntries();
             int rows = (entries.size() + cols - 1) / cols;
             float contentH = rows * (cell + gap) + this.d(16);
-            float maxScroll = Math.max(0, contentH - gh);
-            this.scrollTarget = Math.max(0, Math.min(maxScroll, this.scrollTarget));
-            this.scroll += (this.scrollTarget - this.scroll) * (1.0f - (float) Math.exp(-16f * this.dt));
+            this.gridArea = new float[]{gx, gy, gw, gh};
+            this.bar.update(gh, contentH, this.dt);
             StorageBlocksSetting.Entry hovered = null;
             ui.pushClip(gx, gy, gw, gh);
             List<Object[]> items = new ArrayList<>();
             for (int i = 0; i < entries.size(); i++) {
                 StorageBlocksSetting.Entry e = entries.get(i);
                 float cx = startX + (i % cols) * (cell + gap);
-                float cy = gy + this.d(10) + (i / cols) * (cell + gap) - this.scroll;
+                float cy = gy + this.d(10) + (i / cols) * (cell + gap) - this.bar.pos;
                 if (cy + cell < gy || cy > gy + gh) continue;
                 boolean hot = inside(mx, my, cx, cy, cell, cell) && inside(mx, my, gx, gy, gw, gh);
                 if (hot) hovered = e;
@@ -210,9 +209,12 @@ public final class ColorListEditorScreen extends class_437 {
                 ui.circle(cx + cell - this.d(9), cy + this.d(9), this.d(4), UiRenderer.argb(1.0f, c.getRed(), c.getGreen(), c.getBlue()));
                 if (sel > 0.5f) ui.icon(UiIcon.CHECK, cx + this.d(5), cy + this.d(5), this.d(12), UiRenderer.white(0.9f * sel));
                 StorageBlocksSetting.Entry entry = e;
-                this.hit(cx, cy, cell, cell, 0, entry::toggle);
-                if (!picker) this.hit(cx, cy, cell, cell, 1, () -> class_310.method_1551().method_1507((class_437) new StorageColorPickerScreen(this, entry)));
-                else this.hit(cx, cy, cell, cell, 1, entry::toggle);
+                // only the visible part of a cell is clickable (cells scrolled under the header must not toggle)
+                float hy = Math.max(cy, gy), hh = Math.min(cy + cell, gy + gh) - hy;
+                if (hh <= 0) continue;
+                this.hit(cx, hy, cell, hh, 0, entry::toggle);
+                if (!picker) this.hit(cx, hy, cell, hh, 1, () -> class_310.method_1551().method_1507((class_437) new StorageColorPickerScreen(this, entry)));
+                else this.hit(cx, hy, cell, hh, 1, entry::toggle);
             }
             ui.popClip();
             // items are drawn with the vanilla item renderer (pixel coordinates in this matrix)
@@ -232,11 +234,7 @@ public final class ColorListEditorScreen extends class_437 {
                 ui.textCentered("No blocks match", gx + gw / 2.0f, gy + gh / 2.0f - this.d(8), this.d(14), 1, UiRenderer.white(0.4f));
             }
             // scrollbar
-            if (maxScroll > 0) {
-                float barH = Math.max(this.d(40), gh * gh / contentH);
-                float barY = gy + (gh - barH) * (this.scroll / maxScroll);
-                ui.round(gx + gw - this.d(8), barY, this.d(4), barH, this.d(2), UiRenderer.white(0.25f));
-            }
+            this.bar.draw(ui, gx + gw - this.d(8), gy + this.d(4), gh - this.d(8), this.u(), mx, my, this.dt);
 
             // footer buttons
             float by = py + ph - this.d(58), bh = this.d(36);
@@ -289,6 +287,7 @@ public final class ColorListEditorScreen extends class_437 {
     public boolean mouseClicked(double x, double y, int button) {
         float s = this.scale();
         double mx = x * s, my = y * s;
+        if (button == 0 && this.bar.press(mx, my)) return true;
         for (int i = this.hits.size() - 1; i >= 0; i--) {
             float[] r = this.hits.get(i);
             if (this.buttons.get(i) == button && inside(mx, my, r[0], r[1], r[2], r[3])) {
@@ -302,7 +301,19 @@ public final class ColorListEditorScreen extends class_437 {
 
     @Override
     public boolean method_25401(double x, double y, double h, double v) {
-        this.scrollTarget -= (float) v * this.d(70);
+        this.bar.wheel(-(float) v * this.d(70));
+        return true;
+    }
+
+    @Override
+    public boolean method_25403(class_11909 click, double dx, double dy) {
+        this.bar.drag(click.comp_4799() * this.scale());
+        return true;
+    }
+
+    @Override
+    public boolean method_25406(class_11909 click) {
+        this.bar.release();
         return true;
     }
 
@@ -323,7 +334,7 @@ public final class ColorListEditorScreen extends class_437 {
         }
         if (key == 259 && !this.search.isEmpty()) {
             this.search = this.search.substring(0, this.search.length() - 1);
-            this.scrollTarget = 0;
+            this.bar.reset();
             return true;
         }
         return false;
@@ -332,7 +343,7 @@ public final class ColorListEditorScreen extends class_437 {
     public boolean charTyped(char c, int mods) {
         if (!Character.isISOControl(c) && this.search.length() < 32) {
             this.search = this.search + c;
-            this.scrollTarget = 0;
+            this.bar.reset();
         }
         return true;
     }

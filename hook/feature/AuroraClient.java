@@ -105,8 +105,8 @@ final class AuroraClient {
     volatile Map<String, String> shops = Map.of();
     volatile java.util.Set<String> activeServers = java.util.Set.of();
     volatile long clockOffset;
-    /** How often the open panel asks the VPS for fresh data. */
-    static final long REFRESH_MS = 7000;
+    /** Live updates: the VPS holds each request until something changes (long-poll), at most this long. */
+    static final long REFRESH_MS = 1000;
     final Map<String, UiTextureData> heads = Collections.synchronizedMap(new HashMap<>());
     final ArrayDeque<Log> logs = new ArrayDeque<>();
     volatile long logVersion;
@@ -120,6 +120,17 @@ final class AuroraClient {
         return t;
     });
     private final AtomicBoolean busy = new AtomicBoolean();
+    /** Separate thread for the live stream, so a waiting request never blocks actions. */
+    private final ExecutorService liveThread = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "HookVisuals MinecraftAFK live");
+        t.setDaemon(true);
+        return t;
+    });
+    private final AtomicBoolean watching = new AtomicBoolean();
+    private final Object stateLock = new Object();
+    private volatile long lastTick, version = -1;
+
+    long liveVersion() { return this.version; }
     private HttpClient http;
     private String session, lastLogId, device;
     private long nextPoll, nextFull, retryAt;
@@ -148,7 +159,7 @@ final class AuroraClient {
         String key = normalize(raw);
         if (!KEY.matcher(key).matches()) { this.say("That is not a valid key. It looks like HV-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX.", true); return; }
         this.status = Status.CHECKING;
-        this.say("Checking key with the AuroraAFK server…", false);
+        this.say("Checking key with the MinecraftAFK server…", false);
         this.submit(() -> {
             if (this.device == null) this.device = Saved.load().deviceId();
             this.login(key, true);
@@ -170,9 +181,10 @@ final class AuroraClient {
         });
     }
 
-    /** Called every frame while the panel is open: keeps the data fresh (about once per second). */
+    /** Called every frame while the panel is open: keeps the live stream running while it is open. */
     void tick() {
         long now = System.currentTimeMillis();
+        this.lastTick = now;
         if (this.status == Status.CHECKING && this.retryAt > 0 && now >= this.retryAt && !this.busy.get()) {
             this.retryAt = 0;
             this.submit(() -> {
@@ -182,9 +194,25 @@ final class AuroraClient {
             });
             return;
         }
-        if (this.status != Status.READY || now < this.nextPoll || this.busy.get()) return;
-        this.nextPoll = now + REFRESH_MS;
-        this.submit(this::poll);
+        if (this.status != Status.READY || this.session == null) return;
+        if (this.watching.compareAndSet(false, true)) this.liveThread.execute(this::watch);
+    }
+
+    /**
+     * The live stream: asks the VPS for the state; the VPS answers as soon as anything changes (or after ~15 s
+     * with nothing new), so every change shows up within about a second. Stops a few seconds after the panel closes.
+     */
+    private void watch() {
+        try {
+            while (this.status == Status.READY && this.session != null && System.currentTimeMillis() - this.lastTick < 5000) {
+                int r = this.poll(true);
+                if (r == 401) { this.submit(this::relogin); return; }
+                Thread.sleep(r == 200 ? 350 : 3000);
+            }
+        } catch (InterruptedException ignored) {
+        } finally {
+            this.watching.set(false);
+        }
     }
 
     void action(String type, String accountId, String serverId, String text) {
@@ -207,7 +235,7 @@ final class AuroraClient {
                 if (r.code != 200) this.toast(r.error("Action failed."));
                 else { this.nextPoll = System.currentTimeMillis() + 1200; if (!type.equals("chat")) this.toastOk(okText(type, enabled)); }
             } catch (Exception e) {
-                this.toast("Can't reach the AuroraAFK server.");
+                this.toast("Can't reach the MinecraftAFK server.");
             } finally {
                 this.pending.remove(type + accountId + serverId);
             }
@@ -287,7 +315,7 @@ final class AuroraClient {
                 this.nextPoll = System.currentTimeMillis() + 1200;
                 ok.accept(r);
             } catch (Exception e) {
-                fail.accept("Can't reach the AuroraAFK server.");
+                fail.accept("Can't reach the MinecraftAFK server.");
             } finally {
                 this.pending.remove(mark);
             }
@@ -324,7 +352,7 @@ final class AuroraClient {
                 this.nextPoll = 0;
                 this.say("", false);
                 this.status = Status.READY;
-                this.poll();
+                this.poll(false);
                 return;
             }
             String reason = r.error("invalid");
@@ -344,13 +372,13 @@ final class AuroraClient {
                     case "revoked" -> "This key was turned off. Paste a new key.";
                     case "expired" -> "This key has expired. Paste a new key.";
                     case "device" -> "This key is locked to another PC. Ask for a reset or a new key.";
-                    default -> typed ? "The AuroraAFK server does not know this key." : "Your saved key no longer works. Paste a new key.";
+                    default -> typed ? "The MinecraftAFK server does not know this key." : "Your saved key no longer works. Paste a new key.";
                 }, true);
                 return;
             }
-            this.unreachable(typed, "The AuroraAFK server answered " + r.code + ".");
+            this.unreachable(typed, "The MinecraftAFK server answered " + r.code + ".");
         } catch (Exception e) {
-            this.unreachable(typed, "Can't reach the AuroraAFK server.");
+            this.unreachable(typed, "Can't reach the MinecraftAFK server.");
         }
     }
 
@@ -368,21 +396,29 @@ final class AuroraClient {
         this.status = Status.NEED_KEY;
     }
 
-    private void poll() {
-        if (this.session == null) return;
+    /** One state request; with {@code wait} the VPS keeps it open until something changed. Returns the HTTP code (0 = no connection). */
+    private int poll(boolean wait) {
+        String token = this.session;
+        if (token == null) return 0;
         try {
             boolean full = System.currentTimeMillis() >= this.nextFull;
-            String q = "/v1/state?" + (full ? "full=1" : "full=0") + (this.lastLogId != null ? "&since=" + this.lastLogId : "");
-            Reply r = this.send("GET", q, null, this.session);
-            if (r.code == 401) { this.relogin(); return; } // session ran out or key was changed on the VPS: the login decides
-            if (r.code != 200 || r.json == null) { this.reachable = r.code != 503; this.live = false; return; }
+            boolean hold = wait && !full && this.version >= 0;
+            String q = "/v1/state?" + (full ? "full=1" : "full=0") + (this.lastLogId != null ? "&since=" + this.lastLogId : "") + (hold ? "&wait=1&v=" + this.version : "");
+            Reply r = this.send("GET", q, null, token, hold ? 30 : 12);
+            if (r.code == 401) return 401; // session ran out or key was changed on the VPS: the login decides
+            if (r.code != 200 || r.json == null) { this.reachable = r.code != 503; this.live = false; return r.code; }
             this.reachable = true;
-            this.accept(r.json, full);
+            synchronized (this.stateLock) {
+                if (!token.equals(this.session)) return 200;
+                this.accept(r.json, full);
+                this.version = r.json.has("v") ? r.json.get("v").getAsLong() : -1;
+            }
             if (full) this.nextFull = System.currentTimeMillis() + 60_000;
+            return 200;
         } catch (Exception e) {
             this.reachable = false;
             this.live = false;
-            this.nextPoll = System.currentTimeMillis() + 3000;
+            return 0;
         }
     }
 
@@ -457,6 +493,7 @@ final class AuroraClient {
         this.heads.clear();
         synchronized (this.logs) { this.logs.clear(); this.logVersion++; }
         this.lastLogId = null;
+        this.version = -1;
     }
 
     private void say(String text, boolean error) {
@@ -503,7 +540,11 @@ final class AuroraClient {
     }
 
     private Reply send(String method, String path, String body, String token) throws Exception {
-        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE + path)).timeout(Duration.ofSeconds(12)).header("Accept", "application/json");
+        return this.send(method, path, body, token, 12);
+    }
+
+    private Reply send(String method, String path, String body, String token, int timeoutSec) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create(BASE + path)).timeout(Duration.ofSeconds(timeoutSec)).header("Accept", "application/json");
         if (token != null) b.header("Authorization", "Session " + token);
         if (body != null) b.header("Content-Type", "application/json").method(method, HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
         else b.method(method, HttpRequest.BodyPublishers.noBody());

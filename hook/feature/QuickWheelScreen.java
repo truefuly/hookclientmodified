@@ -22,7 +22,7 @@ public final class QuickWheelScreen extends class_437 {
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
-        new Slot("AuroraAFK", "AFK accounts", UiIcon.HEAD, () -> class_310.method_1551().method_1507((class_437) new AuroraScreen())),
+        new Slot("MinecraftAFK", "AFK accounts", UiIcon.HEAD, () -> class_310.method_1551().method_1507((class_437) new AuroraScreen())),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
         new Slot("Empty", "More soon", UiIcon.PLUS, null),
