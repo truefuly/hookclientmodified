@@ -24,13 +24,17 @@ public final class AuroraTest {
             case 330 -> shot(mc, "key_wrong");
             case 340 -> { if (screen != null) { screen.testType(KEY.toLowerCase()); screen.testClick("#unlock"); } }
             case 460 -> shot(mc, "panel");
-            case 470 -> { if (screen != null) screen.testSelectFirst(); }
+            case 470 -> { if (screen != null) { screen.testClick("tab:chat"); screen.testSelectFirst(); } }
             case 520 -> shot(mc, "chat");
-            case 530 -> mc.method_1507(null);
-            case 560 -> mc.method_1507((class_437) new AuroraScreen());
-            case 640 -> shot(mc, "reopen");
-            case 650 -> {
-                System.out.println("AURORATEST STATUS " + AuroraClient.INSTANCE.status + " accounts=" + AuroraClient.INSTANCE.accounts.size() + " servers=" + AuroraClient.INSTANCE.servers.size() + " heads=" + AuroraClient.INSTANCE.heads.size());
+            case 530 -> { if (screen != null) { screen.testClick("tab:actions"); screen.testSelectFirst(); } }
+            case 580 -> shot(mc, "actions");
+            case 590 -> { if (screen != null) screen.testClick("sec:shops"); }
+            case 620 -> shot(mc, "shops");
+            case 630 -> mc.method_1507(null);
+            case 660 -> mc.method_1507((class_437) new AuroraScreen());
+            case 740 -> shot(mc, "reopen");
+            case 750 -> {
+                System.out.println("AURORATEST STATUS " + AuroraClient.INSTANCE.status + " accounts=" + AuroraClient.INSTANCE.accounts.size() + " servers=" + AuroraClient.INSTANCE.servers.size() + " active=" + AuroraClient.INSTANCE.activeServers.size() + " rewards=" + AuroraClient.INSTANCE.rewards.size() + " heads=" + AuroraClient.INSTANCE.heads.size());
                 System.out.println("AURORATEST DONE");
                 mc.method_1592();
             }

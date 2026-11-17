@@ -87,7 +87,7 @@ final class AuroraClient {
 
     record Account(String id, String name, List<String> servers, boolean pinned) {}
 
-    record Session(String status, String reason, double health, double food, String pos) {}
+    record Session(String status, String reason, double health, double food, String pos, boolean afk, String money, String gems, String coins, String rewardXp, String busy) {}
 
     record Log(String id, String accountId, String serverId, String level, String message, long at) {}
 
@@ -100,6 +100,13 @@ final class AuroraClient {
     volatile List<Server> servers = List.of();
     volatile List<Account> accounts = List.of();
     volatile Map<String, Session> sessions = Map.of();
+    /** Actions state per account@server (AutoSell on, daily status, ...). */
+    volatile Map<String, JsonObject> rewards = Map.of();
+    volatile Map<String, String> shops = Map.of();
+    volatile java.util.Set<String> activeServers = java.util.Set.of();
+    volatile long clockOffset;
+    /** How often the open panel asks the VPS for fresh data. */
+    static final long REFRESH_MS = 7000;
     final Map<String, UiTextureData> heads = Collections.synchronizedMap(new HashMap<>());
     final ArrayDeque<Log> logs = new ArrayDeque<>();
     volatile long logVersion;
@@ -176,11 +183,15 @@ final class AuroraClient {
             return;
         }
         if (this.status != Status.READY || now < this.nextPoll || this.busy.get()) return;
-        this.nextPoll = now + 1000;
+        this.nextPoll = now + REFRESH_MS;
         this.submit(this::poll);
     }
 
     void action(String type, String accountId, String serverId, String text) {
+        this.action(type, accountId, serverId, text, null);
+    }
+
+    void action(String type, String accountId, String serverId, String text, Boolean enabled) {
         if (this.status != Status.READY) return;
         this.pending.put(type + accountId + serverId, System.currentTimeMillis());
         this.worker.execute(() -> {
@@ -190,10 +201,11 @@ final class AuroraClient {
                 b.addProperty("accountId", accountId);
                 b.addProperty("serverId", serverId);
                 if (text != null) b.addProperty("message", text);
+                if (enabled != null) b.addProperty("enabled", enabled);
                 Reply r = this.send("POST", "/v1/action", b.toString(), this.session);
                 if (r.code == 401) { this.relogin(); r = this.send("POST", "/v1/action", b.toString(), this.session); }
                 if (r.code != 200) this.toast(r.error("Action failed."));
-                else this.nextPoll = 0;
+                else { this.nextPoll = System.currentTimeMillis() + 1200; if (!type.equals("chat")) this.toastOk(okText(type, enabled)); }
             } catch (Exception e) {
                 this.toast("Can't reach the AuroraAFK server.");
             } finally {
@@ -326,7 +338,8 @@ final class AuroraClient {
                 JsonObject p = o.getAsJsonObject("position");
                 pos = p.get("x").getAsInt() + " " + p.get("y").getAsInt() + " " + p.get("z").getAsInt();
             }
-            ss.put(str(o, "accountId") + "@" + str(o, "serverId"), new Session(str(o, "status"), str(o, "reason"), num(o, "health"), num(o, "food"), pos));
+            ss.put(str(o, "accountId") + "@" + str(o, "serverId"), new Session(str(o, "status"), str(o, "reason"), num(o, "health"), num(o, "food"), pos,
+                o.has("afk") && o.get("afk").getAsBoolean(), str(o, "money"), str(o, "gems"), str(o, "coins"), str(o, "rewardXp"), str(o, "busy")));
         }
         synchronized (this.logs) {
             if (j.has("reset") && j.get("reset").getAsBoolean()) this.logs.clear();
@@ -339,6 +352,16 @@ final class AuroraClient {
             while (this.logs.size() > 600) this.logs.removeFirst();
             this.logVersion++;
         }
+        Map<String, JsonObject> rw = new HashMap<>();
+        for (JsonElement e : arr(j, "rewards")) { JsonObject o = e.getAsJsonObject(); rw.put(str(o, "accountId") + "@" + str(o, "serverId"), o); }
+        Map<String, String> sh = new HashMap<>();
+        if (j.has("shops") && j.get("shops").isJsonObject()) for (var en : j.getAsJsonObject("shops").entrySet()) sh.put(en.getKey(), en.getValue().getAsString());
+        java.util.Set<String> act = new java.util.HashSet<>();
+        for (JsonElement e : arr(j, "activeServers")) act.add(e.getAsString());
+        if (j.has("serverNow")) this.clockOffset = j.get("serverNow").getAsLong() - System.currentTimeMillis();
+        this.rewards = Map.copyOf(rw);
+        this.shops = Map.copyOf(sh);
+        this.activeServers = java.util.Set.copyOf(act);
         this.servers = List.copyOf(sv);
         this.accounts = List.copyOf(ac);
         this.sessions = Map.copyOf(ss);
@@ -349,6 +372,8 @@ final class AuroraClient {
         this.servers = List.of();
         this.accounts = List.of();
         this.sessions = Map.of();
+        this.rewards = Map.of();
+        this.activeServers = java.util.Set.of();
         this.heads.clear();
         synchronized (this.logs) { this.logs.clear(); this.logVersion++; }
         this.lastLogId = null;
@@ -359,7 +384,32 @@ final class AuroraClient {
         this.messageError = error;
     }
 
+    volatile boolean toastGood;
+
+    private void toastOk(String text) {
+        this.toast = text;
+        this.toastGood = true;
+        this.toastAt = System.currentTimeMillis();
+    }
+
+    private static String okText(String type, Boolean enabled) {
+        return switch (type) {
+            case "start" -> "Connecting…";
+            case "stop" -> "Disconnected.";
+            case "claimDaily" -> "Daily reward claim started.";
+            case "claimEggs" -> "Egg claim started.";
+            case "claimRewards" -> "Reward claim started.";
+            case "buySpawners", "buyXpSpawner" -> "Buying started.";
+            case "stopXpSpawner" -> "Stopped.";
+            case "setHome" -> "Home 1 set.";
+            case "tpHome" -> "Teleporting to home 1.";
+            case "deleteHome" -> "Home 1 deleted.";
+            default -> enabled == null ? "Done." : enabled ? "Turned on." : "Turned off.";
+        };
+    }
+
     private void toast(String text) {
+        this.toastGood = false;
         this.toast = text;
         this.toastAt = System.currentTimeMillis();
     }

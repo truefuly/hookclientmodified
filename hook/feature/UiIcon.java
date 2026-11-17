@@ -49,7 +49,10 @@ public enum UiIcon {
     RESET,
     CALCULATOR,
     HEAD,
-    KEY;
+    KEY,
+    CHAT,
+    GIFT,
+    HOME;
 
     private static final Map<Long, UiTextureData> CACHE;
 
@@ -321,6 +324,29 @@ public enum UiIcon {
                 UiIcon.line(var1, 10.3, 13.7, 20.5, 3.5);
                 UiIcon.line(var1, 17.0, 7.0, 19.8, 9.8);
                 UiIcon.line(var1, 14.2, 9.8, 16.4, 12.0);
+                break;
+            }
+            case 32: {
+                Path2D b = new Path2D.Double();
+                b.moveTo(7.0, 17.0);
+                b.lineTo(5.5, 21.0);
+                b.lineTo(11.0, 17.0);
+                var1.draw(new RoundRectangle2D.Double(3.0, 4.0, 18.0, 13.0, 5.0, 5.0));
+                var1.draw(b);
+                break;
+            }
+            case 33: {
+                var1.draw(new RoundRectangle2D.Double(3.5, 8.0, 17.0, 4.0, 1.5, 1.5));
+                var1.draw(UiIcon.poly(5.0, 12.0, 5.0, 20.5, 19.0, 20.5, 19.0, 12.0));
+                UiIcon.line(var1, 12.0, 8.0, 12.0, 20.5);
+                var1.draw(new Arc2D.Double(7.0, 3.5, 5.0, 5.0, -90.0, 270.0, 0));
+                var1.draw(new Arc2D.Double(12.0, 3.5, 5.0, 5.0, 0.0, 270.0, 0));
+                break;
+            }
+            case 34: {
+                var1.draw(UiIcon.poly(3.0, 11.0, 12.0, 3.5, 21.0, 11.0));
+                var1.draw(UiIcon.poly(5.5, 9.5, 5.5, 20.5, 18.5, 20.5, 18.5, 9.5));
+                var1.draw(UiIcon.poly(10.0, 20.5, 10.0, 14.5, 14.0, 14.5, 14.0, 20.5));
             }
         }
     }
