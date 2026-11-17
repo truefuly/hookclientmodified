@@ -9,7 +9,7 @@ import net.minecraft.class_332;
 import net.minecraft.class_437;
 
 /**
- * The quick utility wheel (emote-wheel style radial menu, drawn in the client's own glass style and theme colour).
+ * The quick utility wheel (emote-wheel style radial menu, drawn like the HookVisuals click GUI: glass panels, header tile, sidebar-style rows).
  * Hold the key: the wheel grows out from behind, the mouse direction from the centre picks a slot, letting go opens
  * it. It fades back quickly on close.
  */
@@ -105,7 +105,6 @@ public final class QuickWheelScreen extends class_437 {
         float u = UiTheme.unit(sw, sh);
         double mx = mouseX * s, my = mouseY * s;
         float cx = sw / 2.0f, cy = sh / 2.0f;
-        float outer = 250 * u, inner = 96 * u;
         int n = SLOTS.length;
 
         // which slot the mouse points at (direction from the centre, small dead zone in the middle)
@@ -140,55 +139,75 @@ public final class QuickWheelScreen extends class_437 {
             ui.pushAlpha(vis);
             ui.pushTransform(cx * (1 - scl), cy * (1 - scl), scl);
 
-            // wheel body: the menu's glass, as a disc
-            UiTheme.glassDisc(ui, cx, cy, outer, u);
+            // Classic HookVisuals look: a header panel in the middle and the utilities as sidebar-style tiles around it,
+            // each one its own glass panel like the click GUI (selected = accent stripe, lighter tile, accent icon).
+            float rx = 300 * u, ry = 205 * u, tw = 172 * u, th = 54 * u;
+            float pw = 284 * u, ph = 136 * u;
 
-            float slotDist = (outer + inner) / 2.0f + 6 * u;
-            float slotR = 50 * u;
+            // connector dots from the centre panel toward the hovered tile
+            if (this.hovered >= 0 && !Float.isNaN(this.pointer)) {
+                double a = Math.toRadians(this.pointer);
+                float h = this.hoverAnim[this.hovered];
+                for (int k = 0; k < 7; k++) {
+                    float f = 0.30f + k * 0.075f;
+                    float px = cx + (float) (Math.sin(a) * rx * f), py = cy - (float) (Math.cos(a) * ry * f);
+                    if (Math.abs(px - cx) < pw / 2 + 6 * u && Math.abs(py - cy) < ph / 2 + 6 * u) continue;
+                    ui.circle(px, py, (1.4f + 0.25f * k) * u, UiPalette.accent((0.18f + 0.07f * k) * h));
+                }
+            }
+
             for (int i = 0; i < n; i++) {
                 double a = Math.toRadians(i * 360.0 / n);
-                float sx = cx + (float) (Math.sin(a) * slotDist), sy = cy - (float) (Math.cos(a) * slotDist);
+                float sx = cx + (float) (Math.sin(a) * rx), sy = cy - (float) (Math.cos(a) * ry);
                 boolean hot = i == this.hovered;
                 this.hoverAnim[i] += ((hot ? 1f : 0f) - this.hoverAnim[i]) * (1.0f - (float) Math.exp(-13f * this.dt));
                 float h = this.hoverAnim[i];
                 Slot slot = SLOTS[i];
                 boolean empty = slot.action() == null;
-                float r = slotR * (1.0f + 0.06f * h);
-                // each slot is a round module card; the hovered one lights up like an enabled module
-                UiTheme.card(ui, sx - r, sy - r, r * 2, r * 2, r, h, empty ? 0f : h, u);
-                if (!empty && h > 0.01f) ui.glow(sx, sy, r + 16 * u, UiPalette.accent(0.16f * h));
-                float is = 24 * u * (1.0f + 0.06f * h);
-                int iconCol = empty ? UiRenderer.white(0.18f + 0.14f * h) : UiEasing.mix(UiRenderer.white(0.86f), UiPalette.accent(1.0f), h);
-                ui.icon(slot.icon(), sx - is / 2, sy - is / 2, is, iconCol);
-            }
-
-            // thin accent arc along the rim toward the hovered slot
-            if (this.hovered >= 0 && !Float.isNaN(this.pointer)) {
-                float span = 360f / n;
-                float rimR = outer - 6 * u;
-                for (float t = -span / 2 + 2; t <= span / 2 - 2; t += 1.0f) {
-                    double a = Math.toRadians(this.pointer + t);
-                    float fade = 1.0f - Math.abs(t) / (span / 2);
-                    ui.circle(cx + (float) (Math.sin(a) * rimR), cy - (float) (Math.cos(a) * rimR), 1.6f * u + u * fade, UiPalette.accent(0.25f + 0.65f * fade * fade));
+                float grow = 1.0f + 0.04f * h;
+                float w = tw * grow, hh = th * grow, x = sx - w / 2, y = sy - hh / 2;
+                ui.pushAlpha(empty ? 0.62f + 0.2f * h : 1f);
+                UiTheme.glass(ui, x, y, w, hh, 16 * u, u, i * 1.7f);
+                if (h > 0.01f) {
+                    ui.round(x + 6 * u, y + 6 * u, w - 12 * u, hh - 12 * u, 11 * u, UiEasing.mix(UiRenderer.white(0.05f * h), UiPalette.accent(0.10f * h), empty ? 0f : 0.6f));
+                    ui.round(x + 6 * u, y + 15 * u, 3 * u, hh - 30 * u, 1.5f * u, empty ? UiRenderer.white(0.3f * h) : UiPalette.accent(0.95f * h));
+                    if (!empty) ui.glow(sx, sy, w * 0.6f, UiPalette.accent(0.07f * h));
                 }
+                float box = 34 * u, bx = x + 16 * u, by = y + (hh - box) / 2;
+                ui.round(bx, by, box, box, 11 * u, UiEasing.mix(UiRenderer.white(0.07f), UiPalette.accent(0.16f), empty ? 0f : h));
+                ui.outline(bx, by, box, box, 11 * u, Math.max(1.0f, u * 0.9f), UiRenderer.white(0.09f));
+                float is = 17 * u;
+                int iconCol = empty ? UiRenderer.white(0.4f + 0.2f * h) : UiEasing.mix(UiTheme.TEXT, UiPalette.accent(1.0f), h);
+                ui.icon(slot.icon(), bx + (box - is) / 2, by + (box - is) / 2, is, iconCol);
+                float lx = bx + box + 12 * u, lw = x + w - 14 * u - lx;
+                ui.text(ui.ellipsize(empty ? "Empty slot" : slot.name(), lw, 13.5f * u, 1), lx, y + hh / 2 - 15 * u, 13.5f * u, 1, empty ? UiTheme.SUB : UiTheme.TEXT);
+                ui.text(ui.ellipsize(slot.hint(), lw, 11 * u, 0), lx, y + hh / 2 + 3 * u, 11 * u, 0, empty ? UiTheme.FAINT : UiTheme.SUB);
+                ui.popAlpha();
             }
 
-            // centre: an inner card with the name of what you point at
-            ui.round(cx - inner, cy - inner, inner * 2, inner * 2, inner, UiRenderer.argb(0.55f, 8, 9, 12));
-            ui.outline(cx - inner, cy - inner, inner * 2, inner * 2, inner, Math.max(1.0f, u * 0.9f), UiRenderer.white(0.08f));
+            // centre: a panel with the click GUI header (icon tile, title, subtitle) for what you point at
+            float px = cx - pw / 2, py = cy - ph / 2;
+            UiTheme.glass(ui, px, py, pw, ph, 20 * u, u, 4.2f);
             Slot cur = this.hovered >= 0 ? SLOTS[this.hovered] : null;
             boolean usable = cur != null && cur.action() != null;
-            String title = cur == null ? "Quick Utilities" : cur.name();
-            String hint = cur == null ? "Point at a utility" : cur.hint();
-            float ts = (cur == null ? 17 : 19) * u;
-            ui.textCentered(ui.ellipsize(title, inner * 1.7f, ts, 1), cx, cy - 15 * u, ts, 1, UiTheme.TEXT);
-            ui.textCentered(ui.ellipsize(hint, inner * 1.7f, 11.5f * u, 0), cx, cy + 9 * u, 11.5f * u, 0, UiTheme.SUB);
-            if (usable) UiTheme.accentDot(ui, cx, cy + 34 * u, u, this.hoverAnim[this.hovered]);
+            float tile = 44 * u, tx = px + 20 * u, ty = py + 20 * u;
+            float hv = this.hovered >= 0 ? this.hoverAnim[this.hovered] : 0f;
+            ui.round(tx, ty, tile, tile, 14 * u, usable ? UiEasing.mix(UiRenderer.white(0.07f), UiPalette.accent(0.18f), hv) : UiRenderer.white(0.07f));
+            ui.outline(tx, ty, tile, tile, 14 * u, Math.max(1.0f, u * 0.9f), UiRenderer.white(0.09f));
+            float his = 21 * u;
+            ui.icon(cur == null ? UiIcon.BOLT : cur.icon(), tx + (tile - his) / 2, ty + (tile - his) / 2, his, usable ? UiEasing.mix(UiTheme.TEXT, UiPalette.accent(1f), hv) : UiTheme.TEXT);
+            String title = cur == null ? "Quick Use" : usable ? cur.name() : "Empty slot";
+            String hint = cur == null ? "HookVisuals" : usable ? cur.hint() : "Nothing here yet";
+            ui.text(ui.ellipsize(title, pw - tile - 56 * u, 20 * u, 1), tx + tile + 15 * u, ty + u, 20 * u, 1, UiTheme.TEXT);
+            ui.text(ui.ellipsize(hint, pw - tile - 56 * u, 12 * u, 0), tx + tile + 16 * u, ty + 26 * u, 12 * u, 0, UiTheme.SUB);
+            ui.rect(px + 18 * u, py + 82 * u, pw - 36 * u, Math.max(1.0f, u), UiRenderer.white(0.055f));
+            boolean release = m == null || m.releaseToSelect.getValue();
+            String foot = usable ? (release ? "Release to open" : "Click to open") : "Point at a utility";
+            UiTheme.accentDot(ui, px + 26 * u, py + 108 * u, u, usable ? 1f : 0.35f);
+            ui.text(foot, px + 38 * u, py + 101 * u, 12 * u, 1, usable ? UiTheme.TEXT : UiTheme.SUB);
+            ui.textRight("Esc", px + pw - 22 * u, py + 101 * u, 12 * u, 0, UiTheme.FAINT);
 
             ui.popTransform();
-            // small key hint under the wheel
-            boolean release = m == null || m.releaseToSelect.getValue();
-            ui.textCentered(release ? "Release to open  ·  Esc to close" : "Click to open  ·  Esc to close", cx, cy + outer * scl + 22 * u, 11.5f * u, 0, UiTheme.FAINT);
             ui.popAlpha();
         } finally {
             ctx.method_51448().popMatrix();

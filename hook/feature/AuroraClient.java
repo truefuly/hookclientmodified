@@ -214,35 +214,80 @@ final class AuroraClient {
         });
     }
 
-    /** Sends one chat message (or /command) from every given account at once. */
-    void chatAll(List<String> accountIds, String serverId, String text) {
-        if (this.status != Status.READY || accountIds.isEmpty()) return;
-        String mark = "chatAll" + serverId;
+    /** One payout offer from the VPS: what every online account would send (99% of its balance). */
+    record PayoutQuote(String batch, String serverId, String recipient, long total, List<String[]> rows, int skipped, long at) {}
+    volatile PayoutQuote payoutQuote;
+    volatile String payoutError = "";
+
+    /** Sends one chat message (or /command) from every online account of the server at once. */
+    void chatAll(String serverId, String text) {
+        JsonObject b = new JsonObject();
+        b.addProperty("message", text);
+        this.bulk("chat", serverId, b, r -> {
+            int ok = r.json.get("sent").getAsInt(), failed = r.json.get("failed").getAsInt();
+            if (failed == 0) this.toastOk("Sent from " + ok + (ok == 1 ? " account" : " accounts"));
+            else this.toast("Sent from " + ok + ", " + failed + " failed");
+        });
+    }
+
+    /** Claims eggs on every online account whose eggs are ready. */
+    void claimEggsAll(String serverId) {
+        this.bulk("claimEggs", serverId, new JsonObject(), r -> {
+            int n = r.json.get("queued").getAsInt();
+            if (n == 0) this.toast("No account has eggs ready right now");
+            else this.toastOk("Claiming eggs on " + n + (n == 1 ? " account" : " accounts"));
+        });
+    }
+
+    /** Step 1 of the payout: asks the VPS how much each online account would send to the player. */
+    void payoutQuote(String serverId, String recipient) {
+        this.payoutQuote = null;
+        this.payoutError = "";
+        JsonObject b = new JsonObject();
+        b.addProperty("recipient", recipient);
+        this.bulk("payoutQuote", serverId, b, r -> {
+            List<String[]> rows = new ArrayList<>();
+            Map<String, String> names = new HashMap<>();
+            for (Account a : this.accounts) names.put(a.id, a.name);
+            for (JsonElement e : arr(r.json, "quotes")) {
+                JsonObject q = e.getAsJsonObject();
+                rows.add(new String[]{names.getOrDefault(str(q, "accountId"), "?"), str(q, "display"), String.valueOf(q.get("amount").getAsLong()), str(q, "accountId")});
+            }
+            this.payoutQuote = new PayoutQuote(str(r.json, "batch"), serverId, str(r.json, "recipient"), r.json.get("total").getAsLong(), List.copyOf(rows), arr(r.json, "skipped").size(), System.currentTimeMillis());
+            if (rows.isEmpty()) this.payoutError = "No online account has money to pay out.";
+        }, err -> this.payoutError = err);
+    }
+
+    /** Step 2: sends the payout the player just checked (only once, only within 100 seconds). */
+    void payoutSend() {
+        PayoutQuote q = this.payoutQuote;
+        if (q == null) return;
+        this.payoutQuote = null;
+        JsonObject b = new JsonObject();
+        b.addProperty("batch", q.batch());
+        this.bulk("payoutSend", q.serverId(), b, r -> this.toastOk("Paying $" + String.format(java.util.Locale.US, "%,d", r.json.get("total").getAsLong()) + " to " + str(r.json, "recipient") + " from " + r.json.get("sending").getAsInt() + " accounts · check chat"));
+    }
+
+    private void bulk(String type, String serverId, JsonObject body, java.util.function.Consumer<Reply> ok) {
+        this.bulk(type, serverId, body, ok, this::toast);
+    }
+
+    private void bulk(String type, String serverId, JsonObject body, java.util.function.Consumer<Reply> ok, java.util.function.Consumer<String> fail) {
+        if (this.status != Status.READY) return;
+        String mark = type + "All" + serverId;
+        if (this.pending.containsKey(mark)) return;
         this.pending.put(mark, System.currentTimeMillis());
+        body.addProperty("type", type);
+        body.addProperty("serverId", serverId);
         this.worker.execute(() -> {
-            int ok = 0, failed = 0;
-            String error = null;
             try {
-                for (String id : accountIds) {
-                    JsonObject b = new JsonObject();
-                    b.addProperty("type", "chat");
-                    b.addProperty("accountId", id);
-                    b.addProperty("serverId", serverId);
-                    b.addProperty("message", text);
-                    try {
-                        Reply r = this.send("POST", "/v1/action", b.toString(), this.session);
-                        if (r.code == 401) { this.relogin(); r = this.send("POST", "/v1/action", b.toString(), this.session); }
-                        if (r.code == 200) ok++;
-                        else { failed++; error = r.error("Action failed."); if (r.code == 403 || r.code == 429) break; }
-                    } catch (Exception e) {
-                        failed++;
-                        error = "Can't reach the AuroraAFK server.";
-                    }
-                }
+                Reply r = this.send("POST", "/v1/bulk", body.toString(), this.session);
+                if (r.code == 401) { this.relogin(); r = this.send("POST", "/v1/bulk", body.toString(), this.session); }
+                if (r.code != 200 || r.json == null) { fail.accept(r.error("Action failed.")); return; }
                 this.nextPoll = System.currentTimeMillis() + 1200;
-                if (ok > 0 && failed == 0) this.toastOk("Sent from " + ok + (ok == 1 ? " account" : " accounts"));
-                else if (ok > 0) this.toast("Sent from " + ok + ", " + failed + " failed: " + error);
-                else this.toast(error == null ? "Nothing was sent." : error);
+                ok.accept(r);
+            } catch (Exception e) {
+                fail.accept("Can't reach the AuroraAFK server.");
             } finally {
                 this.pending.remove(mark);
             }

@@ -34,6 +34,8 @@ public final class AuroraScreen extends class_437 {
 
     private String keyInput = "";
     private String chatInput = "";
+    private boolean payoutOpen;
+    private String payoutName = "";
     private boolean chatFocus;
     private String serverId, accountId;
     private static String tab = "connect", section = "rewards";
@@ -117,7 +119,10 @@ public final class AuroraScreen extends class_437 {
             float scl = 0.94f + 0.06f * vis;
             ui.pushAlpha(vis);
             ui.pushTransform(sw / 2.0f * (1 - scl), sh / 2.0f * (1 - scl) + 14 * u * (1 - vis), scl);
-            if (this.api.status == AuroraClient.Status.READY) this.drawPanel(ui, sw, sh, u, mx, my);
+            if (this.api.status == AuroraClient.Status.READY) {
+                this.drawPanel(ui, sw, sh, u, mx, my);
+                if (this.payoutOpen) this.drawPayout(ui, sw, sh, u, mx, my);
+            }
             else this.drawKey(ui, sw, sh, u, mx, my);
             this.drawToast(ui, sw, sh, u);
             ui.popTransform();
@@ -293,6 +298,21 @@ public final class AuroraScreen extends class_437 {
             float bw = 128 * u, bh = th;
             this.button(ui, "#stopall", "Disconnect all", cx + cw - bw, ty, bw, bh, false, curOn > 0, u, mx, my);
             this.button(ui, "#startall", "Connect all", cx + cw - 2 * bw - 10 * u, ty, bw, bh, true, curOn < shown.size(), u, mx, my);
+        }
+        if (tab.equals("actions") && this.api.canControl) {
+            long now = System.currentTimeMillis() + this.api.clockOffset;
+            int ready = 0;
+            for (AuroraClient.Account a : shown) {
+                if (!"online".equals(st(sessions.get(a.id() + "@" + this.serverId)))) continue;
+                JsonObject r = this.api.rewards.get(a.id() + "@" + this.serverId);
+                long until = r != null && r.has("eggCooldownUntil") && !r.get("eggCooldownUntil").isJsonNull() ? r.get("eggCooldownUntil").getAsLong() : 0;
+                if (until <= now) ready++;
+            }
+            boolean eggsBusy = this.api.pending.containsKey("claimEggsAll" + this.serverId);
+            String eggs = eggsBusy ? "Claiming eggs..." : "Claim all eggs · " + ready;
+            float ew = ui.textWidth(eggs, 13 * u, 1) + 34 * u, pwid = ui.textWidth("Payout all", 13 * u, 1) + 34 * u;
+            this.button(ui, "#eggsall", eggs, cx + cw - ew, ty, ew, th, true, ready > 0 && !eggsBusy, u, mx, my);
+            this.button(ui, "#payout", "Payout all", cx + cw - ew - 10 * u - pwid, ty, pwid, th, false, curOn > 0, u, mx, my);
         }
         float by = ty + th + 14 * u, bh = bottom - by;
         switch (tab) {
@@ -626,6 +646,67 @@ public final class AuroraScreen extends class_437 {
         }
     }
 
+    // ---- payout dialog (all online accounts -> one player, 99% of each balance, like the app)
+    private void drawPayout(UiRenderer ui, int sw, int sh, float u, double mx, double my) {
+        this.hit("#pay-block", 0, 0, sw, sh);
+        ui.rect(0, 0, sw, sh, UiRenderer.argb(0.45f, 0, 0, 0));
+        AuroraClient.PayoutQuote q = this.api.payoutQuote;
+        if (q != null && !q.serverId().equals(this.serverId)) q = null;
+        boolean loading = this.api.pending.containsKey("payoutQuoteAll" + this.serverId);
+        long left = q == null ? 0 : 95_000 - (System.currentTimeMillis() - q.at());
+        int rowsShown = q == null ? 0 : Math.min(8, q.rows().size());
+        float pw = 460 * u, pad = 22 * u;
+        float ph = 78 * u + pad + (q == null ? 110 * u : 46 * u + rowsShown * 30 * u + (q.rows().size() > rowsShown ? 22 * u : 0) + 64 * u) + 40 * u + pad;
+        float px = (sw - pw) / 2, py = (sh - ph) / 2;
+        ui.round(px, py, pw, ph, 20 * u, UiPalette.glass(1f));
+        UiTheme.glass(ui, px, py, pw, ph, 20 * u, u, 4f);
+        UiTheme.header(ui, px, py, pw, UiIcon.GIFT, "Payout", "All online accounts · 1% stays on each", u);
+        float y = py + 78 * u + pad, ix = px + pad, iw = pw - 2 * pad;
+        if (q == null) {
+            ui.text("Recipient Minecraft name", ix, y, 12 * u, 1, UiTheme.SUB);
+            y += 20 * u;
+            float fh = 44 * u;
+            UiTheme.card(ui, ix, y, iw, fh, 12 * u, 0f, 1f, u);
+            float ts = 15 * u;
+            boolean has = !this.payoutName.isEmpty();
+            ui.text(has ? this.payoutName : "Player name", ix + 16 * u, y + (fh - ts) / 2 - u, ts, 1, has ? UiTheme.TEXT : UiTheme.FAINT);
+            if (!loading && (System.currentTimeMillis() / 530) % 2 == 0) ui.rect(ix + 16 * u + (has ? ui.textWidth(this.payoutName, ts, 1) + 2 * u : 0), y + fh / 2 - 9 * u, Math.max(1f, 1.5f * u), 18 * u, UiPalette.accent(0.9f));
+            y += fh + 12 * u;
+            boolean err = !loading && !this.api.payoutError.isEmpty();
+            String info = loading ? "Reading the balances..." : err ? this.api.payoutError : "Next you see how much every account sends. Nothing is paid yet.";
+            ui.text(ui.ellipsize(info, iw, 12 * u, 0), ix, y, 12 * u, 0, err ? RED : UiTheme.SUB);
+            y += 34 * u;
+            float bw = (iw - 10 * u) / 2;
+            this.button(ui, "#pay-cancel", "Cancel", ix, y, bw, 40 * u, false, true, u, mx, my);
+            this.button(ui, "#pay-check", loading ? "Checking..." : "Check amounts", ix + bw + 10 * u, y, bw, 40 * u, true, !loading && this.payoutName.length() >= 3, u, mx, my);
+            return;
+        }
+        ui.text("To " + q.recipient(), ix, y, 15 * u, 1, UiTheme.TEXT);
+        ui.textRight(left > 0 ? "valid " + (left / 1000) + "s" : "expired", ix + iw, y + 2 * u, 11.5f * u, 0, left > 0 ? UiTheme.SUB : RED);
+        y += 26 * u;
+        ui.rect(ix, y, iw, Math.max(1f, u), UiRenderer.white(0.06f));
+        y += 10 * u;
+        for (int i = 0; i < rowsShown; i++) {
+            String[] r = q.rows().get(i);
+            AuroraClient.Account a = this.api.accounts.stream().filter(v -> v.id().equals(r[3])).findFirst().orElse(null);
+            if (a != null) this.head(ui, a, "online", ix, y + 2 * u, 20 * u, u);
+            ui.text(ui.ellipsize(r[0], iw * 0.45f, 13 * u, 1), ix + 30 * u, y + 5 * u, 13 * u, 1, UiTheme.TEXT);
+            ui.text(r[1], ix + iw * 0.55f, y + 6 * u, 11.5f * u, 0, UiTheme.SUB);
+            ui.textRight("$" + String.format(java.util.Locale.US, "%,d", Long.parseLong(r[2])), ix + iw, y + 5 * u, 13 * u, 1, UiPalette.accent(1f));
+            y += 30 * u;
+        }
+        if (q.rows().size() > rowsShown) { ui.text("+ " + (q.rows().size() - rowsShown) + " more accounts", ix + 30 * u, y, 11.5f * u, 0, UiTheme.SUB); y += 22 * u; }
+        ui.rect(ix, y + 4 * u, iw, Math.max(1f, u), UiRenderer.white(0.06f));
+        y += 14 * u;
+        ui.text(q.rows().size() + " accounts" + (q.skipped() > 0 ? " · " + q.skipped() + " skipped" : ""), ix, y + 4 * u, 12 * u, 0, UiTheme.SUB);
+        ui.textRight("Total  $" + String.format(java.util.Locale.US, "%,d", q.total()), ix + iw, y, 17 * u, 1, UiTheme.TEXT);
+        y += 50 * u;
+        float bw = (iw - 10 * u) / 2;
+        this.button(ui, "#pay-cancel", "Cancel", ix, y, bw, 40 * u, false, true, u, mx, my);
+        boolean sending = this.api.pending.containsKey("payoutSendAll" + this.serverId);
+        this.button(ui, left > 0 ? "#pay-send" : "#pay-again", left <= 0 ? "Check again" : sending ? "Sending..." : "Send $" + String.format(java.util.Locale.US, "%,d", q.total()), ix + bw + 10 * u, y, bw, 40 * u, true, !sending && !q.rows().isEmpty(), u, mx, my);
+    }
+
     private void drawToast(UiRenderer ui, int sw, int sh, float u) {
         long age = System.currentTimeMillis() - this.api.toastAt;
         if (this.api.toast.isEmpty() || age > 3500) return;
@@ -734,9 +815,8 @@ public final class AuroraScreen extends class_437 {
             if (this.api.pending.containsKey("chatAll" + this.serverId)) return;
             List<AuroraClient.Account> shown = new ArrayList<>();
             for (AuroraClient.Account a : this.api.accounts) if (a.servers().contains(this.serverId)) shown.add(a);
-            List<String> ids = this.onlineIds(shown);
-            if (ids.isEmpty()) return;
-            this.api.chatAll(ids, this.serverId, text);
+            if (this.onlineIds(shown).isEmpty()) return;
+            this.api.chatAll(this.serverId, text);
         } else this.api.action("chat", this.accountId, this.serverId, text);
         this.chatInput = "";
         this.chatScrollTarget = 0;
@@ -777,6 +857,12 @@ public final class AuroraScreen extends class_437 {
             case "#unlock" -> this.unlock();
             case "#changekey" -> { this.api.changeKey(); this.keyInput = ""; cue(UiAudio.Cue.TICK); }
             case "#chatin" -> this.chatFocus = true;
+            case "#pay-block" -> {}
+            case "#payout" -> { this.payoutOpen = true; this.payoutName = ""; this.api.payoutQuote = null; this.api.payoutError = ""; cue(UiAudio.Cue.TICK); }
+            case "#pay-cancel" -> { this.payoutOpen = false; this.api.payoutQuote = null; cue(UiAudio.Cue.TICK); }
+            case "#pay-check", "#pay-again" -> { if (this.payoutName.length() >= 3) this.api.payoutQuote(this.serverId, this.payoutName); cue(UiAudio.Cue.TICK); }
+            case "#pay-send" -> { this.api.payoutSend(); this.payoutOpen = false; cue(UiAudio.Cue.TICK); }
+            case "#eggsall" -> { this.api.claimEggsAll(this.serverId); cue(UiAudio.Cue.TICK); }
             case "#startall", "#stopall" -> {
                 boolean start = k.equals("#startall");
                 for (AuroraClient.Account a : this.api.accounts) {
@@ -836,6 +922,12 @@ public final class AuroraScreen extends class_437 {
         int code = key.comp_4795();
         boolean ctrl = (key.comp_4797() & 2) != 0;
         boolean keyMode = this.api.status != AuroraClient.Status.READY;
+        if (this.payoutOpen && !keyMode) {
+            if (code == 256) { this.click("#pay-cancel", false); return true; }
+            if ((code == 257 || code == 335) && this.api.payoutQuote == null) this.click("#pay-check", false); // sending needs a click on the button
+            else if (code == 259 && !this.payoutName.isEmpty() && this.api.payoutQuote == null) this.payoutName = ctrl ? "" : this.payoutName.substring(0, this.payoutName.length() - 1);
+            return true;
+        }
         if (code == 256) {
             if (this.chatFocus) this.chatFocus = false;
             else this.close();
@@ -870,6 +962,10 @@ public final class AuroraScreen extends class_437 {
             if (((up >= 'A' && up <= 'Z') || (up >= '0' && up <= '9') || up == '-') && this.keyInput.length() < 40) this.keyInput += up;
             return true;
         }
+        if (this.payoutOpen) {
+            if (this.api.payoutQuote == null && ((c < 128 && Character.isLetterOrDigit(c)) || c == '_') && this.payoutName.length() < 16) { this.payoutName += c; this.api.payoutError = ""; }
+            return true;
+        }
         if (this.chatFocus && c >= 32 && c != 127 && this.chatInput.length() < 256) this.chatInput += c;
         return true;
     }
@@ -878,6 +974,8 @@ public final class AuroraScreen extends class_437 {
     void testType(String text) { this.keyInput = AuroraClient.normalize(text); }
 
     void testClick(String key) { this.click(key, false); }
+
+    void testPayoutName(String name) { this.payoutName = name; }
 
     void testSelectFirst() {
         for (AuroraClient.Account a : this.api.accounts) if (a.servers().contains(this.serverId)) { this.click("p:" + a.id(), false); return; }
