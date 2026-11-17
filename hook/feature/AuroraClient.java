@@ -214,6 +214,41 @@ final class AuroraClient {
         });
     }
 
+    /** Sends one chat message (or /command) from every given account at once. */
+    void chatAll(List<String> accountIds, String serverId, String text) {
+        if (this.status != Status.READY || accountIds.isEmpty()) return;
+        String mark = "chatAll" + serverId;
+        this.pending.put(mark, System.currentTimeMillis());
+        this.worker.execute(() -> {
+            int ok = 0, failed = 0;
+            String error = null;
+            try {
+                for (String id : accountIds) {
+                    JsonObject b = new JsonObject();
+                    b.addProperty("type", "chat");
+                    b.addProperty("accountId", id);
+                    b.addProperty("serverId", serverId);
+                    b.addProperty("message", text);
+                    try {
+                        Reply r = this.send("POST", "/v1/action", b.toString(), this.session);
+                        if (r.code == 401) { this.relogin(); r = this.send("POST", "/v1/action", b.toString(), this.session); }
+                        if (r.code == 200) ok++;
+                        else { failed++; error = r.error("Action failed."); if (r.code == 403 || r.code == 429) break; }
+                    } catch (Exception e) {
+                        failed++;
+                        error = "Can't reach the AuroraAFK server.";
+                    }
+                }
+                this.nextPoll = System.currentTimeMillis() + 1200;
+                if (ok > 0 && failed == 0) this.toastOk("Sent from " + ok + (ok == 1 ? " account" : " accounts"));
+                else if (ok > 0) this.toast("Sent from " + ok + ", " + failed + " failed: " + error);
+                else this.toast(error == null ? "Nothing was sent." : error);
+            } finally {
+                this.pending.remove(mark);
+            }
+        });
+    }
+
     // ---- worker side ----------------------------------------------------------------------------------
 
     private void submit(Runnable job) {

@@ -24,7 +24,7 @@ public final class AuroraTest {
             case 330 -> shot(mc, "key_wrong");
             case 340 -> { if (screen != null) { screen.testType(KEY.toLowerCase()); screen.testClick("#unlock"); } }
             case 460 -> shot(mc, "panel");
-            case 470 -> { if (screen != null) { screen.testClick("tab:chat"); screen.testSelectFirst(); } }
+            case 470 -> { if (screen != null) { screen.testClick("tab:chat"); screen.testClick("p:"); } }
             case 520 -> shot(mc, "chat");
             case 530 -> { if (screen != null) { screen.testClick("tab:actions"); screen.testSelectFirst(); } }
             case 580 -> shot(mc, "actions");

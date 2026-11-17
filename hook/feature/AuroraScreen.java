@@ -387,7 +387,7 @@ public final class AuroraScreen extends class_437 {
         boolean inList = inside(mx, my, x, iy, w, ih);
         float ry = iy - this.listScroll;
         if (allRow) {
-            this.pickerRow(ui, null, "All accounts", "Chat of every account", UiTheme.SUB, x + pad, ry, w - 2 * pad, rowH, u, mx, my, inList, null);
+            this.pickerRow(ui, null, "All accounts", "Write as every online account", UiTheme.SUB, x + pad, ry, w - 2 * pad, rowH, u, mx, my, inList, null);
             ry += rowH + 4 * u;
         }
         for (AuroraClient.Account a : shown) {
@@ -419,12 +419,19 @@ public final class AuroraScreen extends class_437 {
         this.hit("p:" + id, x, y, w, h);
     }
 
+    private List<String> onlineIds(List<AuroraClient.Account> shown) {
+        List<String> ids = new ArrayList<>();
+        for (AuroraClient.Account a : shown) if ("online".equals(st(this.api.sessions.get(a.id() + "@" + this.serverId)))) ids.add(a.id());
+        return ids;
+    }
+
     // ---- Chat tab
     private void drawChat(UiRenderer ui, List<AuroraClient.Account> shown, float x, float y, float w, float h, float u, double mx, double my) {
         UiTheme.card(ui, x, y, w, h, 16 * u, 0f, 0f, u);
         AuroraClient.Account target = shown.stream().filter(a -> a.id().equals(this.accountId)).findFirst().orElse(null);
         ui.text("Chat", x + 18 * u, y + 14 * u, 16 * u, 1, UiTheme.TEXT);
-        String who = target == null ? "All accounts  ·  pick an account on the left to chat as it" : "as " + target.name();
+        int onlineCount = this.onlineIds(shown).size();
+        String who = target == null ? "All accounts  ·  your message is sent from all " + onlineCount + " online accounts" : "as " + target.name();
         ui.text(ui.ellipsize(who, w - 36 * u, 11.5f * u, 0), x + 18 * u, y + 36 * u, 11.5f * u, 0, UiTheme.SUB);
         ui.rect(x + 14 * u, y + 58 * u, w - 28 * u, Math.max(1f, u), UiRenderer.white(0.055f));
 
@@ -467,10 +474,11 @@ public final class AuroraScreen extends class_437 {
         ui.popClip();
 
         float ix = x + 14 * u, iy = y + h - 14 * u - inH, iw = w - 28 * u;
-        boolean can = this.api.canChat && target != null;
+        boolean can = this.api.canChat && (target != null || onlineCount > 0);
+        boolean sending = this.api.pending.containsKey("chatAll" + this.serverId);
         boolean hot = can && inside(mx, my, ix, iy, iw, inH);
         UiTheme.card(ui, ix, iy, iw, inH, 12 * u, this.anim("chatin", hot || this.chatFocus ? 1 : 0, 14), this.chatFocus ? 1f : 0f, u);
-        String ph = !this.api.canChat ? "Your key can not chat" : target == null ? "Pick an account to chat" : "Message or /command as " + target.name();
+        String ph = !this.api.canChat ? "Your key can not chat" : sending ? "Sending to all accounts…" : target == null ? (onlineCount == 0 ? "No account is online" : "Message or /command for all " + onlineCount + " online accounts") : "Message or /command as " + target.name();
         float its = 12.5f * u;
         String shownText = this.chatInput;
         while (shownText.length() > 1 && ui.textWidth(shownText, its, 0) > iw - 30 * u) shownText = shownText.substring(1);
@@ -721,8 +729,15 @@ public final class AuroraScreen extends class_437 {
 
     private void sendChat() {
         String text = this.chatInput.trim();
-        if (text.isEmpty() || this.accountId == null || !this.api.canChat) return;
-        this.api.action("chat", this.accountId, this.serverId, text);
+        if (text.isEmpty() || !this.api.canChat || this.serverId == null) return;
+        if (this.accountId == null) {
+            if (this.api.pending.containsKey("chatAll" + this.serverId)) return;
+            List<AuroraClient.Account> shown = new ArrayList<>();
+            for (AuroraClient.Account a : this.api.accounts) if (a.servers().contains(this.serverId)) shown.add(a);
+            List<String> ids = this.onlineIds(shown);
+            if (ids.isEmpty()) return;
+            this.api.chatAll(ids, this.serverId, text);
+        } else this.api.action("chat", this.accountId, this.serverId, text);
         this.chatInput = "";
         this.chatScrollTarget = 0;
         cue(UiAudio.Cue.TICK);
@@ -787,7 +802,7 @@ public final class AuroraScreen extends class_437 {
                     String id = k.substring(2);
                     this.accountId = id.isEmpty() ? null : id;
                     this.chatScrollTarget = this.chatScroll = 0;
-                    this.chatFocus = tab.equals("chat") && this.accountId != null && this.api.canChat;
+                    this.chatFocus = tab.equals("chat") && this.api.canChat;
                     cue(UiAudio.Cue.TICK);
                 } else if (k.startsWith("start:") || k.startsWith("stop:")) {
                     int c = k.indexOf(':');
@@ -841,7 +856,7 @@ public final class AuroraScreen extends class_437 {
             }
             return true;
         }
-        if ((code == 257 || code == 335 || code == 84) && tab.equals("chat") && this.accountId != null && this.api.canChat) this.chatFocus = true;
+        if ((code == 257 || code == 335 || code == 84) && tab.equals("chat") && this.api.canChat) this.chatFocus = true;
         return true;
     }
 
