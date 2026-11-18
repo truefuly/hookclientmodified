@@ -142,6 +142,19 @@ public final class XbowCartModule extends Module {
         return !this.queue.isEmpty() || !this.steps.isEmpty();
     }
 
+    /** Self-test only (-Dhook.carttest): keeps the module on and the game unpaused, whatever the profile says. */
+    public static boolean testEnabled() {
+        return CartTest.ENABLED;
+    }
+
+    public static void testKeepAlive() {
+        if (!CartTest.ENABLED) return;
+        net.minecraft.class_310 mc = net.minecraft.class_310.method_1551();
+        if (mc.field_1724 == null) return;
+        if (mc.field_1755 instanceof net.minecraft.class_433) mc.method_1507(null);
+        if (instance != null && !instance.isEnabled()) instance.setEnabled(true);
+    }
+
     @EventListener
     public void onTick(TickEvent event) {
         class_746 p = this.mc.field_1724;
