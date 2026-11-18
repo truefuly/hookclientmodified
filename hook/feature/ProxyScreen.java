@@ -461,7 +461,7 @@ public final class ProxyScreen extends class_437 {
             net.fabricmc.fabric.api.client.screen.v1.ScreenEvents.AFTER_INIT.register((client, screen, w, h) -> {
                 if (!(screen instanceof net.minecraft.class_500)) return;
                 ProxyManager.Proxy a = ProxyManager.active();
-                String label = a == null ? "Proxies" : "Proxy: on";
+                String label = a == null ? "Proxies" : "Proxy ON"; // no colon: some fonts squeeze ": " into the y
                 net.minecraft.class_4185 b = net.minecraft.class_4185.method_46430(class_2561.method_43470(label), btn -> client.method_1507(new ProxyScreen(screen)))
                         .method_46434(w - 75 - 3, 3, 75, 20).method_46431();
                 net.fabricmc.fabric.api.client.screen.v1.Screens.getButtons(screen).add(b);
