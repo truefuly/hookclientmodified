@@ -225,7 +225,7 @@ public final class XbowCartModule extends Module {
             return this.fail("there is already a cart");
 
         CartPlanner.Plan plan0 = new CartPlanner.Plan();
-        if (!CartPlanner.prepareRail(plan0, rail, railClick)) return this.fail("can't place a rail there");
+        if (!CartPlanner.prepareRail(plan0, rail, railClick)) return this.fail(CartPlanner.why);
 
         // dense search over the whole cart box: every aim point whose arrow reaches the cart through a usable fire
         // cell; flat rail first, then ramp rails (cart half a block higher) so steep / odd angles work too
@@ -293,6 +293,9 @@ public final class XbowCartModule extends Module {
         class_2338 r = plan.rail;
         double top = plan.slope ? 0.5 : 0.125;
         class_243 cartPoint = new class_243(r.method_10263() + 0.5 + CartHuman.jitter(0.28), r.method_10264() + top, r.method_10260() + 0.5 + CartHuman.jitter(0.28));
+        // near the edge of your reach the middle of the rail may be too far: aim at the near part of the rail instead
+        class_243 eyeNow = this.mc.field_1724.method_33571();
+        if (eyeNow.method_1022(cartPoint) > this.mc.field_1724.method_55754() - 0.1) cartPoint = CartPlanner.nearTop(r, r.method_10264() + top, eyeNow, 0.2);
         this.steps.add(new Step(CLICK, CartPlanner::cartSlot, cartPoint, r, null, plan.cartClick));
         if (plan.fire != null) {
             if (plan.supportClick != null) this.steps.add(click(() -> plan.supportSlot, plan.supportClick));
@@ -305,7 +308,11 @@ public final class XbowCartModule extends Module {
     }
 
     private static Step click(IntSupplier slot, class_3965 hit) {
-        return new Step(CLICK, slot, CartHuman.facePoint(hit.method_17777(), hit.method_17780(), 0.28), hit.method_17777(), hit.method_17780(), hit);
+        class_243 aim = CartHuman.facePoint(hit.method_17777(), hit.method_17780(), 0.28);
+        // the middle of the face can be out of reach while its near part is not: then aim at the planned (near) point
+        net.minecraft.class_746 p = net.minecraft.class_310.method_1551().field_1724;
+        if (p != null && p.method_33571().method_1022(aim) > p.method_55754() - 0.1) aim = hit.method_17784();
+        return new Step(CLICK, slot, aim, hit.method_17777(), hit.method_17780(), hit);
     }
 
     private void runStep(class_746 p) {

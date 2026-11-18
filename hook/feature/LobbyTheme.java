@@ -7,9 +7,14 @@ public enum LobbyTheme {
     OverworldCaves("Overworld Caves", "caves", false, "Lava falls, crystals and glow berries"),
     Nether("Nether", "nether", false, "Lava lakes, fortress and fungi"),
     End("End", "end", false, "End city, crystals and floating islands"),
-    Halloween("Halloween Edition", "halloween", true, "Orange moon, haunted house and bats"),
+    // takes the old Halloween slot: settings store the index, so the other themes keep theirs
+    HookVisualsDark("HookVisuals Dark", "hookdark", false, "Dark mode with the glowing HK icon"),
     Winter("Winter Edition", "winter", true, "Snowy village, ice lake and snowfall"),
-    HookVisuals("HookVisuals Special", "hook", false, "The HK logo, beacons and a neon grid");
+    HookVisuals("HookVisuals Special", "hook", false, "The HK logo, beacons and a neon grid"),
+    HookVisualsLight("HookVisuals Light", "hooklight", false, "Light mode with the glowing HK icon");
+
+    /** Order of the tiles in the theme picker (the enum order is fixed by saved settings). */
+    public static final LobbyTheme[] DISPLAY = {Standard, HookVisuals, HookVisualsDark, HookVisualsLight, OverworldCastle, OverworldCaves, Nether, End, Winter};
 
     public final String title;
     public final String folder;

@@ -30,9 +30,10 @@ public final class MenuArtGen {
         theme(root, "caves", MenuArtGen::cavesTheme);
         theme(root, "nether", MenuArtGen::netherTheme);
         theme(root, "end", MenuArtGen::endTheme);
-        theme(root, "halloween", MenuArtGen::halloweenTheme);
         theme(root, "winter", MenuArtGen::winterTheme);
         theme(root, "hook", MenuArtGen::hookTheme);
+        theme(root, "hookdark", sc -> hookPlainTheme(sc, true));
+        theme(root, "hooklight", sc -> hookPlainTheme(sc, false));
         System.out.println("lobby themes written to " + root.getAbsolutePath());
     }
 
@@ -422,11 +423,8 @@ public final class MenuArtGen {
         for (int x = 0; x < 150; x++) top[x] = 190 + (int) Math.round((fbm(x / 30.0, 31) - 0.5) * 10) / 2 * 2;
         for (int x = 150; x < lake0; x++) top[x] = 190 + (x - 150) * 3;
         for (int x = lake0; x < lake1; x++) top[x] = lakeY;
-        lakeBand(near, lake0, lake1, lakeY, shoreY, hex(0x2e5d74), hex(0x10223a), 380);
-        meadow(near, top, lake0, lake1, shoreY, hex(0x4b8a3c), hex(0x2f5a2c), hex(0x25472a), hex(0x0a120d), true);
+        meadow(near, top, 0, 0, shoreY, hex(0x4b8a3c), hex(0x2f5a2c), hex(0x25472a), hex(0x0a120d), true);
         for (int x = 150; x < 176; x++) for (int y = top[x]; y < lakeY + 2; y++) set(near, x, y, (y / 3 + x / 4) % 3 == 0 ? hex(0x4f5560) : hex(0x3f444f));
-        waterfall(near, s, 150, 12, top[150] - 1, lakeY, hex(0x4f7fc8), hex(0xbcd6ff), 0xE6F0FF);
-        s.fx("shimmer", "near", lake0 + 6, lakeY + 3, lake1 - lake0 - 12, shoreY - lakeY - 6, 0xBFE4F0, 14);
         cherry(near, s, 488, top[488]);
         portalFrame(near, s, "near", 560, top[572], 0x6a24c9);
         campfire(near, s, "near", 650, top[650], 0xFF9A3C);
@@ -566,12 +564,6 @@ public final class MenuArtGen {
             else if (o > 0.97) rect(mid, x, y, 2, 2, hex(0xff3b3b));   // redstone
             else if (o > 0.955) rect(mid, x, y, 2, 2, hex(0xe8c24a));  // gold
         }
-        int lavaX = 120;
-        for (int x = lavaX; x < lavaX + 14; x++) for (int y = 0; y < mt[x + 5]; y++) set(mid, x, y, ((x + y) % 3 == 0) ? hex(0xffb13d) : hex(0xf06a1c));
-        for (int x = lavaX - 30; x < lavaX + 44; x++) for (int y = mt[x] - 2; y < mt[x] + 6; y++) set(mid, x, y, ((x + y) % 4 == 0) ? hex(0xffc14a) : hex(0xf0601c));
-        s.fx("fall", "mid", lavaX, 0, 14, mt[lavaX + 5], 0xFFE08A, 12);
-        s.fx("glow", "mid", lavaX + 7, mt[lavaX + 5] - 4, 1, 1, 0xFF7A20, 8);
-        s.fx("lava", "mid", lavaX - 30, mt[lavaX] - 2, 74, 6, 0xFFD27A, 6);
         for (int k = 0; k < 3; k++) {
             int sx = 330 + k * 46;
             rect(mid, sx, mt[sx] - 34, 3, 34, hex(0x6b4a2b));
@@ -589,7 +581,7 @@ public final class MenuArtGen {
         int pool0 = 300, pool1 = 470;
         for (int x = pool0; x < pool1; x++) top[x] = 316;
         for (int x = 0; x < 800; x++) {
-            boolean pool = x >= pool0 && x < pool1;
+            boolean pool = false; // no foreground pool: it sat right behind the menu buttons
             for (int y = top[x]; y < H; y++) {
                 int c;
                 if (pool && y < 344) c = mix(hex(0x1d4a5a), hex(0x0a1a24), (y - 316) / 28.0);
@@ -602,7 +594,6 @@ public final class MenuArtGen {
                 near.setRGB(x, y, c);
             }
         }
-        s.fx("shimmer", "near", pool0 + 4, 318, pool1 - pool0 - 8, 22, 0x7FD8E8, 10);
         geode(near, s, 600, top[600]);
         geode(near, s, 70, top[70]);
         for (int k = 0; k < 6; k++) {
@@ -679,7 +670,7 @@ public final class MenuArtGen {
         int lava0 = 230, lava1 = 520, lavaY = 288;
         for (int x = lava0; x < lava1; x++) top[x] = lavaY;
         for (int x = 0; x < 800; x++) {
-            boolean lava = x >= lava0 && x < lava1;
+            boolean lava = false; // no foreground lava lake behind the menu buttons
             for (int y = top[x]; y < H; y++) {
                 int c;
                 if (lava && y < 330) {
@@ -693,8 +684,6 @@ public final class MenuArtGen {
                 near.setRGB(x, y, c);
             }
         }
-        s.fx("lava", "near", lava0, lavaY, lava1 - lava0, 40, 0xFFD27A, 12);
-        s.fx("glow", "near", (lava0 + lava1) / 2, lavaY, 1, 1, 0xFF6A1C, 9);
         fungus(near, 110, top[110], hex(0x9a1f2a), hex(0xff6a3a));
         fungus(near, 660, top[660], hex(0x167a70), hex(0x4fd1a5));
         fungus(near, 740, top[740], hex(0x167a70), hex(0x4fd1a5));
@@ -910,14 +899,13 @@ public final class MenuArtGen {
         int ice0 = 240, ice1 = 470;
         for (int x = ice0; x < ice1; x++) top[x] = 290;
         for (int x = 0; x < 800; x++) for (int y = top[x]; y < H; y++) {
-            boolean ice = x >= ice0 && x < ice1 && y < 318;
+            boolean ice = false; // the frozen pond read as a stray strip behind the menu buttons: plain snow now
             int c = ice ? (((x + y * 3) % 23 == 0) ? hex(0xe8f6ff) : mix(hex(0x9cc8e8), hex(0x6a98c0), (y - 290) / 28.0))
                     : (y - top[x] < 2 ? hex(0xffffff) : hex(0xe4eaf2));
             if (!ice && hash2(x / 2, y / 2, 3) > 0.8) c = shade(c, -10);
             c = mix(c, hex(0x2a3448), Math.min(0.8, Math.max(0, (y - 300) / 70.0)));
             near.setRGB(x, y, c);
         }
-        s.fx("shimmer", "near", ice0 + 4, 292, ice1 - ice0 - 8, 22, 0xFFFFFF, 10);
         bigSpruce(near, 60, top[60], hex(0x143022), hex(0xf4f8ff));
         bigSpruce(near, 750, top[750], hex(0x143022), hex(0xf4f8ff));
         igloo(near, 560, top[580]);
@@ -1004,6 +992,95 @@ public final class MenuArtGen {
         s.fx("rise", "near", 0, 200, 800, 100, 0x6CF5C0, 26);
         s.fx("scan", "-", 0, 0, 640, 360, 0x4FD1A5, 0);
         s.layer("near", near, 14, 0, 0, false);
+    }
+
+    // ------------------------------------------------------------ HookVisuals Dark / Light
+
+    /** Coverage (0..1) of the white HK in icon.png, cropped to the letters and scaled to {@code width} pixels. */
+    static float[][] hkMask(int width) throws Exception {
+        BufferedImage icon = ImageIO.read(new File("icon.png"));
+        int x0 = icon.getWidth(), y0 = icon.getHeight(), x1 = 0, y1 = 0;
+        for (int y = 0; y < icon.getHeight(); y++) for (int x = 0; x < icon.getWidth(); x++) {
+            int c = icon.getRGB(x, y);
+            if ((c >>> 24) > 128 && (c & 0xFF) > 128) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+        }
+        double scale = (x1 - x0 + 1) / (double) width;
+        int height = (int) Math.ceil((y1 - y0 + 1) / scale);
+        float[][] m = new float[height][width];
+        for (int y = 0; y < height; y++) for (int x = 0; x < width; x++) {
+            int hits = 0, n = 0;
+            for (int sy = 0; sy < 4; sy++) for (int sx = 0; sx < 4; sx++) {
+                int ix = (int) (x0 + (x + (sx + 0.5) / 4) * scale), iy = (int) (y0 + (y + (sy + 0.5) / 4) * scale);
+                if (ix > x1 || iy > y1) continue;
+                n++;
+                int c = icon.getRGB(ix, iy);
+                if ((c >>> 24) > 128 && (c & 0xFF) > 128) hits++;
+            }
+            m[y][x] = n == 0 ? 0 : hits / (float) n;
+        }
+        return m;
+    }
+
+    /** Plain dark / light backdrop with the glowing HookVisuals icon (right of the menu buttons). */
+    static void hookPlainTheme(Scene s, boolean dark) throws Exception {
+        int top = dark ? hex(0x05070a) : hex(0xe9edf2), midC = dark ? hex(0x0a0d12) : hex(0xd8dee6), bottom = dark ? hex(0x0e1218) : hex(0xc3cbd6);
+        BufferedImage sky = img(W, H);
+        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+            double t = y / (double) (H - 1);
+            int c = t < 0.5 ? mix(top, midC, t * 2) : mix(midC, bottom, (t - 0.5) * 2);
+            double vx = (x - W / 2.0) / (W / 2.0), vy = (y - H / 2.0) / (H / 2.0);
+            double v = Math.min(1, (vx * vx + vy * vy) * 0.5);
+            c = mix(c, dark ? hex(0x000000) : hex(0xaab3c0), v * (dark ? 0.55 : 0.35));
+            if (hash2(x, y, 11) > 0.996) c = mix(c, dark ? hex(0x9fb4c8) : hex(0xffffff), dark ? 0.35 : 0.6); // faint dust
+            sky.setRGB(x, y, c);
+        }
+        s.layer("sky", sky, 0, 0, 0, false);
+
+        int cx = 548, cy = 178, lw = 116;
+        float[][] m = hkMask(lw);
+        int lh = m.length, lx = cx - lw / 2, ly = cy - lh / 2;
+        int glowC = dark ? 0x6cf5c0 : 0x2fb88e;
+        // soft glow halo (its own layer so it can breathe)
+        BufferedImage glow = img(W, H);
+        double rx = lw * 0.95, ry = lh * 1.6;
+        for (int y = 0; y < H; y++) for (int x = 0; x < W; x++) {
+            double dx = (x - cx) / rx, dy = (y - cy) / ry, d = Math.sqrt(dx * dx + dy * dy);
+            if (d >= 1) continue;
+            double a = Math.pow(1 - d, 2.2) * (dark ? 0.55 : 0.42);
+            glow.setRGB(x, y, ((int) Math.round(a * 255) << 24) | glowC);
+        }
+        // tight glow following the letters
+        float[][] blur = new float[lh + 16][lw + 16];
+        for (int y = 0; y < lh; y++) for (int x = 0; x < lw; x++) {
+            if (m[y][x] <= 0) continue;
+            for (int j = -8; j <= 8; j++) for (int i = -8; i <= 8; i++) {
+                double d = Math.sqrt(i * i + j * j);
+                if (d > 8) continue;
+                blur[y + 8 + j][x + 8 + i] += (float) (m[y][x] * (1 - d / 8) * 0.03);
+            }
+        }
+        for (int y = 0; y < blur.length; y++) for (int x = 0; x < blur[0].length; x++) {
+            int gx = lx - 8 + x, gy = ly - 8 + y;
+            if (gx < 0 || gy < 0 || gx >= W || gy >= H) continue;
+            double add = Math.min(0.85, blur[y][x]);
+            int prev = glow.getRGB(gx, gy) >>> 24;
+            double a = 1 - (1 - prev / 255.0) * (1 - add);
+            glow.setRGB(gx, gy, ((int) Math.round(a * 255) << 24) | glowC);
+        }
+        s.layer("glow", glow, 0, 0, 0, true);
+
+        BufferedImage logo = img(W, H);
+        int face = dark ? hex(0xf4fbf8) : hex(0x14181e), edge = dark ? hex(0xb8ffe6) : hex(0x2a3a3a);
+        for (int y = 0; y < lh; y++) for (int x = 0; x < lw; x++) {
+            float a = m[y][x];
+            if (a <= 0.02f) continue;
+            boolean border = a < 0.98f || (y > 0 && m[y - 1][x] < 0.5f);
+            int c = border ? mix(face, edge, 0.5) : face;
+            logo.setRGB(lx + x, ly + y, (Math.round(Math.min(1f, a * 1.15f) * 255) << 24) | (c & 0xFFFFFF));
+        }
+        s.layer("logo", logo, 0, 0, 0, false);
+        s.fx("sparkle", "logo", lx - 14, ly - 14, lw + 28, lh + 28, dark ? 0xE8FFF6 : 0x2FB88E, 8);
+        s.fx("rise", "-", 0, 220, 640, 140, dark ? 0x6CF5C0 : 0x7A8796, 14);
     }
 
     /** The HookVisuals HK logo (italic H + K sharing a stem) built from 4px blocks. */

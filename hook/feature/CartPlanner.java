@@ -330,27 +330,40 @@ final class CartPlanner {
     // ---------------------------------------------------------------- rail spot
 
     /** Rail + cart clicks for a cart at r. railClick may be supplied (crosshair hit) or is derived (top of the block below). */
+    /** Why the last prepareRail said no (shown in the action bar). */
+    static String why = "";
+
+    /**
+     * The point on top of block cell {@code r} at height {@code y} that is closest to the eye (kept {@code inset} away
+     * from the edges). Vanilla measures reach to the block, not to its middle, so this is where a click is in reach.
+     */
+    static class_243 nearTop(class_2338 r, double y, class_243 eye, double inset) {
+        double x = Math.max(r.method_10263() + inset, Math.min(r.method_10263() + 1 - inset, eye.field_1352));
+        double z = Math.max(r.method_10260() + inset, Math.min(r.method_10260() + 1 - inset, eye.field_1350));
+        return new class_243(x, y, z);
+    }
+
     static boolean prepareRail(Plan plan, class_2338 r, class_3965 railClick) {
         class_746 p = mc().field_1724;
         class_243 eye = p.method_33571();
         double reach = p.method_55754();
         plan.rail = r;
+        why = "can't place a rail there";
         if (isRailBlock(r)) {
             plan.railClick = null;
         } else {
-            if (!free(r) || !sturdyTop(r.method_10074())) return false;
-            if (p.method_5829().method_994(new class_238(r))) return false;
-            if (railSlot() < 0) return false;
-            if (railClick == null) {
-                class_243 top = new class_243(r.method_10263() + 0.5, r.method_10264(), r.method_10260() + 0.5);
-                railClick = new class_3965(top, class_2350.field_11036, r.method_10074(), false);
-            }
-            if (eye.method_1022(railClick.method_17784()) > reach - 0.05) return false;
+            if (!free(r)) { why = "the spot above that block is not free"; return false; }
+            if (!sturdyTop(r.method_10074())) { why = "rails can't stand on that block"; return false; }
+            if (p.method_5829().method_994(new class_238(r))) { why = "you are standing there"; return false; }
+            if (railSlot() < 0) { why = "no rail in hotbar"; return false; }
+            // the crosshair raycast already found this block within your reach: that click point is fine as it is
+            if (railClick == null) railClick = new class_3965(nearTop(r, r.method_10264(), eye, 0.2), class_2350.field_11036, r.method_10074(), false);
+            if (eye.method_1022(railClick.method_17784()) > reach + 0.01) { why = "the rail spot is out of reach"; return false; }
             plan.railClick = railClick;
         }
-        if (cartSlot() < 0) return false;
-        class_243 cartPoint = new class_243(r.method_10263() + 0.5, r.method_10264() + 0.0625, r.method_10260() + 0.5);
-        if (eye.method_1022(cartPoint) > reach - 0.05) return false;
+        if (cartSlot() < 0) { why = "no TNT minecart in hotbar"; return false; }
+        class_243 cartPoint = nearTop(r, r.method_10264() + 0.0625, eye, 0.2);
+        if (eye.method_1022(cartPoint) > reach) { why = "the cart spot is out of reach"; return false; }
         plan.cartClick = new class_3965(cartPoint, class_2350.field_11036, r, false);
         return true;
     }
@@ -381,7 +394,7 @@ final class CartPlanner {
             blockSlot = supportSlot();
             if (blockSlot < 0) return false;
             if (p.method_5829().method_994(new class_238(block))) return false;
-            blockClick = new class_3965(new class_243(block.method_10263() + 0.5, block.method_10264(), block.method_10260() + 0.5), class_2350.field_11036, block.method_10074(), false);
+            blockClick = new class_3965(nearTop(block, block.method_10264(), eye, 0.2), class_2350.field_11036, block.method_10074(), false);
             if (eye.method_1022(blockClick.method_17784()) > reach) return false;
         } else {
             if (!sturdyTop(block)) return false;
@@ -396,10 +409,10 @@ final class CartPlanner {
                 }
         class_238 me = p.method_5829();
         if (me.method_994(new class_238(low)) || me.method_994(new class_238(upper))) return false;
-        class_3965 upClick = new class_3965(new class_243(upper.method_10263() + 0.5, upper.method_10264(), upper.method_10260() + 0.5), class_2350.field_11036, block, false);
-        class_3965 lowClick = new class_3965(new class_243(low.method_10263() + 0.5, low.method_10264(), low.method_10260() + 0.5), class_2350.field_11036, low.method_10074(), false);
+        class_3965 upClick = new class_3965(nearTop(upper, upper.method_10264(), eye, 0.2), class_2350.field_11036, block, false);
+        class_3965 lowClick = new class_3965(nearTop(low, low.method_10264(), eye, 0.2), class_2350.field_11036, low.method_10074(), false);
         if (eye.method_1022(upClick.method_17784()) > reach || eye.method_1022(lowClick.method_17784()) > reach) return false;
-        class_243 cartPoint = new class_243(low.method_10263() + 0.5, low.method_10264() + 0.5, low.method_10260() + 0.5);
+        class_243 cartPoint = nearTop(low, low.method_10264() + 0.5, eye, 0.2);
         if (eye.method_1022(cartPoint) > reach) return false;
         plan.rail = low;
         plan.railClick = lowClick;

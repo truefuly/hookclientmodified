@@ -127,6 +127,10 @@ public final class MenuBackground {
         } finally {
             ctx.method_51448().popMatrix();
         }
+        // soft shade along the bottom so the menu buttons stay readable on bright ground (snow, end stone, ...)
+        int fadeTop = h - h * 3 / 10;
+        int strength = lobby == LobbyTheme.HookVisualsLight ? 0x48 : 0x88;
+        ctx.method_25296(0, fadeTop, w, h, 0, faded(strength << 24));
         return true;
     }
 

@@ -8,6 +8,8 @@
     "EntityMixin"
   ],
   "client": [
+    "ProxyPipelineMixin",
+    "ProxyLegacyPingMixin",
     "AntiScreenshareMixin",
     "AntiScreenshareGameRendererMixin",
     "AntiScreenshareLevelMixin",

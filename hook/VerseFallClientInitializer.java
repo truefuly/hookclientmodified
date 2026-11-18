@@ -17,6 +17,7 @@ public final class VerseFallClientInitializer implements ClientModInitializer {
         thetruetrident.cartcore.CartcoreCore.cartConfig.save();
         Binds.openClickGui = () -> {};
         hook.feature.SwordcoreModuleSupport.initialize();
+        hook.feature.ProxyScreen.registerButton(); // "Proxies" on the multiplayer screen
         if (hook.feature.AntiScreenshareTest.ENABLED)
             net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(c -> hook.feature.AntiScreenshareTest.tick());
         if (hook.feature.AuroraTest.ENABLED)

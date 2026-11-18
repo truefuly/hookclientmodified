@@ -1,11 +1,7 @@
 layer sky.png 640 360 0.0 0.0 0 0
 fx dust - 0 0 640 360 c8c2b0 26
 layer far.png 720 360 5.0 0.0 0 0
-fx fall mid 120 0 14 268 ffe08a 12
-fx glow mid 127 264 1 1 ff7a20 8
-fx lava mid 90 266 74 6 ffd27a 6
 layer mid.png 760 360 10.0 0.0 0 0
-fx shimmer near 304 318 162 22 7fd8e8 10
 fx glow near 600 272 1 1 a070ff 6
 fx sparkle near 582 250 36 38 f0e0ff 8
 fx glow near 70 274 1 1 a070ff 6

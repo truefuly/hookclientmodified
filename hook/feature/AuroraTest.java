@@ -18,6 +18,7 @@ public final class AuroraTest {
         clock++;
         AuroraScreen screen = mc.field_1755 instanceof AuroraScreen a ? a : null;
         if (KEY.equals("wheel")) { wheel(mc); return; }
+        if (KEY.equals("themes")) { themes(mc); return; }
         switch (clock) {
             case 200 -> mc.method_1507((class_437) new AuroraScreen());
             case 240 -> shot(mc, "key_empty");
@@ -53,6 +54,42 @@ public final class AuroraTest {
                 mc.method_1592();
             }
             default -> {}
+        }
+    }
+
+    /** -Dhook.auroratest=themes: every lobby theme on the title + multiplayer screen, then the proxy screen and a ping through a local SOCKS5 test proxy. */
+    private static void themes(class_310 mc) {
+        int n = LobbyTheme.values().length; // 1..n-1 (Standard is vanilla)
+        int base = 200, per = 90;
+        if (clock >= base && clock < base + (n - 1) * per) {
+            int i = 1 + (clock - base) / per, k = (clock - base) % per;
+            LobbyTheme t = LobbyTheme.values()[i];
+            if (k == 0) { hook.module.modules.client.Hook.lobbyTheme.setModeIndex(i); mc.method_1507(new net.minecraft.class_442()); }
+            if (k == 40) shot(mc, "t_" + t.folder + "_title");
+            if (k == 45) mc.method_1507(new net.minecraft.class_500(new net.minecraft.class_442()));
+            if (k == 85) shot(mc, "t_" + t.folder + "_mp");
+            return;
+        }
+        int t0 = base + (n - 1) * per;
+        if (clock == t0) {
+            hook.module.modules.client.Hook.lobbyTheme.setModeIndex(LobbyTheme.HookVisualsDark.ordinal());
+            int added = ProxyManager.importText("127.0.0.1:1085:testuser:testpass");
+            ProxyManager.Proxy p = ProxyManager.all().stream().filter(x -> x.port == 1085).findFirst().orElse(null);
+            if (p != null) { p.name = "Local test proxy"; ProxyManager.setEnabled(p, true); }
+            System.out.println("AURORATEST PROXY added=" + added + " active=" + (ProxyManager.active() == null ? "-" : ProxyManager.active().address()));
+            mc.method_1507(new ProxyScreen(new net.minecraft.class_442()));
+        }
+        if (clock == t0 + 40) shot(mc, "proxy_list");
+        if (clock == t0 + 45 && mc.field_1755 instanceof ProxyScreen ps) ps.testEdit(0);
+        if (clock == t0 + 75) shot(mc, "proxy_edit");
+        if (clock == t0 + 80) mc.method_1507(new net.minecraft.class_500(new net.minecraft.class_442())); // pings 127.0.0.1:25599 through the proxy
+        if (clock == t0 + 200) shot(mc, "proxy_mp");
+        if (clock == t0 + 210) {
+            ProxyManager.all().removeIf(x -> x.port == 1085);
+            ProxyManager.save();
+            System.out.println("AURORATEST PROXY cleaned active=" + (ProxyManager.active() == null ? "-" : "?"));
+            System.out.println("AURORATEST DONE");
+            mc.method_1592();
         }
     }
 

@@ -1,0 +1,5 @@
+layer sky.png 640 360 0.0 0.0 0 0
+layer glow.png 640 360 0.0 0.0 0 1
+layer logo.png 640 360 0.0 0.0 0 0
+fx sparkle logo 476 135 144 87 e8fff6 8
+fx rise - 0 220 640 140 6cf5c0 14

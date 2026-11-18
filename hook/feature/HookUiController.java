@@ -865,7 +865,7 @@ public final class HookUiController {
 
     /** Lobby theme picker: preview tiles like the colour themes; Standard keeps vanilla menus. */
     private void drawLobbyThemes(UiRenderer ui, float x, float y, float width, boolean interactive) {
-        LobbyTheme[] themes = LobbyTheme.values();
+        LobbyTheme[] themes = LobbyTheme.DISPLAY;
         LobbyTheme selected = LobbyTheme.selected();
         float gap = this.d(12.0f);
         float tileW = (width - gap * 2.0f) / 3.0f;
@@ -909,7 +909,7 @@ public final class HookUiController {
             }
             ui.outline(tx, ty, tileW, tileH, this.d(16.0f), Math.max(1.0f, this.u * 0.9f), UiEasing.mix(UiRenderer.white(0.06f + 0.08f * hover), UiPalette.accent(0.6f), sel));
             if (!interactive) continue;
-            int index = i;
+            int index = theme.ordinal();
             this.hit(tx, ty, tileW, tileH, click -> {
                 if (hook.module.modules.client.Hook.lobbyTheme.getModeIndex() != index) {
                     hook.module.modules.client.Hook.lobbyTheme.setModeIndex(index);
