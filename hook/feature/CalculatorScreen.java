@@ -31,6 +31,7 @@ public final class CalculatorScreen extends class_437 {
     private float dt = 0.016f;
     private String flash;
     private long flashAt;
+    private long copiedAt = -1L;
 
     public CalculatorScreen() {
         super((class_2561) class_2561.method_43473());
@@ -84,6 +85,60 @@ public final class CalculatorScreen extends class_437 {
             case "<" -> { if (!this.expr.isEmpty()) this.expr = this.expr.substring(0, this.expr.length() - 1); }
             default -> { if (this.expr.length() < 48) this.expr += k; }
         }
+    }
+
+    /** Display form: thousands grouped with dots, decimal comma, × and ÷ for the operators ("1234567.5*2" -> "1.234.567,5 × 2"). */
+    static String pretty(String s) {
+        StringBuilder out = new StringBuilder();
+        int i = 0, n = s.length();
+        while (i < n) {
+            char c = s.charAt(i);
+            if (Character.isDigit(c)) {
+                int st = i;
+                while (i < n && Character.isDigit(s.charAt(i))) i++;
+                String digits = s.substring(st, i);
+                for (int j = 0; j < digits.length(); j++) {
+                    if (j > 0 && (digits.length() - j) % 3 == 0) out.append('.');
+                    out.append(digits.charAt(j));
+                }
+                if (i < n && s.charAt(i) == '.') {
+                    out.append(',');
+                    i++;
+                    while (i < n && Character.isDigit(s.charAt(i))) out.append(s.charAt(i++));
+                }
+            } else if (c == '.') {
+                out.append(',');
+                i++;
+            } else {
+                switch (c) {
+                    case '*' -> out.append(" × ");
+                    case '/' -> out.append(" ÷ ");
+                    case '+' -> out.append(" + ");
+                    case '-' -> out.append(i == 0 || "*/+-(^".indexOf(s.charAt(i - 1)) >= 0 ? "-" : " - ");
+                    default -> out.append(c);
+                }
+                i++;
+            }
+        }
+        return out.toString().trim();
+    }
+
+    /** The plain number to copy (no grouping dots, so it pastes straight into /pay etc.), or null if nothing valid. */
+    private String copyValue() {
+        if (this.expr.isEmpty()) return null;
+        return evaluate(this.expr);
+    }
+
+    void testCopy() {
+        this.copy();
+    }
+
+    private void copy() {
+        String v = this.copyValue();
+        if (v == null) { cue(UiAudio.Cue.TICK); return; }
+        try { class_310.method_1551().field_1774.method_1455(v); } catch (Throwable ignored) {}
+        this.copiedAt = System.nanoTime();
+        cue(UiAudio.Cue.TICK);
     }
 
     // ------------------------------------------------------------------ maths (recursive descent, no eval)
@@ -205,10 +260,28 @@ public final class CalculatorScreen extends class_437 {
             float dx = px + pad, dy = py + 78 * u + 18 * u, dw = pw - 2 * pad, dh = dispH;
             boolean err = this.result.equals("Error");
             UiTheme.card(ui, dx, dy, dw, dh, 18 * u, 0f, this.result.isEmpty() || err ? 0f : 1f, u);
-            if (!this.result.isEmpty() && !err) UiTheme.accentDot(ui, dx + 20 * u, dy + 25 * u, u, 1f);
-            ui.textRight(ui.ellipsize(this.result.isEmpty() ? "Calculator" : this.result, dw - 60 * u, 12 * u, 0), dx + dw - 18 * u, dy + 18 * u, 12 * u, 0,
+            // copy button (top-left of the display): copies the plain result number to the clipboard
+            float cpb = 30 * u, cpx = dx + 12 * u, cpy = dy + 12 * u;
+            boolean canCopy = this.copyValue() != null;
+            float copiedT = this.copiedAt < 0 ? 0f : Math.max(0f, 1f - (now - this.copiedAt) / 1.0e6f / 1400f);
+            boolean cphot = canCopy && inside(mx, my, cpx, cpy, cpb, cpb);
+            ui.pushAlpha(canCopy ? 1f : 0.35f);
+            UiTheme.iconButton(ui, copiedT > 0f ? UiIcon.CHECK : UiIcon.COPY, cpx, cpy, cpb, this.anim("copy", cphot ? 1 : 0, 16), u);
+            ui.popAlpha();
+            float leftEnd = cpx + cpb + 8 * u;
+            if (copiedT > 0f) {
+                ui.text("Copied", leftEnd, cpy + (cpb - 12 * u) / 2.0f, 12 * u, 1, UiPalette.accent(0.95f * Math.min(1f, copiedT * 3f)));
+                leftEnd += ui.textWidth("Copied", 12 * u, 1) + 8 * u;
+            }
+            if (canCopy) {
+                this.hits.add(new float[]{cpx, cpy, cpb, cpb});
+                this.hitKeys.add("#copy");
+            }
+            String top = this.result.isEmpty() ? "Calculator" : err ? "Error" : pretty(this.result.endsWith(" =") ? this.result.substring(0, this.result.length() - 2) : this.result) + " =";
+            float topMax = dx + dw - 18 * u - leftEnd;
+            ui.textRight(ui.ellipsize(top, topMax, 12 * u, 0), dx + dw - 18 * u, dy + 21 * u, 12 * u, 0,
                 err ? UiRenderer.argb(0.9f, 240, 90, 90) : this.result.isEmpty() ? UiTheme.FAINT : UiTheme.SUB);
-            String shown = this.expr.isEmpty() ? "0" : this.expr.replace("*", "×");
+            String shown = this.expr.isEmpty() ? "0" : pretty(this.expr);
             float big = 34 * u;
             while (big > 16 * u && ui.textWidth(shown, big, 1) > dw - 36 * u) big -= u;
             ui.textRight(shown, dx + dw - 18 * u, dy + dh - big - 18 * u, big, 1, UiTheme.TEXT);
@@ -232,7 +305,7 @@ public final class CalculatorScreen extends class_437 {
                         ui.glow((float) UiEasing.clamp((float) mx, kx, kx + kw), y + bh * 0.15f, kw * 0.6f, UiRenderer.white(0.045f * h));
                         ui.popClip();
                     }
-                    String label = k.equals("*") ? "×" : k;
+                    String label = k.equals("*") ? "×" : k.equals("/") ? "÷" : k.equals(".") ? "," : k;
                     int col = eq || op ? UiEasing.mix(UiPalette.accent(0.95f), UiTheme.TEXT, 0.15f * h) : k.equals("C") ? UiTheme.SUB : UiTheme.TEXT;
                     float ts = 19 * u;
                     ui.textCentered(label, kx + kw / 2.0f, y + (bh - ts) / 2.0f - u, ts, 1, col);
@@ -271,6 +344,7 @@ public final class CalculatorScreen extends class_437 {
             if (inside(x, y, r[0], r[1], r[2], r[3])) {
                 String k = this.hitKeys.get(i);
                 if (k.equals("#close")) this.close();
+                else if (k.equals("#copy")) this.copy();
                 else this.press(k);
                 return true;
             }
@@ -285,6 +359,7 @@ public final class CalculatorScreen extends class_437 {
         if (code == 257 || code == 335) { this.press("="); return true; } // Enter
         if (code == 259) { this.press("<"); return true; }                // Backspace
         if (code == 261) { this.press("C"); return true; }                // Delete
+        if (code == 67 && (key.comp_4797() & 2) != 0) { this.copy(); return true; } // Ctrl+C
         return true;
     }
 

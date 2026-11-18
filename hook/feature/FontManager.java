@@ -139,7 +139,7 @@ public final class FontManager {
         for (char var1 = ' '; var1 <= '~'; var1 = (char)(var1 + '\u0001')) {
             var0.append(var1);
         }
-        var0.append("\u2022\u2026\u00b7\u2014\u2013\u00b0\u00d7\u2190\u2192\u2713\u00a7\u00e9\u00e8\u00e0\u00e7\u00f1\u00fc\u00f6\u00e4\u00df");
+        var0.append("\u2022\u2026\u00b7\u2014\u2013\u00b0\u00d7\u2190\u2192\u2713\u00a7\u00e9\u00e8\u00e0\u00e7\u00f1\u00fc\u00f6\u00e4\u00df\u00f7");
         CHARS = var0.toString();
     }
 

@@ -8,6 +8,7 @@ public final class AuroraTest {
     public static final String KEY = System.getProperty("hook.auroratest");
     public static final boolean ENABLED = KEY != null;
     private static int clock = -1;
+    private static String savedClip;
 
     private AuroraTest() {
     }
@@ -19,6 +20,7 @@ public final class AuroraTest {
         AuroraScreen screen = mc.field_1755 instanceof AuroraScreen a ? a : null;
         if (KEY.equals("wheel")) { wheel(mc); return; }
         if (KEY.equals("themes")) { themes(mc); return; }
+        if (KEY.equals("calc")) { calc(mc); return; }
         switch (clock) {
             case 200 -> mc.method_1507((class_437) new AuroraScreen());
             case 240 -> shot(mc, "key_empty");
@@ -109,6 +111,26 @@ public final class AuroraTest {
             case 330 -> QuickWheelScreen.testHover = 0;
             case 360 -> shot(mc, "wheel_calc");
             case 370 -> { QuickWheelScreen.testHover = -1; System.out.println("AURORATEST DONE"); mc.method_1592(); }
+            default -> {}
+        }
+    }
+
+    /** -Dhook.auroratest=calc: calculator with grouped numbers, divide key and the copy button. */
+    private static void calc(class_310 mc) {
+        CalculatorScreen c = mc.field_1755 instanceof CalculatorScreen cs ? cs : null;
+        switch (clock) {
+            case 200 -> mc.method_1507(new CalculatorScreen());
+            case 230 -> { if (c != null) for (String k : "1234567.5*12/4".split("")) c.press(k); }
+            case 250 -> shot(mc, "calc_expr");
+            case 260 -> { if (c != null) c.press("="); }
+            case 280 -> shot(mc, "calc_result");
+            case 290 -> { savedClip = mc.field_1774.method_1460(); if (c != null) c.testCopy(); }
+            case 300 -> {
+                shot(mc, "calc_copied");
+                System.out.println("AURORATEST CLIP " + mc.field_1774.method_1460() + " pretty=" + CalculatorScreen.pretty("-1234567.5*-12/4+1000"));
+                mc.field_1774.method_1455(savedClip == null ? "" : savedClip); // give the user's clipboard back
+            }
+            case 330 -> { System.out.println("AURORATEST DONE"); mc.method_1592(); }
             default -> {}
         }
     }
