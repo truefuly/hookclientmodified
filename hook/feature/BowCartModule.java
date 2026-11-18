@@ -56,6 +56,11 @@ public final class BowCartModule extends Module {
     private CartPlanner.Plan pending;
     private volatile CartPlanner.Plan preview;
     private int lastAge = Integer.MIN_VALUE;
+    // after a shot: did the server really fire the arrow and blow the cart up? (explains failures on servers)
+    private int watchUntil = -1;
+    private class_2338 watchRail;
+    private boolean watchArrow, watchCart;
+    private volatile boolean watchBoom;
 
 
     public BowCartModule() {
@@ -64,7 +69,7 @@ public final class BowCartModule extends Module {
         this.color.setDescription(EncryptedString.of("Colour of the outline"));
         this.messages.setDescription(EncryptedString.of("Tells you in the action bar why it could not cart."));
         this.crosshair.setDescription(EncryptedString.of("On: rail + cart go on the block you look at when you shoot (any angle). Off: where the arrow lands."));
-        this.flameOnly.setDescription(EncryptedString.of("Only Flame bows trigger it; normal bows shoot normally."));
+        this.flameOnly.setDescription(EncryptedString.of("Normal bows (no Flame) can never light a cart, so they never place one. On: they just shoot. Off: you also get a hint."));
         this.minPower.setDescription(EncryptedString.of("Shots drawn less than this do nothing."));
         this.cooldown.setDescription(EncryptedString.of("Minimum ticks between two placements - stops double / spam placing."));
         this.skipIfCart.setDescription(EncryptedString.of("Does not place again where a minecart already stands."));
@@ -147,6 +152,11 @@ public final class BowCartModule extends Module {
             m.lookBackAt = p.field_6012 + CartHuman.ticks(0.9, 0.4, 1);
             m.lookBackEnd = m.lookBackAt + 20;
         }
+        m.watchUntil = p.field_6012 + 16;
+        m.watchRail = plan.rail;
+        m.watchArrow = false;
+        m.watchCart = false;
+        m.watchBoom = false;
         if (m.swapBack.getValue()) {
             int delay = human ? CartHuman.ticks(m.swapDelay.getValue() + 0.5, 0.7, Math.max(1, m.swapDelay.getIntValue())) : m.swapDelay.getIntValue();
             if (delay <= 0) InventoryUtil.swap(slot);
@@ -222,6 +232,7 @@ public final class BowCartModule extends Module {
             if (!p.method_6115()) InventoryUtil.swap(this.swapBackSlot);
             this.swapBackAt = -1;
         }
+        this.watchShot(p);
         if (!this.highlight.getValue()) { this.preview = null; return; }
         try { this.preview = this.plan(true); } catch (Throwable t) { this.preview = null; }
     }
@@ -267,6 +278,26 @@ public final class BowCartModule extends Module {
 
     private static Color alpha(Color c, int a) { return new Color(c.getRed(), c.getGreen(), c.getBlue(), a); }
 
+    private void watchShot(class_746 p) {
+        if (this.watchUntil < 0 || this.mc.field_1687 == null) return;
+        if (this.watchBoom) { this.watchUntil = -1; return; }
+        if (!this.watchArrow && !this.mc.field_1687.method_8390(net.minecraft.class_1665.class, p.method_5829().method_1014(16.0),
+                a -> a.method_24921() == p && a.field_6012 < 40).isEmpty()) this.watchArrow = true;
+        boolean cart = this.hasCart(this.watchRail);
+        if (cart) this.watchCart = true;
+        if (p.field_6012 < this.watchUntil) return;
+        this.watchUntil = -1;
+        if (!this.watchCart) { this.fail("the cart didn't stay on the rail (the server removed it)"); return; }
+        if (!cart) return; // cart is gone: it went off
+        if (!this.watchArrow) this.fail("the server didn't fire your arrow");
+        else this.fail("arrow fired, but the cart didn't explode - TNT is probably blocked here");
+    }
+
+    @EventListener
+    public void onPacket(hook.event.events.PacketReceiveEvent event) {
+        if (event.packet instanceof net.minecraft.class_2664) this.watchBoom = true;
+    }
+
     /** quiet = live preview: no messages, no test bookkeeping. */
     private CartPlanner.Plan plan(boolean quiet) {
         class_746 p = this.mc.field_1724;
@@ -283,29 +314,10 @@ public final class BowCartModule extends Module {
             power = 1.0f;
         }
         if (!(bow.method_7909() instanceof class_1753)) return null;
-        if (this.flameOnly.getValue() && !CartPlanner.hasFlame(bow)) return null; // normal bows: ignored, plain shot
+        // a normal arrow can't light a TNT minecart: placing one would only catch the arrow
+        if (!CartPlanner.hasFlame(bow)) return quiet || this.flameOnly.getValue() ? null : this.fail("this bow has no Flame - the arrow can't light the cart");
         if (power < Math.max(0.1f, this.minPower.getFloatValue() / 100.0f)) return null;
         if (CartPlanner.cartSlot() < 0) return quiet ? null : this.fail("no TNT minecart in hotbar");
-
-        if (this.crosshair.getValue() && power >= this.quickDraw.getFloatValue() / 100.0f) {
-            // the block under your crosshair at the moment you shoot - works from any angle
-            if (!(p.method_5745(p.method_55754(), 1.0f, false) instanceof net.minecraft.class_3965 bh) || bh.method_17783() != net.minecraft.class_239.class_240.field_1332) return null;
-            class_2338 hitPos = bh.method_17777();
-            class_2338 r;
-            net.minecraft.class_3965 rc;
-            if (CartPlanner.isRailBlock(hitPos)) { r = hitPos; rc = null; }
-            else {
-                if (bh.method_17780() == class_2350.field_11033) return quiet ? null : this.fail("can't put a rail under a block");
-                r = hitPos.method_10093(bh.method_17780());
-                rc = bh;
-            }
-            if (CartPlanner.railSlot() < 0 && !CartPlanner.isRailBlock(r)) return quiet ? null : this.fail("no rail in hotbar");
-            if (this.skipIfCart.getValue() && this.hasCart(r)) return null;
-            CartPlanner.Plan cp = new CartPlanner.Plan();
-            if (!CartPlanner.prepareRail(cp, r, rc)) return quiet ? null : this.fail("can't place a rail there");
-            if (!quiet && CartTest.ENABLED) { CartTest.planFire = null; CartTest.planRail = cp.rail; CartTest.planInfo = "CROSSHAIR rail=" + cp.rail.method_23854(); }
-            return cp;
-        }
 
         // same launch as BowItem: eye - 0.1, rotation * power * 3, plus your own movement
         class_243 start = new class_243(p.method_23317(), p.method_23320() - 0.1, p.method_23321());
@@ -313,6 +325,42 @@ public final class BowCartModule extends Module {
         class_243 mv = p.method_60478();
         vel = vel.method_1031(mv.field_1352, p.method_24828() ? 0.0 : mv.field_1351, mv.field_1350);
 
+        if (this.crosshair.getValue() && power >= this.quickDraw.getFloatValue() / 100.0f) {
+            CartPlanner.Plan cp = this.crosshairPlan(p, quiet, start, vel);
+            if (cp == SHOOT_ONLY) return null;
+            if (cp != null) return cp;
+            // nothing there, or the arrow (it leaves 0.1 below your eyes) would only graze under the cart into the
+            // block: use a spot on the arrow's real path instead
+        }
+        return this.pathPlan(p, quiet, start, vel, power);
+    }
+
+    private static final CartPlanner.Plan SHOOT_ONLY = new CartPlanner.Plan();
+
+    private CartPlanner.Plan crosshairPlan(class_746 p, boolean quiet, class_243 start, class_243 vel) {
+        {
+            // the block under your crosshair at the moment you shoot - works from any angle
+            if (!(p.method_5745(p.method_55754(), 1.0f, false) instanceof net.minecraft.class_3965 bh) || bh.method_17783() != net.minecraft.class_239.class_240.field_1332) return null;
+            class_2338 hitPos = bh.method_17777();
+            class_2338 r;
+            net.minecraft.class_3965 rc;
+            if (CartPlanner.isRailBlock(hitPos)) { r = hitPos; rc = null; }
+            else {
+                if (bh.method_17780() == class_2350.field_11033) return null;
+                r = hitPos.method_10093(bh.method_17780());
+                rc = bh;
+            }
+            if (CartPlanner.railSlot() < 0 && !CartPlanner.isRailBlock(r)) return null;
+            if (this.skipIfCart.getValue() && this.hasCart(r)) return SHOOT_ONLY; // a cart is already there: just shoot it
+            CartPlanner.Plan cp = new CartPlanner.Plan();
+            if (!CartPlanner.prepareRail(cp, r, rc)) return null;
+            if (!CartPlanner.trace(start, vel, CartPlanner.cartBox(r)).hitsCart) return null;
+            if (!quiet && CartTest.ENABLED) { CartTest.planFire = null; CartTest.planRail = cp.rail; CartTest.planInfo = "CROSSHAIR rail=" + cp.rail.method_23854(); }
+            return cp;
+        }
+    }
+
+    private CartPlanner.Plan pathPlan(class_746 p, boolean quiet, class_243 start, class_243 vel, float power) {
         CartPlanner.Trace land = CartPlanner.trace(start, vel, null);
         class_243 eye = p.method_33571();
         double reach = p.method_55754(); // vanilla block reach

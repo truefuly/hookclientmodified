@@ -153,6 +153,8 @@ public final class XbowCartModule extends Module {
         if (mc.field_1724 == null) return;
         if (mc.field_1755 instanceof net.minecraft.class_433) mc.method_1507(null);
         if (instance != null && !instance.isEnabled()) instance.setEnabled(true);
+        hook.module.Module bow = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(BowCartModule.class);
+        if (bow != null && !bow.isEnabled()) bow.setEnabled(true);
     }
 
     @EventListener
