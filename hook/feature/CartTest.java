@@ -51,6 +51,7 @@ final class CartTest {
         if (p.field_6012 == lastAge || phase == 99) return;
         lastAge = p.field_6012;
         clock++;
+        if ("slime".equals(ONLY)) { slime(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -199,6 +200,33 @@ final class CartTest {
         if (any && cartSeenAt < 0) cartSeenAt = now;
         if (!any && cartSeenAt >= 0 && cartGoneAt < 0) cartGoneAt = now;
         cartNow = any;
+    }
+
+    /** -Dhook.carttest.only=slime: Slime Chunks module from above, plus a check of the formula against the seed. */
+    private static void slime(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode spectator");
+            cmd("time set day");
+            cmd("tp @s 8 152 40 0 35");
+            hook.module.Module m = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SlimeChunkModule.class);
+            if (m != null && !m.isEnabled()) m.setEnabled(true);
+        }
+        if (clock == 140) {
+            long seed = mc.method_1576().method_30002().method_8412();
+            StringBuilder sb = new StringBuilder();
+            int n = 0;
+            for (int x = -6; x <= 6; x++) for (int z = -6; z <= 6; z++) if (SlimeChunkModule.isSlimeChunk(seed, x, z)) { n++; if (sb.length() < 300) sb.append(x).append(',').append(z).append(' '); }
+            System.out.println("CARTTEST SLIME seed=" + seed + " count=" + n + "/169 chunks: " + sb);
+            System.out.println("CARTTEST SLIME ref seed0 (0,0)=" + SlimeChunkModule.isSlimeChunk(0L, 0, 0) + " seed12345 list=" + refList(12345L));
+        }
+        if (clock == 170) net.minecraft.class_318.method_22690(mc.field_1697, "slime_top.png", mc.method_1522(), 1, msg -> {});
+        if (clock == 190) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static String refList(long seed) {
+        StringBuilder sb = new StringBuilder();
+        for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) if (SlimeChunkModule.isSlimeChunk(seed, x, z)) sb.append(x).append(',').append(z).append(' ');
+        return sb.toString();
     }
 
     private static void cmd(String c) {

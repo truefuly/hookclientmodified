@@ -154,6 +154,7 @@ public final class ModuleManager {
         this.in(Category.RENDER, new hook.feature.TrajectoriesModule());
         this.in(Category.RENDER, new HitGlowModule());
         this.in(Category.RENDER, new hook.feature.ChunkBordersModule());
+        this.in(Category.RENDER, new hook.feature.SlimeChunkModule());
         this.in(Category.RENDER, new hook.feature.CleanHitboxesModule());
         this.a(new VerseFallModuleBridge("HUD Lyrics", "Shows the lyrics of the current song on your HUD.", "HUD Lyrics"));
         this.safe("3D Character", Character3dModule::new);
