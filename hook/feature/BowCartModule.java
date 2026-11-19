@@ -71,6 +71,11 @@ public final class BowCartModule extends Module {
     private class_243 launchStart, launchVel;
     private float launchPower;
     private int shotTick, watchArrowAt = -1, watchCartAt = -1;
+    // the server's "arrow spawned" packet for our arrow (seen even if the arrow is gone again before the next tick)
+    private volatile long shotNanos, arrowPacketNanos;
+    // TNT carts can't explode here (gamerule / protected area): stop wasting carts until you join again or move away
+    private int tntBlockedHits;
+    private class_243 tntBlockedAt;
 
 
     public BowCartModule() {
@@ -143,8 +148,20 @@ public final class BowCartModule extends Module {
         if (m.skipIfCart.getValue() && m.hasCart(plan.rail)) return;
         m.lastPlace = p.field_6012;
         m.shotTick = p.field_6012;
+        m.shotNanos = System.nanoTime();
+        m.arrowPacketNanos = 0L;
         String srv = m.mc.method_1558() == null ? "" : String.valueOf(m.mc.method_1558().field_3761);
-        if (!srv.equals(m.delayServer)) { m.delayServer = srv; m.placeDelay = TEST_DELAY; }
+        if (!srv.equals(m.delayServer)) { m.delayServer = srv; m.placeDelay = TEST_DELAY; m.tntBlockedHits = 0; m.tntBlockedAt = null; }
+        if (m.tntBlockedAt != null) {
+            if (new class_243(p.method_23317(), p.method_23318(), p.method_23321()).method_1022(m.tntBlockedAt) < 64.0) {
+                m.lastPlace = Integer.MIN_VALUE / 2;
+                m.fail("paused - TNT carts don't explode here (move 64+ blocks away or rejoin to try again)");
+                log("shot skipped: tnt blocked here");
+                return;
+            }
+            m.tntBlockedAt = null;
+            m.tntBlockedHits = 0;
+        }
         log("shot server=" + (srv.isEmpty() ? "singleplayer" : srv) + " ping=" + m.pingTicks() * 50 + "ms delay=" + m.placeDelay + " draw=" + m.launchPower + " rail=" + plan.rail.method_23854());
         if (m.placeDelay > 0) {
             // the release goes out alone in this tick; rail + cart follow in a later tick
@@ -344,16 +361,26 @@ public final class BowCartModule extends Module {
 
     private void watchShot(class_746 p) {
         if (this.watchUntil < 0 || this.mc.field_1687 == null) return;
-        if (this.watchBoom) { this.watchUntil = -1; log("BOOM +" + (p.field_6012 - this.shotTick) + "t arrowSeen=" + this.watchArrowAt + " cartSeen=" + this.watchCartAt); return; }
+        if (this.watchBoom) { this.watchUntil = -1; this.tntBlockedHits = 0; log("BOOM +" + (p.field_6012 - this.shotTick) + "t arrowSeen=" + this.watchArrowAt + " cartSeen=" + this.watchCartAt); return; }
         if (!this.watchArrow && !this.mc.field_1687.method_8390(net.minecraft.class_1665.class, p.method_5829().method_1014(16.0),
                 a -> a.method_24921() == p && a.field_6012 < 40).isEmpty()) { this.watchArrow = true; this.watchArrowAt = p.field_6012 - this.shotTick; }
         boolean cart = this.hasCart(this.watchRail);
         if (cart && !this.watchCart) { this.watchCart = true; this.watchCartAt = p.field_6012 - this.shotTick; }
         if (p.field_6012 < this.watchUntil) return;
         this.watchUntil = -1;
-        log("result arrowSeen=" + this.watchArrowAt + " cartSeen=" + this.watchCartAt + " cartNow=" + cart + " railNow=" + CartPlanner.isRailBlock(this.watchRail) + " boom=false");
+        long ap = this.arrowPacketNanos;
+        boolean fired = this.watchArrow || ap != 0L;
+        log("result arrowSeen=" + this.watchArrowAt + " arrowPacket=" + (ap == 0L ? "none" : ((ap - this.shotNanos) / 1_000_000L) + "ms") + " cartSeen=" + this.watchCartAt + " cartNow=" + cart + " railNow=" + CartPlanner.isRailBlock(this.watchRail) + " boom=false");
         if (!this.watchCart) { this.fail("the cart didn't stay on the rail (the server removed it)"); return; }
         if (!cart) return; // cart is gone: it went off
+        if (fired) {
+            // the arrow came out and is gone, the cart is untouched: it hit the cart and the server stopped the blast
+            if (++this.tntBlockedHits >= 2) {
+                this.tntBlockedAt = new class_243(p.method_23317(), p.method_23318(), p.method_23321());
+                this.fail("arrow hit the cart twice but TNT doesn't explode here - Bow Cart paused here so no more carts are wasted");
+            } else this.fail("arrow fired and hit, but this server doesn't let TNT carts explode here (TNT off / protected area)");
+            return;
+        }
         if (!this.watchArrow) {
             if (this.placeDelay < 2) {
                 this.placeDelay++;
@@ -365,10 +392,21 @@ public final class BowCartModule extends Module {
     @EventListener
     public void onPacket(hook.event.events.PacketReceiveEvent event) {
         if (event.packet instanceof net.minecraft.class_2664) this.watchBoom = true;
+        else if (event.packet instanceof net.minecraft.class_8038<?> bundle) {
+            for (Object sub : bundle.method_48324()) if (sub instanceof net.minecraft.class_2604 add) this.onAddEntity(add);
+        } else if (event.packet instanceof net.minecraft.class_2604 add) this.onAddEntity(add);
         // server messages while a shot is watched (for example a protection plugin saying no) go to the log
         else if (this.watchUntil >= 0 && event.packet instanceof net.minecraft.class_7439 msg) {
             try { log("server msg: " + msg.comp_763().method_10851()); } catch (Throwable ignored) {}
         }
+    }
+
+    private void onAddEntity(net.minecraft.class_2604 add) {
+        if (add.method_11169() != net.minecraft.class_1299.field_6122 && add.method_11169() != net.minecraft.class_1299.field_6135) return;
+        var p = this.mc.field_1724;
+        if (p == null || add.method_11166() != p.method_5628()) return; // data = owner id
+        if (this.shotNanos == 0L || System.nanoTime() - this.shotNanos > 3_000_000_000L || this.arrowPacketNanos != 0L) return;
+        this.arrowPacketNanos = System.nanoTime();
     }
 
     /** quiet = live preview: no messages, no test bookkeeping. */

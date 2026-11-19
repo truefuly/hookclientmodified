@@ -57,6 +57,7 @@ final class CartTest {
             cmd("effect give @s resistance infinite 255 true");
             cmd("time set day");
             cmd("gamerule doFireTick false");
+            cmd("gamerule tnt_explodes " + !Boolean.getBoolean("hook.carttest.notnt")); // the world remembers it
             phase = 0;
             return;
         }
