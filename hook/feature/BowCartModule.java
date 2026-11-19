@@ -317,6 +317,13 @@ public final class BowCartModule extends Module {
         // a normal arrow can't light a TNT minecart: placing one would only catch the arrow
         if (!CartPlanner.hasFlame(bow)) return quiet || this.flameOnly.getValue() ? null : this.fail("this bow has no Flame - the arrow can't light the cart");
         if (power < Math.max(0.1f, this.minPower.getFloatValue() / 100.0f)) return null;
+        // The server counts the draw itself, from when YOUR start-drawing packet arrived. With lag that can be a few
+        // ticks less than you see; under 3 server ticks it fires no arrow at all - and then a cart placed with the
+        // shot would just stand there. So only cart shots the server surely fires (2 ticks + your ping of margin).
+        if (!quiet && p.method_6115()) {
+            int need = 3 + 2 + this.pingTicks();
+            if (p.method_6048() < need) return this.fail("drawn too short for the server (" + p.method_6048() + "/" + need + " ticks) - just shot, no cart placed");
+        }
         if (CartPlanner.cartSlot() < 0) return quiet ? null : this.fail("no TNT minecart in hotbar");
 
         // same launch as BowItem: eye - 0.1, rotation * power * 3, plus your own movement
@@ -336,6 +343,16 @@ public final class BowCartModule extends Module {
     }
 
     private static final CartPlanner.Plan SHOOT_ONLY = new CartPlanner.Plan();
+
+    /** Your ping in game ticks (50 ms each), from the tab list. */
+    private int pingTicks() {
+        try {
+            net.minecraft.class_640 info = this.mc.method_1562().method_2871(this.mc.field_1724.method_5667());
+            return info == null ? 0 : (Math.max(0, info.method_2959()) + 49) / 50;
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
 
     private CartPlanner.Plan crosshairPlan(class_746 p, boolean quiet, class_243 start, class_243 vel) {
         {
