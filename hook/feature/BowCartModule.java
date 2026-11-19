@@ -61,6 +61,16 @@ public final class BowCartModule extends Module {
     private class_2338 watchRail;
     private boolean watchArrow, watchCart;
     private volatile boolean watchBoom;
+    // Lag fix: some servers (anticheats / plugins) drop the arrow when rail + cart come in the same tick as the bow
+    // release. After such a dropped shot the placement is sent 1 (then 2) ticks later, aimed at where the arrow is by then.
+    private static final int TEST_DELAY = Integer.getInteger("hook.bowdelay", 0);
+    private int placeDelay = TEST_DELAY;
+    private String delayServer = "";
+    private CartPlanner.Plan delayed;
+    private int delayedAt = -1;
+    private class_243 launchStart, launchVel;
+    private float launchPower;
+    private int shotTick, watchArrowAt = -1, watchCartAt = -1;
 
 
     public BowCartModule() {
@@ -105,6 +115,7 @@ public final class BowCartModule extends Module {
         this.pending = null;
         this.turner.stop();
         this.lookBackAt = -1;
+        this.delayed = null;
         super.onDisable();
     }
 
@@ -131,6 +142,55 @@ public final class BowCartModule extends Module {
         if (p.field_6012 - m.lastPlace < m.cooldown.getIntValue()) return;
         if (m.skipIfCart.getValue() && m.hasCart(plan.rail)) return;
         m.lastPlace = p.field_6012;
+        m.shotTick = p.field_6012;
+        String srv = m.mc.method_1558() == null ? "" : String.valueOf(m.mc.method_1558().field_3761);
+        if (!srv.equals(m.delayServer)) { m.delayServer = srv; m.placeDelay = TEST_DELAY; }
+        log("shot server=" + (srv.isEmpty() ? "singleplayer" : srv) + " ping=" + m.pingTicks() * 50 + "ms delay=" + m.placeDelay + " draw=" + m.launchPower + " rail=" + plan.rail.method_23854());
+        if (m.placeDelay > 0) {
+            // the release goes out alone in this tick; rail + cart follow in a later tick
+            m.delayed = plan;
+            m.delayedAt = p.field_6012 + m.placeDelay;
+            return;
+        }
+        m.placeNow(p, plan);
+    }
+
+    private static void log(String msg) {
+        System.out.println("[BowCart] " + msg);
+    }
+
+    /** Delayed placement: follow the predicted arrow forward by the delay and use a spot it still has to fly through. */
+    private void placeDelayed(class_746 p) {
+        if (this.delayed == null || p.field_6012 < this.delayedAt) return;
+        CartPlanner.Plan plan = this.delayed;
+        this.delayed = null;
+        if (this.launchStart == null || this.mc.field_1687 == null) return;
+        class_243 pos = this.launchStart, vel = this.launchVel;
+        // the arrow moves once in the tick it is fired, then once per tick until our packets are handled
+        for (int i = 0; i < this.placeDelay; i++) {
+            class_243 next = pos.method_1019(vel);
+            net.minecraft.class_3965 bh = this.mc.field_1687.method_17742(new net.minecraft.class_3959(pos, next, net.minecraft.class_3959.class_3960.field_17558, net.minecraft.class_3959.class_242.field_1348, p));
+            if (bh != null && bh.method_17783() != net.minecraft.class_239.class_240.field_1333) { pos = null; break; }
+            pos = next;
+            vel = vel.method_1021(0.99).method_1031(0, -0.05, 0);
+        }
+        CartPlanner.Plan use = null;
+        if (pos != null) {
+            if (CartPlanner.trace(pos, vel, CartPlanner.cartBox(plan.rail, plan.slope)).hitsCart) use = plan;
+            else try { use = this.pathPlan(p, true, pos, vel, this.launchPower); } catch (Throwable t) { use = null; }
+        }
+        if (use == null) {
+            log("delayed: arrow already past every spot in reach");
+            this.fail("lag fix on (" + this.placeDelay + " tick): too close - aim a bit further away");
+            return;
+        }
+        if (this.skipIfCart.getValue() && this.hasCart(use.rail)) return;
+        if (CartTest.ENABLED) { CartTest.planRail = use.rail; CartTest.planInfo = (CartTest.planInfo == null ? "" : CartTest.planInfo) + " delayed=" + this.placeDelay + " rail=" + use.rail.method_23854(); }
+        this.placeNow(p, use);
+    }
+
+    private void placeNow(class_746 p, CartPlanner.Plan plan) {
+        BowCartModule m = this;
         int slot = p.method_31548().method_67532();
         float yaw0 = p.method_36454(), pitch0 = p.method_36455();
         boolean human = m.humanize.getValue();
@@ -156,6 +216,9 @@ public final class BowCartModule extends Module {
         m.watchRail = plan.rail;
         m.watchArrow = false;
         m.watchCart = false;
+        m.watchArrowAt = -1;
+        m.watchCartAt = -1;
+        log("placed +" + (p.field_6012 - m.shotTick) + "t rail=" + plan.rail.method_23854());
         m.watchBoom = false;
         if (m.swapBack.getValue()) {
             int delay = human ? CartHuman.ticks(m.swapDelay.getValue() + 0.5, 0.7, Math.max(1, m.swapDelay.getIntValue())) : m.swapDelay.getIntValue();
@@ -232,6 +295,7 @@ public final class BowCartModule extends Module {
             if (!p.method_6115()) InventoryUtil.swap(this.swapBackSlot);
             this.swapBackAt = -1;
         }
+        this.placeDelayed(p);
         this.watchShot(p);
         if (!this.highlight.getValue()) { this.preview = null; return; }
         try { this.preview = this.plan(true); } catch (Throwable t) { this.preview = null; }
@@ -280,22 +344,31 @@ public final class BowCartModule extends Module {
 
     private void watchShot(class_746 p) {
         if (this.watchUntil < 0 || this.mc.field_1687 == null) return;
-        if (this.watchBoom) { this.watchUntil = -1; return; }
+        if (this.watchBoom) { this.watchUntil = -1; log("BOOM +" + (p.field_6012 - this.shotTick) + "t arrowSeen=" + this.watchArrowAt + " cartSeen=" + this.watchCartAt); return; }
         if (!this.watchArrow && !this.mc.field_1687.method_8390(net.minecraft.class_1665.class, p.method_5829().method_1014(16.0),
-                a -> a.method_24921() == p && a.field_6012 < 40).isEmpty()) this.watchArrow = true;
+                a -> a.method_24921() == p && a.field_6012 < 40).isEmpty()) { this.watchArrow = true; this.watchArrowAt = p.field_6012 - this.shotTick; }
         boolean cart = this.hasCart(this.watchRail);
-        if (cart) this.watchCart = true;
+        if (cart && !this.watchCart) { this.watchCart = true; this.watchCartAt = p.field_6012 - this.shotTick; }
         if (p.field_6012 < this.watchUntil) return;
         this.watchUntil = -1;
+        log("result arrowSeen=" + this.watchArrowAt + " cartSeen=" + this.watchCartAt + " cartNow=" + cart + " railNow=" + CartPlanner.isRailBlock(this.watchRail) + " boom=false");
         if (!this.watchCart) { this.fail("the cart didn't stay on the rail (the server removed it)"); return; }
         if (!cart) return; // cart is gone: it went off
-        if (!this.watchArrow) this.fail("the server didn't fire your arrow");
-        else this.fail("arrow fired, but the cart didn't explode - TNT is probably blocked here");
+        if (!this.watchArrow) {
+            if (this.placeDelay < 2) {
+                this.placeDelay++;
+                this.fail("the server dropped your arrow - lag fix: next shots place " + this.placeDelay + " tick later");
+            } else this.fail("the server didn't fire your arrow");
+        } else this.fail("arrow fired, but the cart didn't explode - TNT is probably blocked here");
     }
 
     @EventListener
     public void onPacket(hook.event.events.PacketReceiveEvent event) {
         if (event.packet instanceof net.minecraft.class_2664) this.watchBoom = true;
+        // server messages while a shot is watched (for example a protection plugin saying no) go to the log
+        else if (this.watchUntil >= 0 && event.packet instanceof net.minecraft.class_7439 msg) {
+            try { log("server msg: " + msg.comp_763().method_10851()); } catch (Throwable ignored) {}
+        }
     }
 
     /** quiet = live preview: no messages, no test bookkeeping. */
@@ -331,6 +404,7 @@ public final class BowCartModule extends Module {
         class_243 vel = CartPlanner.dir(p.method_36454(), p.method_36455()).method_1021(power * 3.0);
         class_243 mv = p.method_60478();
         vel = vel.method_1031(mv.field_1352, p.method_24828() ? 0.0 : mv.field_1351, mv.field_1350);
+        if (!quiet) { this.launchStart = start; this.launchVel = vel; this.launchPower = power; }
 
         if (this.crosshair.getValue() && power >= this.quickDraw.getFloatValue() / 100.0f) {
             CartPlanner.Plan cp = this.crosshairPlan(p, quiet, start, vel);
