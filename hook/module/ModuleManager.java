@@ -225,6 +225,13 @@ public final class ModuleManager {
         if (settings != null) {
             com.spotifyclient.media.MediaBackend.setMode(settings.backend.getMode());
         }
+        // the floating 3D lyric words in the world ("Lyrics Text") are removed for good - only HUD Lyrics stays
+        com.spotifyclient.ModSettings.enable3DLyrics = false;
+        try {
+            com.spotifyclient.module.ClientModule lyricsText = com.spotifyclient.module.ModuleRegistry.byName("Lyrics Text");
+            if (lyricsText != null && lyricsText.hasToggle() && lyricsText.isOn()) lyricsText.setOn(false);
+        } catch (Throwable ignored) {
+        }
         for (Module module : this.modules) {
             if (module instanceof VerseFallModuleBridge bridge) bridge.syncSettings();
         }
