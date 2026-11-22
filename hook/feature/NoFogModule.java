@@ -54,6 +54,13 @@ public final class NoFogModule extends Module {
         instance = this;
     }
 
+    /** Self-test: set mode / custom distances like a user config. */
+    void testConfig(int modeIndex, double startPct, double endPct) {
+        this.mode.setModeIndex(modeIndex);
+        this.start.getValue(startPct);
+        this.end.getValue(endPct);
+    }
+
     /** Whether the black sky disc and void darkness should be skipped. */
     public static boolean removesDarkSky() {
         NoFogModule m = instance;
@@ -100,6 +107,12 @@ public final class NoFogModule extends Module {
             // under water / in lava vanilla also leaves the sky and clouds at distance 0 (the coloured wall you see
             // instead of the sky) - clear them too
             if (on) { fog[4] = custom ? e : FAR; fog[5] = custom ? e : FAR; }
+        }
+        if (!air && env) {
+            // water / lava / powder snow: always fully clear, whatever the mode ("Custom" distances are for air fog)
+            fog[0] = FAR; fog[1] = FAR + 1.0f; fog[2] = FAR; fog[3] = FAR + 1.0f; fog[4] = FAR; fog[5] = FAR;
+            tint(camera, fogColor);
+            return;
         }
         if (env) { fog[0] = s; fog[1] = e; }
         if (edge) { fog[2] = s; fog[3] = e; }

@@ -54,6 +54,7 @@ final class CartTest {
         if ("slime".equals(ONLY)) { slime(mc, p); return; }
         if ("creative".equals(ONLY)) { creative(mc, p); return; }
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
+        if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -353,6 +354,43 @@ final class CartTest {
         }
         if (clock == 465) net.minecraft.class_318.method_22690(mc.field_1697, "basefinder.png", mc.method_1522(), 1, msg -> {});
         if (clock == 480) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=fog: under water and in lava, No Fog off/on with the user's "Custom 0%/10%" config. */
+    private static void fog(class_310 mc, net.minecraft.class_746 p) {
+        NoFogModule nf = (NoFogModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(NoFogModule.class);
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("effect give @s fire_resistance infinite 0 true");
+            cmd("effect give @s water_breathing infinite 0 true");
+            for (int b = 0; b < 2; b++) {
+                int z = b * 30;
+                cmd("fill 0 99 " + (z - 7) + " 81 113 " + (z + 7) + " glass hollow");
+                cmd("fill 1 100 " + (z - 6) + " 80 112 " + (z + 6) + " " + (b == 0 ? "water" : "lava"));
+                String[] col = {"red", "orange", "yellow", "lime", "cyan", "blue", "purple"};
+                for (int i = 0; i < 7; i++) cmd("fill " + (10 + i * 10) + " 100 " + (z + 2 - (i % 2) * 6) + " " + (10 + i * 10) + " 110 " + (z + 4 - (i % 2) * 6) + " " + col[i] + "_concrete");
+            }
+            nf.testConfig(1, 0.0, 10.0);
+            if (nf.isEnabled()) nf.setEnabled(false);
+            cmd("tp @s 2 105 0 -90 0"); cmd("clear @s");
+        }
+        if (clock == 140 || clock == 225) mc.field_1705.method_1743().method_1808(false);
+        if (clock == 150) shot(mc, "fog_water_off");
+        if (clock == 155) nf.setEnabled(true);
+        if (clock == 175) shot(mc, "fog_water_on");
+        if (clock == 180) { nf.setEnabled(false); cmd("tp @s 2 105 30 -90 0"); }
+        if (clock == 230) shot(mc, "fog_lava_off");
+        if (clock == 235) nf.setEnabled(true);
+        if (clock == 255) shot(mc, "fog_lava_on");
+        if (clock == 260) System.out.println("CARTTEST FOG medium=" + mc.field_1773.method_19418().method_19334() + " enabled=" + nf.isEnabled());
+        if (clock == 270) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static void shot(class_310 mc, String name) {
+        System.out.println("CARTTEST FOG shot " + name + " medium=" + mc.field_1773.method_19418().method_19334());
+        net.minecraft.class_318.method_22690(mc.field_1697, name + ".png", mc.method_1522(), 1, msg -> {});
     }
 
     private static String refList(long seed) {
