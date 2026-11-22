@@ -21,7 +21,11 @@ import net.minecraft.class_2338;
 import net.minecraft.class_243;
 import net.minecraft.class_2680;
 
-/** The Base Finder modules (own category). All of them read the shared {@link BaseFinder} chunk scan. */
+/**
+ * The Base Finder modules (own category). All of them read the shared {@link BaseFinder} chunk scan, which already
+ * separates blocks worldgen never makes from ones that structures also generate - so villages, trial chambers, ancient
+ * cities, mansions, temples, shipwrecks, bastions, end cities and so on are not flagged.
+ */
 public final class BaseFinderModules {
     private BaseFinderModules() {
     }
@@ -53,7 +57,7 @@ public final class BaseFinderModules {
         @EventListener
         public void onTick(TickEvent event) {
             BaseFinder.tick(this.needAir());
-            this.check();
+            if (this.mc.field_1687 != null) this.check();
         }
 
         void check() {
@@ -69,6 +73,10 @@ public final class BaseFinderModules {
             return BaseFinder.distSq(p) <= r * r;
         }
 
+        boolean chunkInRange(BaseFinder.ChunkData cd) {
+            return this.inRange(new class_2338(cd.centerX(), (int) BaseFinder.feetY(), cd.centerZ()));
+        }
+
         void alertOnce(long key, String msg) {
             if (this.alerts.getValue() && this.alerted.add(key)) BaseFinder.chat(String.valueOf(this.getName()), msg);
         }
@@ -80,45 +88,51 @@ public final class BaseFinderModules {
         }
     }
 
-    /** Marks every block of the given kinds in range (nearest 2000). */
-    static void drawKinds(Esp m, BaseFinder.Draw d, Color c, int... kinds) {
-        int n = 0;
-        for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-            for (int k : kinds) {
-                for (class_2338 p : cd.hits[k]) {
-                    if (!m.inRange(p)) continue;
-                    d.block(p, c, m.fill.getIntValue());
-                    if (m.tracers.getValue()) d.tracer(class_243.method_24953(p), c);
-                    if (++n > 2000) return;
-                }
-            }
+    /** Marks the given blocks in range (at most 2000). Returns how many were drawn. */
+    static int drawList(Esp m, BaseFinder.Draw d, Color c, List<class_2338> list, int n) {
+        for (class_2338 p : list) {
+            if (n >= 2000) return n;
+            if (!m.inRange(p)) continue;
+            d.block(p, c, m.fill.getIntValue());
+            if (m.tracers.getValue()) d.tracer(class_243.method_24953(p), c);
+            n++;
         }
+        return n;
+    }
+
+    static String xz(BaseFinder.ChunkData cd) {
+        return cd.centerX() + ", " + cd.centerZ();
+    }
+
+    static String pos(class_2338 p) {
+        return p.method_10263() + ", " + p.method_10264() + ", " + p.method_10260();
     }
 
     // =================================================================== 1. Base Blocks
     public static final class BaseBlocks extends Esp {
-        private final NumberSetting minScore = new NumberSetting(EncryptedString.of("Base Score"), 2.0, 40.0, 6.0, 1.0);
+        private final NumberSetting minScore = new NumberSetting(EncryptedString.of("Base Score"), 4.0, 60.0, 10.0, 1.0);
         private final BooleanSetting chunks = new BooleanSetting(EncryptedString.of("Highlight Chunks"), true);
         private final BooleanSetting blocks = new BooleanSetting(EncryptedString.of("Show Blocks"), true);
 
         public BaseBlocks() {
-            super("Base ESP", "Finds player-made blocks (beds, crafting/furnaces, redstone, concrete, glass, beacons, anvils...) and scores every chunk - many of them together = a base.", 0xFFFF5A5A);
-            this.minScore.setDescription(EncryptedString.of("How many player blocks a chunk needs to count as a base (chunk highlight + alert)."));
+            super("Base ESP", "Finds player-made blocks and scores every chunk. Blocks worldgen never makes (enchanting tables, anvils, beacons, shulkers, observers, concrete...) always count; blocks villages, trial chambers, ancient cities, mansions etc. also have only count outside those structures.", 0xFFFF5A5A);
+            this.minScore.setDescription(EncryptedString.of("Score a chunk needs to count as a base. Never-natural blocks give 2, others 1, every different block type +1."));
             this.chunks.setDescription(EncryptedString.of("Colours whole chunks that reach the base score."));
             this.blocks.setDescription(EncryptedString.of("Boxes around every single player block."));
             this.addSettings(this.color, this.minScore, this.chunks, this.blocks, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
-        int score(BaseFinder.ChunkData cd) {
-            return cd.count(BaseFinder.BASE) + cd.count(BaseFinder.STORAGE) / 2 + cd.count(BaseFinder.LIGHT) / 3 + cd.count(BaseFinder.SIGN);
+        boolean isBase(BaseFinder.ChunkData cd) {
+            return BaseFinder.settled(cd) && BaseFinder.baseScore(cd) >= this.minScore.getIntValue();
         }
 
         @Override
         void check() {
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                int s = this.score(cd);
-                if (s >= this.minScore.getIntValue())
-                    this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "possible base at " + ((cd.cx << 4) + 8) + ", " + ((cd.cz << 4) + 8) + " (score " + s + ", " + cd.count(BaseFinder.BASE) + " player blocks)");
+                if (!this.isBase(cd)) continue;
+                String zone = BaseFinder.naturalZone(cd.cx, cd.cz);
+                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "base at " + xz(cd) + " (score " + cd.score + ", " + cd.distinct + " block types"
+                    + (zone != null ? ", built inside a structure (" + zone + ")" : "") + ")");
             }
         }
 
@@ -126,13 +140,11 @@ public final class BaseFinderModules {
         public void onRender3D(Render3DEvent event) {
             BaseFinder.Draw d = new BaseFinder.Draw();
             Color c = BaseFinder.col(this.color.getArgb(), 230);
-            if (this.blocks.getValue()) drawKinds(this, d, c, BaseFinder.BASE);
-            if (this.chunks.getValue()) {
-                double y = BaseFinder.feetY();
-                for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                    int s = this.score(cd);
-                    if (s >= this.minScore.getIntValue()) d.chunk(cd.cx, cd.cz, y, c, Math.min(120, 30 + s * 4));
-                }
+            double y = BaseFinder.feetY();
+            int n = 0;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (this.blocks.getValue()) n = drawList(this, d, c, BaseFinder.finds(cd, BaseFinder.BASE, BaseFinder.BASE_W), n);
+                if (this.chunks.getValue() && this.isBase(cd)) d.chunk(cd.cx, cd.cz, y, c, Math.min(120, 30 + cd.score * 2));
             }
             d.render(event, this.walls.getValue());
         }
@@ -141,19 +153,23 @@ public final class BaseFinderModules {
     // =================================================================== 2. Storage
     public static final class Storage extends Esp {
         private final BooleanSetting entities = new BooleanSetting(EncryptedString.of("Chest Minecarts & Donkeys"), true);
-        private final NumberSetting minChunk = new NumberSetting(EncryptedString.of("Stash Alert"), 2.0, 60.0, 8.0, 1.0);
+        private final NumberSetting minChunk = new NumberSetting(EncryptedString.of("Stash Alert"), 2.0, 60.0, 6.0, 1.0);
 
         public Storage() {
-            super("Storage ESP", "Chests, barrels, shulkers, ender chests, hoppers, furnaces... plus chest minecarts and donkeys/llamas with chests. Alerts on stashes.", 0xFFFFB347);
-            this.minChunk.setDescription(EncryptedString.of("This many containers in one chunk = stash alert."));
+            super("Storage ESP", "Chests, barrels, shulkers, ender chests, hoppers, furnaces... plus chest minecarts and donkeys/llamas with chests. Loot chests of structures, shipwrecks and buried treasure are left out. Alerts on stashes.", 0xFFFFB347);
+            this.minChunk.setDescription(EncryptedString.of("This many player containers in one chunk = stash alert."));
             this.addSettings(this.color, this.entities, this.minChunk, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
         @Override
         void check() {
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                int n = cd.count(BaseFinder.STORAGE);
-                if (n >= this.minChunk.getIntValue()) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "stash: " + n + " containers at " + ((cd.cx << 4) + 8) + ", " + ((cd.cz << 4) + 8));
+                if (!BaseFinder.settled(cd)) continue;
+                List<class_2338> f = BaseFinder.finds(cd, BaseFinder.STORAGE, BaseFinder.STORAGE_W);
+                int shulkers = 0;
+                for (class_2338 p : cd.hits[BaseFinder.STORAGE]) if (BaseFinder.id(this.mc.field_1687.method_8320(p).method_26204()).contains("shulker")) shulkers++;
+                if (f.size() >= this.minChunk.getIntValue() || shulkers >= 2)
+                    this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "stash: " + f.size() + " containers" + (shulkers > 0 ? " (" + shulkers + " shulkers)" : "") + " at " + xz(cd));
             }
         }
 
@@ -163,7 +179,7 @@ public final class BaseFinderModules {
             Color c = BaseFinder.col(this.color.getArgb(), 230);
             int n = 0;
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                for (class_2338 p : cd.hits[BaseFinder.STORAGE]) {
+                for (class_2338 p : BaseFinder.finds(cd, BaseFinder.STORAGE, BaseFinder.STORAGE_W)) {
                     if (!this.inRange(p)) continue;
                     String id = BaseFinder.id(this.mc.field_1687.method_8320(p).method_26204());
                     Color k = id.contains("shulker") ? new Color(200, 110, 255, 235) : id.equals("ender_chest") ? new Color(60, 210, 170, 235) : id.contains("chest") || id.equals("barrel") ? c : new Color(170, 170, 170, 200);
@@ -174,20 +190,20 @@ public final class BaseFinderModules {
             }
             if (this.entities.getValue() && this.mc.field_1687 != null) {
                 for (class_1297 e : this.mc.field_1687.method_18112()) {
-                    String t = entityId(e);
-                    boolean chested = t.equals("chest_minecart") || t.equals("hopper_minecart") || t.equals("furnace_minecart") || t.endsWith("chest_boat")
-                        || (e instanceof net.minecraft.class_1492 h && h.method_6703());
-                    if (!chested || e.method_5707(this.mc.field_1724.method_33571()) > this.range.getValue() * this.range.getValue()) continue;
+                    String t = BaseFinder.entityId(e);
+                    boolean cart = t.equals("chest_minecart") || t.equals("hopper_minecart") || t.endsWith("chest_boat") || t.endsWith("chest_raft");
+                    boolean animal = e instanceof net.minecraft.class_1492 h && h.method_6703() && !t.equals("trader_llama");
+                    if (!cart && !animal) continue;
+                    // mineshaft loot carts are natural
+                    if (t.equals("chest_minecart") && BaseFinder.naturalAt(e.method_23317(), e.method_23321())) continue;
+                    if (e.method_5707(this.mc.field_1724.method_33571()) > this.range.getValue() * this.range.getValue()) continue;
                     net.minecraft.class_238 b = e.method_5829();
                     d.box(b.field_1323, b.field_1322, b.field_1321, b.field_1320, b.field_1325, b.field_1324, c, this.fill.getIntValue());
+                    if (this.tracers.getValue()) d.tracer(new class_243(e.method_23317(), e.method_23318(), e.method_23321()), c);
                 }
             }
             d.render(event, this.walls.getValue());
         }
-    }
-
-    static String entityId(class_1297 e) {
-        try { return net.minecraft.class_7923.field_41177.method_10221(e.method_5864()).method_12832(); } catch (Throwable t) { return "?"; }
     }
 
     // =================================================================== 3. New Chunks
@@ -272,36 +288,155 @@ public final class BaseFinderModules {
         }
     }
 
-    // =================================================================== 4. Growth (chunk age)
-    public static final class Growth extends Esp {
-        private final NumberSetting kelpPct = new NumberSetting(EncryptedString.of("Kelp Grown %"), 50.0, 100.0, 85.0, 5.0);
-        private final BooleanSetting chunks = new BooleanSetting(EncryptedString.of("Highlight Chunks"), true);
-        private final BooleanSetting marks = new BooleanSetting(EncryptedString.of("Mark Grown Plants"), false);
+    // =================================================================== 4. Kelp ESP
+    /**
+     * Worldgen kelp tops are always age 20-23. Kelp only grows (age 24-25 = grew at least once / twice) while a player is
+     * within simulation distance, about 8 minutes per step. Grown kelp = someone spent a long time here.
+     */
+    public static final class KelpEsp extends Esp {
+        private final NumberSetting minGrown = new NumberSetting(EncryptedString.of("Min Grown Kelp"), 1.0, 40.0, 3.0, 1.0);
+        private final NumberSetting minPct = new NumberSetting(EncryptedString.of("Grown %"), 5.0, 100.0, 25.0, 5.0);
+        private final BooleanSetting marks = new BooleanSetting(EncryptedString.of("Mark Kelp Tops"), true);
 
-        public Growth() {
-            super("Growth Detector", "Plants only grow while a player keeps the chunk loaded: kelp reaching the surface, fully grown amethyst, ripe berries everywhere = this area was lived in for a long time.", 0xFFB06BFF);
-            this.kelpPct.setDescription(EncryptedString.of("Share of kelp columns that reached the water surface for a chunk to count as 'lived in'. Fresh chunks have short kelp."));
-            this.chunks.setDescription(EncryptedString.of("Colours lived-in chunks."));
-            this.marks.setDescription(EncryptedString.of("Boxes the grown kelp tops / amethyst clusters / ripe berries."));
-            this.addSettings(this.color, this.kelpPct, this.chunks, this.marks, this.range, this.fill, this.walls, this.alerts);
+        public KelpEsp() {
+            super("Kelp ESP", "Finds chunks with grown kelp and marks them at the water surface. Freshly generated kelp never passes age 23 - older kelp only exists where a player stayed loaded for a long time (bases, AFK spots, farms).", 0xFF3DDC84);
+            this.minGrown.setDescription(EncryptedString.of("Grown kelp plants a chunk needs."));
+            this.minPct.setDescription(EncryptedString.of("Share of the kelp that could still grow that actually grew."));
+            this.marks.setDescription(EncryptedString.of("Boxes on every grown kelp top."));
+            this.addSettings(this.color, this.minGrown, this.minPct, this.marks, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
-        /** 0 = no sign, else a short reason. */
-        String reason(BaseFinder.ChunkData cd) {
-            int kelp = cd.count(BaseFinder.KELP), top = cd.count(BaseFinder.KELP_TOP);
-            if (kelp >= 4 && top * 100 >= kelp * this.kelpPct.getIntValue()) return "kelp grown " + top + "/" + kelp;
-            int full = cd.count(BaseFinder.AMETHYST_FULL), bud = cd.count(BaseFinder.AMETHYST_BUD);
-            if (full >= 6 && full >= bud * 3) return "amethyst grown " + full + " clusters / " + bud + " buds";
-            int ber = cd.count(BaseFinder.BERRY), ripe = cd.count(BaseFinder.BERRY_RIPE);
-            if (ber >= 6 && ripe * 100 >= ber * 90) return "berries ripe " + ripe + "/" + ber;
-            return null;
+        boolean grown(BaseFinder.ChunkData cd) {
+            int grown = cd.count(BaseFinder.KELP_GROWN);
+            int growable = cd.count(BaseFinder.KELP) - cd.kelpStuck;
+            return grown >= this.minGrown.getIntValue() && growable > 0 && grown * 100 >= growable * this.minPct.getIntValue();
+        }
+
+        /** The water surface above this chunk's kelp. */
+        double surface(BaseFinder.ChunkData cd) {
+            int top = Integer.MIN_VALUE;
+            for (class_2338 p : cd.hits[BaseFinder.KELP]) top = Math.max(top, p.method_10264());
+            if (top == Integer.MIN_VALUE) return 63;
+            class_2338 p = new class_2338(cd.centerX(), top, cd.centerZ());
+            for (class_2338 k : cd.hits[BaseFinder.KELP]) if (k.method_10264() == top) { p = k; break; }
+            int y = p.method_10264();
+            while (y < 320 && !this.mc.field_1687.method_8320(new class_2338(p.method_10263(), y + 1, p.method_10260())).method_26227().method_15769()) y++;
+            return y + 1.0;
         }
 
         @Override
         void check() {
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (!this.grown(cd)) continue;
+                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "grown kelp at " + xz(cd) + " (" + cd.count(BaseFinder.KELP_GROWN) + "/" + (cd.count(BaseFinder.KELP) - cd.kelpStuck) + " grew - long loaded)");
+            }
+        }
+
+        @EventListener
+        public void onRender3D(Render3DEvent event) {
+            BaseFinder.Draw d = new BaseFinder.Draw();
+            Color c = BaseFinder.col(this.color.getArgb(), 230);
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (!this.grown(cd) || !this.chunkInRange(cd)) continue;
+                d.chunk(cd.cx, cd.cz, this.surface(cd), c, Math.max(this.fill.getIntValue(), 25));
+                if (this.marks.getValue()) for (class_2338 p : cd.hits[BaseFinder.KELP_GROWN]) d.block(p, c, 0);
+                if (this.tracers.getValue()) d.tracer(new class_243(cd.centerX(), this.surface(cd), cd.centerZ()), c);
+            }
+            d.render(event, this.walls.getValue());
+        }
+    }
+
+    // =================================================================== 5. Amethyst ESP
+    /**
+     * Geodes generate with all four bud stages mixed (about a quarter fully grown). Buds only grow while a player is
+     * nearby, so a geode that is nearly all clusters was kept loaded for a long time.
+     */
+    public static final class AmethystEsp extends Esp {
+        private final NumberSetting minPct = new NumberSetting(EncryptedString.of("Grown %"), 30.0, 100.0, 60.0, 5.0);
+        private final NumberSetting minClusters = new NumberSetting(EncryptedString.of("Min Clusters"), 1.0, 40.0, 6.0, 1.0);
+        private final BooleanSetting all = new BooleanSetting(EncryptedString.of("Show All Clusters"), false);
+
+        public AmethystEsp() {
+            super("Amethyst ESP", "Highlights fully grown amethyst clusters. A geode that is mostly clusters grew while someone was near for a long time; fresh geodes are only about a quarter grown.", 0xFFC77DFF);
+            this.minPct.setDescription(EncryptedString.of("Share of fully grown clusters a geode needs to count as grown (fresh ones are ~25%)."));
+            this.minClusters.setDescription(EncryptedString.of("Clusters needed before a chunk is judged."));
+            this.all.setDescription(EncryptedString.of("Also box clusters in geodes that are not grown."));
+            this.addSettings(this.color, this.minPct, this.minClusters, this.all, this.range, this.fill, this.tracers, this.walls, this.alerts);
+        }
+
+        boolean grown(BaseFinder.ChunkData cd) {
+            int full = cd.count(BaseFinder.AMETHYST_FULL), bud = cd.count(BaseFinder.AMETHYST_BUD);
+            return full >= this.minClusters.getIntValue() && full * 100 >= (full + bud) * this.minPct.getIntValue();
+        }
+
+        @Override
+        void check() {
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (!this.grown(cd)) continue;
+                class_2338 p = cd.hits[BaseFinder.AMETHYST_FULL].get(0);
+                int full = cd.count(BaseFinder.AMETHYST_FULL), bud = cd.count(BaseFinder.AMETHYST_BUD);
+                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "grown geode at " + pos(p) + " (" + (full * 100 / (full + bud)) + "% clusters - long loaded)");
+            }
+        }
+
+        @EventListener
+        public void onRender3D(Render3DEvent event) {
+            BaseFinder.Draw d = new BaseFinder.Draw();
+            Color c = BaseFinder.col(this.color.getArgb(), 235);
+            Color dim = new Color(c.getRed(), c.getGreen(), c.getBlue(), 110);
+            int n = 0;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                boolean g = this.grown(cd);
+                if (!g && !this.all.getValue()) continue;
+                n = drawList(this, d, g ? c : dim, cd.hits[BaseFinder.AMETHYST_FULL], n);
+                if (g && this.chunkInRange(cd)) {
+                    int minY = Integer.MAX_VALUE;
+                    for (class_2338 p : cd.hits[BaseFinder.AMETHYST_FULL]) minY = Math.min(minY, p.method_10264());
+                    d.chunk(cd.cx, cd.cz, minY - 1.0, c, 20);
+                }
+            }
+            d.render(event, this.walls.getValue());
+        }
+    }
+
+    // =================================================================== 6. Growth (all signs together)
+    public static final class Growth extends Esp {
+        private final BooleanSetting chunks = new BooleanSetting(EncryptedString.of("Highlight Chunks"), true);
+        private final BooleanSetting marks = new BooleanSetting(EncryptedString.of("Mark Plants"), false);
+
+        public Growth() {
+            super("Growth Detector", "All plant clues in one: grown kelp (worldgen kelp never passes age 23), mostly-grown amethyst geodes, and picked or planted berry bushes (worldgen bushes are always ripe).", 0xFFB06BFF);
+            this.chunks.setDescription(EncryptedString.of("Colours chunks with a clue."));
+            this.marks.setDescription(EncryptedString.of("Boxes the plants that gave the clue."));
+            this.addSettings(this.color, this.chunks, this.marks, this.range, this.fill, this.walls, this.alerts);
+        }
+
+        /** null = no sign, else a short reason. */
+        String reason(BaseFinder.ChunkData cd) {
+            int grown = cd.count(BaseFinder.KELP_GROWN), growable = cd.count(BaseFinder.KELP) - cd.kelpStuck;
+            if (grown >= 3 && grown * 4 >= growable) return "kelp grew " + grown + "/" + growable;
+            int full = cd.count(BaseFinder.AMETHYST_FULL), bud = cd.count(BaseFinder.AMETHYST_BUD);
+            if (full >= 6 && full * 100 >= (full + bud) * 60) return "amethyst " + (full * 100 / (full + bud)) + "% grown";
+            int picked = cd.count(BaseFinder.BERRY_PICKED);
+            if (picked >= 3 && picked * 2 >= cd.count(BaseFinder.BERRY) && !this.foxNear(cd)) return picked + " berry bushes picked/planted";
+            return null;
+        }
+
+        /** Foxes eat berries too. */
+        private boolean foxNear(BaseFinder.ChunkData cd) {
+            for (class_1297 e : this.mc.field_1687.method_18112()) {
+                if (!BaseFinder.entityId(e).equals("fox")) continue;
+                if (Math.abs(e.method_23317() - cd.centerX()) < 40 && Math.abs(e.method_23321() - cd.centerZ()) < 40) return true;
+            }
+            return false;
+        }
+
+        @Override
+        void check() {
+            if (this.mc.field_1724.field_6012 % 20 != 0) return;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
                 String r = this.reason(cd);
-                if (r != null) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "lived-in chunk at " + ((cd.cx << 4) + 8) + ", " + ((cd.cz << 4) + 8) + " (" + r + ")");
+                if (r != null) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "lived-in chunk at " + xz(cd) + " (" + r + ")");
             }
         }
 
@@ -311,10 +446,10 @@ public final class BaseFinderModules {
             Color c = BaseFinder.col(this.color.getArgb(), 220);
             double y = BaseFinder.feetY();
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                if (this.reason(cd) == null) continue;
+                if (!this.alerted.contains(BaseFinder.key(cd.cx, cd.cz)) && !(this.alerts.getValue() ? false : this.reason(cd) != null)) continue;
                 if (this.chunks.getValue()) d.chunk(cd.cx, cd.cz, y, c, this.fill.getIntValue());
                 if (this.marks.getValue()) {
-                    for (int k : new int[]{BaseFinder.KELP_TOP, BaseFinder.AMETHYST_FULL, BaseFinder.BERRY_RIPE})
+                    for (int k : new int[]{BaseFinder.KELP_GROWN, BaseFinder.AMETHYST_FULL, BaseFinder.BERRY_PICKED})
                         for (class_2338 p : cd.hits[k]) if (this.inRange(p)) d.block(p, c, 0);
                 }
             }
@@ -322,17 +457,17 @@ public final class BaseFinderModules {
         }
     }
 
-    // =================================================================== 5. Light
+    // =================================================================== 7. Light
     public static final class Light extends Esp {
         private final BooleanSetting sources = new BooleanSetting(EncryptedString.of("Placed Light"), true);
         private final BooleanSetting hidden = new BooleanSetting(EncryptedString.of("Lit Caves"), true);
-        private final NumberSetting minLit = new NumberSetting(EncryptedString.of("Lit Cave Blocks"), 2.0, 60.0, 6.0, 1.0);
+        private final NumberSetting minLit = new NumberSetting(EncryptedString.of("Lit Cave Spots"), 2.0, 60.0, 6.0, 1.0);
 
         public Light() {
-            super("Light ESP", "Torches, lanterns, glowstone, sea lanterns, froglights, candles... that players place, and dark caves with block light but no natural source (torches hidden behind walls / in tunnels).", 0xFFFFE066);
+            super("Light ESP", "Torches, lanterns, glowstone, sea lanterns, froglights, candles, bulbs... that players place (not the ones villages, strongholds, ancient cities etc. come with), plus cave spots lit by light no natural source explains.", 0xFFFFE066);
             this.sources.setDescription(EncryptedString.of("Boxes every placed light source."));
-            this.hidden.setDescription(EncryptedString.of("Marks cave air that is lit (light 9+) in chunks without lava/glow lichen/magma: someone put light there, even if you can't see it."));
-            this.minLit.setDescription(EncryptedString.of("Lit cave spots a chunk needs before it is marked."));
+            this.hidden.setDescription(EncryptedString.of("Marks dark-cave air that is lit (9+) where no lava, glow lichen, magma, glow berries, sea pickles... in reach could do it: someone put light there."));
+            this.minLit.setDescription(EncryptedString.of("Unexplained lit spots a chunk needs before it is marked."));
             this.addSettings(this.color, this.sources, this.hidden, this.minLit, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
@@ -341,23 +476,15 @@ public final class BaseFinderModules {
             return this.hidden.getValue();
         }
 
-        boolean litCave(BaseFinder.ChunkData cd) {
-            if (cd.count(BaseFinder.LIT_CAVE) < this.minLit.getIntValue()) return false;
-            // natural light in this chunk or right next to it explains it
-            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
-                BaseFinder.ChunkData n = BaseFinder.get(cd.cx + dx, cd.cz + dz);
-                if (n != null && n.count(BaseFinder.NATURAL_LIGHT) > 0) return false;
-            }
-            return true;
-        }
-
         @Override
         void check() {
+            if (this.mc.field_1724.field_6012 % 10 != 0) return;
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (!BaseFinder.settled(cd)) continue;
                 int below = 0;
-                for (class_2338 p : cd.hits[BaseFinder.LIGHT]) if (p.method_10264() < 40) below++;
-                if (below >= 3) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), below + " light sources underground at " + ((cd.cx << 4) + 8) + ", " + ((cd.cz << 4) + 8));
-                else if (this.hidden.getValue() && this.litCave(cd)) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "lit cave (hidden light) at " + ((cd.cx << 4) + 8) + ", " + ((cd.cz << 4) + 8));
+                for (class_2338 p : BaseFinder.finds(cd, BaseFinder.LIGHT, BaseFinder.LIGHT_W)) if (p.method_10264() < 40 && BaseFinder.overworld()) below++;
+                if (below >= 3) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), below + " placed lights underground at " + xz(cd));
+                else if (this.hidden.getValue() && BaseFinder.litByPlayer(cd, this.minLit.getIntValue())) this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "cave lit by a player at " + xz(cd));
             }
         }
 
@@ -365,16 +492,16 @@ public final class BaseFinderModules {
         public void onRender3D(Render3DEvent event) {
             BaseFinder.Draw d = new BaseFinder.Draw();
             Color c = BaseFinder.col(this.color.getArgb(), 230);
-            if (this.sources.getValue()) drawKinds(this, d, c, BaseFinder.LIGHT);
-            if (this.hidden.getValue()) {
-                Color h = new Color(255, 150, 40, 200);
-                for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                    if (!this.litCave(cd)) continue;
-                    int n = 0;
+            int n = 0;
+            Color h = new Color(255, 150, 40, 200);
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (this.sources.getValue()) n = drawList(this, d, c, BaseFinder.finds(cd, BaseFinder.LIGHT, BaseFinder.LIGHT_W), n);
+                if (this.hidden.getValue() && cd.litVerdict == Boolean.TRUE) {
+                    int m = 0;
                     for (class_2338 p : cd.hits[BaseFinder.LIT_CAVE]) {
                         if (!this.inRange(p)) continue;
                         d.box(p.method_10263() + 0.35, p.method_10264() + 0.35, p.method_10260() + 0.35, p.method_10263() + 0.65, p.method_10264() + 0.65, p.method_10260() + 0.65, h, 60);
-                        if (++n > 80) break;
+                        if (++m > 80) break;
                     }
                 }
             }
@@ -382,10 +509,10 @@ public final class BaseFinderModules {
         }
     }
 
-    // =================================================================== 6. Portals
+    // =================================================================== 8. Portals
     public static final class Portals extends Esp {
         public Portals() {
-            super("Portal ESP", "Lit nether portals (ruined portals are never lit - a lit one was made by a player), end portals, frames with eyes and end gateways.", 0xFFB050FF);
+            super("Portal ESP", "Lit nether portals (ruined portals are never lit - a lit one was made by a player) and activated end portals (not the End's exit portal).", 0xFFB050FF);
             this.addSettings(this.color, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
@@ -394,39 +521,46 @@ public final class BaseFinderModules {
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
                 if (cd.count(BaseFinder.PORTAL) == 0) continue;
                 class_2338 p = cd.hits[BaseFinder.PORTAL].get(0);
-                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), BaseFinder.id(this.mc.field_1687.method_8320(p).method_26204()).replace('_', ' ') + " at " + p.method_10263() + ", " + p.method_10264() + ", " + p.method_10260());
+                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), BaseFinder.id(this.mc.field_1687.method_8320(p).method_26204()).replace('_', ' ') + " at " + pos(p));
             }
         }
 
         @EventListener
         public void onRender3D(Render3DEvent event) {
             BaseFinder.Draw d = new BaseFinder.Draw();
-            drawKinds(this, d, BaseFinder.col(this.color.getArgb(), 230), BaseFinder.PORTAL);
+            Color c = BaseFinder.col(this.color.getArgb(), 230);
+            int n = 0;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) n = drawList(this, d, c, cd.hits[BaseFinder.PORTAL], n);
             d.render(event, this.walls.getValue());
         }
     }
 
-    // =================================================================== 7. Signs
+    // =================================================================== 9. Signs
     public static final class Signs extends Esp {
         private final BooleanSetting log = new BooleanSetting(EncryptedString.of("Log Text"), true);
 
         public Signs() {
-            super("Sign ESP", "Boxes every sign through walls and writes its text with coordinates in chat (bases are full of signs: names, warnings, shop labels).", 0xFF8BD3FF);
+            super("Sign ESP", "Boxes every player sign through walls and writes its text with coordinates in chat (bases are full of signs: names, warnings, shop labels). Village and igloo signs are left out.", 0xFF8BD3FF);
             this.log.setDescription(EncryptedString.of("Each sign's text goes into chat once."));
             this.addSettings(this.color, this.log, this.range, this.fill, this.tracers, this.walls);
         }
 
+        private boolean ok(BaseFinder.ChunkData cd) {
+            return BaseFinder.settled(cd) && !BaseFinder.natural(cd);
+        }
+
         @Override
         void check() {
-            if (!this.log.getValue() || this.mc.field_1687 == null) return;
+            if (!this.log.getValue()) return;
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                if (cd.count(BaseFinder.SIGN) == 0 || !this.ok(cd)) continue;
                 for (class_2338 p : cd.hits[BaseFinder.SIGN]) {
                     if (this.alerted.contains(p.method_10063())) continue;
                     if (!(this.mc.field_1687.method_8321(p) instanceof net.minecraft.class_2625 sign)) continue;
                     String text = signText(sign.method_49853()) + " " + signText(sign.method_49854());
                     this.alerted.add(p.method_10063());
                     if (text.isBlank()) continue;
-                    BaseFinder.chat("Sign", p.method_10263() + ", " + p.method_10264() + ", " + p.method_10260() + ": §e" + text.trim());
+                    BaseFinder.chat("Sign", pos(p) + ": §e" + text.trim());
                 }
             }
         }
@@ -443,34 +577,48 @@ public final class BaseFinderModules {
         @EventListener
         public void onRender3D(Render3DEvent event) {
             BaseFinder.Draw d = new BaseFinder.Draw();
-            drawKinds(this, d, BaseFinder.col(this.color.getArgb(), 230), BaseFinder.SIGN);
+            Color c = BaseFinder.col(this.color.getArgb(), 230);
+            int n = 0;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) if (cd.count(BaseFinder.SIGN) > 0 && this.ok(cd)) n = drawList(this, d, c, cd.hits[BaseFinder.SIGN], n);
             d.render(event, this.walls.getValue());
         }
     }
 
-    // =================================================================== 8. Entity clues
+    // =================================================================== 10. Entity clues
     public static final class EntityClues extends Esp {
         private final BooleanSetting frames = new BooleanSetting(EncryptedString.of("Item Frames & Armor Stands"), true);
         private final BooleanSetting pets = new BooleanSetting(EncryptedString.of("Tamed / Named / Leashed"), true);
         private final BooleanSetting farms = new BooleanSetting(EncryptedString.of("Animal Farms"), true);
         private final NumberSetting farmSize = new NumberSetting(EncryptedString.of("Farm Size"), 4.0, 40.0, 10.0, 1.0);
+        private final BooleanSetting villagers = new BooleanSetting(EncryptedString.of("Trading Halls"), true);
         private final BooleanSetting misc = new BooleanSetting(EncryptedString.of("Crystals, Boats, Carts"), true);
 
         public EntityClues() {
-            super("Entity Clues", "Entities only players leave behind: item frames, armor stands, tamed pets, name-tagged or leashed mobs, end crystals, parked boats/minecarts and animal farms (many of one kind packed together).", 0xFF5AC8FF);
+            super("Entity Clues", "Entities only players leave behind: item frames, armor stands, tamed pets, name-tagged or leashed mobs, end crystals, parked boats/minecarts, animal farms and villager trading halls. Wandering trader llamas, skeleton-trap horses, mineshaft carts, end city frames and village animals are left out.", 0xFF5AC8FF);
             this.farmSize.setDescription(EncryptedString.of("This many animals of one kind within 6 blocks = farm."));
-            this.addSettings(this.color, this.frames, this.pets, this.farms, this.farmSize, this.misc, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.villagers.setDescription(EncryptedString.of("6+ villagers locked in cells within 8 blocks."));
+            this.addSettings(this.color, this.frames, this.pets, this.farms, this.farmSize, this.villagers, this.misc, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
-        private boolean clue(class_1297 e, String id) {
-            if (this.frames.getValue() && (id.equals("item_frame") || id.equals("glow_item_frame") || id.equals("armor_stand") || id.equals("painting"))) return true;
-            if (this.pets.getValue()) {
-                if (e instanceof net.minecraft.class_1321 t && t.method_6181()) return true;
-                if (!(e instanceof net.minecraft.class_1657) && e.method_5797() != null) return true;
-                if (e instanceof net.minecraft.class_9817 l && l.method_60953()) return true;
+        private String clue(class_1297 e, String id) {
+            boolean nat = BaseFinder.naturalAt(e.method_23317(), e.method_23321());
+            if (this.frames.getValue() && (id.equals("item_frame") || id.equals("glow_item_frame") || id.equals("armor_stand") || id.equals("painting")))
+                return nat && !id.equals("glow_item_frame") ? null : id.replace('_', ' ');
+            if (this.pets.getValue() && !id.equals("trader_llama") && !id.equals("skeleton_horse") && !id.equals("zombie_horse")) {
+                if (e instanceof net.minecraft.class_1321 t && t.method_6181()) return "tamed " + id;
+                if (e instanceof net.minecraft.class_1496 h && h.method_6727()) return "tamed " + id;
+                if (!(e instanceof net.minecraft.class_1657) && e.method_5797() != null) return "named " + id;
+                if (e instanceof net.minecraft.class_9817 l && l.method_60953()) {
+                    class_1297 holder = l.method_60952();
+                    if (holder == null || !BaseFinder.entityId(holder).equals("wandering_trader")) return "leashed " + id;
+                }
             }
-            if (this.misc.getValue() && (id.equals("end_crystal") || id.endsWith("_boat") || id.endsWith("_raft") || id.equals("minecart") || id.endsWith("_minecart"))) return true;
-            return false;
+            if (this.misc.getValue()) {
+                if (id.equals("end_crystal") && !nat) return "end crystal";
+                if (id.endsWith("_boat") || id.endsWith("_raft")) return id.replace('_', ' ');
+                if ((id.equals("minecart") || id.endsWith("_minecart")) && !nat) return id.replace('_', ' ');
+            }
+            return null;
         }
 
         @EventListener
@@ -479,43 +627,53 @@ public final class BaseFinderModules {
             BaseFinder.Draw d = new BaseFinder.Draw();
             Color c = BaseFinder.col(this.color.getArgb(), 230);
             double r2 = this.range.getValue() * this.range.getValue();
-            Map<String, java.util.List<class_1297>> animals = new HashMap<>();
+            Map<String, java.util.List<class_1297>> groups = new HashMap<>();
             for (class_1297 e : this.mc.field_1687.method_18112()) {
                 if (e == this.mc.field_1724 || e.method_5707(this.mc.field_1724.method_33571()) > r2) continue;
-                String id = entityId(e);
-                if (this.clue(e, id)) {
+                String id = BaseFinder.entityId(e);
+                String why = this.clue(e, id);
+                if (why != null) {
                     net.minecraft.class_238 b = e.method_5829();
                     d.box(b.field_1323, b.field_1322, b.field_1321, b.field_1320, b.field_1325, b.field_1324, c, this.fill.getIntValue());
                     if (this.tracers.getValue()) d.tracer(new class_243(e.method_23317(), e.method_23318(), e.method_23321()), c);
+                    this.alertOnce(BaseFinder.key((int) Math.floor(e.method_23317()) >> 4, (int) Math.floor(e.method_23321()) >> 4) * 31 + id.hashCode(),
+                        why + " at " + (int) e.method_23317() + ", " + (int) e.method_23318() + ", " + (int) e.method_23321());
                 }
-                if (this.farms.getValue() && e instanceof net.minecraft.class_1429) animals.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(e);
+                boolean farmAnimal = this.farms.getValue() && e instanceof net.minecraft.class_1429 && !BaseFinder.naturalAt(e.method_23317(), e.method_23321());
+                // trading hall: villagers locked in cells (free villagers gather at the bell at night)
+                boolean villager = this.villagers.getValue() && id.equals("villager") && BaseFinder.enclosed(e);
+                if (farmAnimal || villager) groups.computeIfAbsent(id, k -> new java.util.ArrayList<>()).add(e);
             }
-            if (this.farms.getValue()) {
-                Color fc = new Color(255, 230, 90, 220);
-                for (Map.Entry<String, java.util.List<class_1297>> en : animals.entrySet()) {
-                    List<class_1297> list = en.getValue();
-                    if (list.size() < this.farmSize.getIntValue()) continue;
-                    for (class_1297 a : list) {
-                        int near = 0;
-                        for (class_1297 b : list) if (a.method_5858(b) < 36.0) near++;
-                        if (near >= this.farmSize.getIntValue()) {
-                            net.minecraft.class_238 bb = a.method_5829().method_1014(2.5);
-                            d.box(bb.field_1323, bb.field_1322, bb.field_1321, bb.field_1320, bb.field_1325, bb.field_1324, fc, 0);
-                            this.alertOnce(BaseFinder.key((int) a.method_23317() >> 4, (int) a.method_23321() >> 4), en.getKey() + " farm (" + near + ") at " + (int) a.method_23317() + ", " + (int) a.method_23318() + ", " + (int) a.method_23321());
-                            break;
-                        }
-                    }
+            Color fc = new Color(255, 230, 90, 220);
+            for (Map.Entry<String, java.util.List<class_1297>> en : groups.entrySet()) {
+                boolean vil = en.getKey().equals("villager");
+                int need = vil ? 6 : this.farmSize.getIntValue();
+                double reach = vil ? 64.0 : 36.0;
+                List<class_1297> list = en.getValue();
+                if (list.size() < need) continue;
+                for (class_1297 a : list) {
+                    int near = 0;
+                    for (class_1297 b : list) if (a.method_5858(b) < reach) near++;
+                    if (near < need) continue;
+                    net.minecraft.class_238 bb = a.method_5829().method_1014(vil ? 4.0 : 2.5);
+                    d.box(bb.field_1323, bb.field_1322, bb.field_1321, bb.field_1320, bb.field_1325, bb.field_1324, fc, 0);
+                    this.alertOnce(BaseFinder.key((int) a.method_23317() >> 4, (int) a.method_23321() >> 4) * 7 + en.getKey().hashCode(),
+                        (vil ? "villager trading hall" : en.getKey() + " farm") + " (" + near + ") at " + (int) a.method_23317() + ", " + (int) a.method_23318() + ", " + (int) a.method_23321());
+                    break;
                 }
             }
             d.render(event, this.walls.getValue());
         }
     }
 
-    // =================================================================== 9. Tunnels
+    // =================================================================== 11. Tunnels
     public static final class Tunnels extends Esp {
+        private final NumberSetting minSpots = new NumberSetting(EncryptedString.of("Min Length"), 2.0, 40.0, 4.0, 1.0);
+
         public Tunnels() {
-            super("Tunnel Finder", "Dead-straight 1x2 tunnels underground (8+ blocks, solid floor, roof and walls) - caves never look like that; strip mines and travel tunnels do.", 0xFF4FA3FF);
-            this.addSettings(this.color, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            super("Tunnel Finder", "Dead-straight tunnels (1x2 from 8 blocks, up to 3x3 from 12) with solid floor, roof and walls - caves never look like that; strip mines, travel tunnels and nether highways do. Mineshafts, strongholds and other structures are left out.", 0xFF4FA3FF);
+            this.minSpots.setDescription(EncryptedString.of("Tunnel spots a chunk needs (higher = only long tunnels)."));
+            this.addSettings(this.color, this.minSpots, this.range, this.fill, this.tracers, this.walls, this.alerts);
         }
 
         @Override
@@ -523,12 +681,15 @@ public final class BaseFinderModules {
             return true;
         }
 
+        boolean ok(BaseFinder.ChunkData cd) {
+            return cd.count(BaseFinder.TUNNEL) >= this.minSpots.getIntValue() && BaseFinder.settled(cd) && !BaseFinder.natural(cd);
+        }
+
         @Override
         void check() {
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                if (cd.count(BaseFinder.TUNNEL) < 4) continue;
-                class_2338 p = cd.hits[BaseFinder.TUNNEL].get(0);
-                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "player tunnel at " + p.method_10263() + ", " + p.method_10264() + ", " + p.method_10260());
+                if (!this.ok(cd)) continue;
+                this.alertOnce(BaseFinder.key(cd.cx, cd.cz), "player tunnel at " + pos(cd.hits[BaseFinder.TUNNEL].get(0)));
             }
         }
 
@@ -538,7 +699,7 @@ public final class BaseFinderModules {
             Color c = BaseFinder.col(this.color.getArgb(), 220);
             int n = 0;
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                if (cd.count(BaseFinder.TUNNEL) < 4) continue;
+                if (!this.ok(cd)) continue;
                 for (class_2338 p : cd.hits[BaseFinder.TUNNEL]) {
                     if (!this.inRange(p)) continue;
                     d.box(p.method_10263() + 0.1, p.method_10264(), p.method_10260() + 0.1, p.method_10263() + 0.9, p.method_10264() + 2.0, p.method_10260() + 0.9, c, this.fill.getIntValue());

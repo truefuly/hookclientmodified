@@ -249,16 +249,36 @@ final class CartTest {
         if (clock == 210) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
-    /** -Dhook.carttest.only=basefinder: a fake base 40 blocks away, all Base Finder modules on, then what they found. */
+    /**
+     * -Dhook.carttest.only=basefinder: a fake base, real vanilla structures (village, trial chambers, igloo, temples,
+     * swamp hut, outpost, shipwreck, ruined portal, mineshaft), grown kelp and a grown geode; then what got flagged.
+     */
+    private static final String[][] STRUCTS = {{"village_plains", "-110", "20"}, {"trial_chambers", "20", "-120"}, {"igloo", "130", "20"},
+        {"desert_pyramid", "130", "130"}, {"swamp_hut", "-110", "130"}, {"pillager_outpost", "20", "150"}, {"jungle_pyramid", "-110", "-110"},
+        {"shipwreck", "130", "-110"}, {"ruined_portal", "150", "-20"}, {"mineshaft", "-150", "-20"}, {"village_desert", "-20", "-170"}};
+
     private static void basefinder(class_310 mc, net.minecraft.class_746 p) {
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("time set day");
             cmd("kill @e[type=!player]");
+            for (String[] st : STRUCTS) cmd("place structure minecraft:" + st[0] + " " + st[1] + " 70 " + st[2]);
+            // kelp: 6 grown (age 25) in one chunk, 6 fresh (age 21) in another
+            cmd("fill -40 40 -40 -1 61 -25 stone");
+            cmd("fill -39 41 -39 -2 61 -26 water");
+            for (int i = 0; i < 6; i++) {
+                cmd("fill " + (-38 + i) + " 41 -30 " + (-38 + i) + " 54 -30 kelp_plant");
+                cmd("setblock " + (-38 + i) + " 55 -30 kelp[age=25]");
+                cmd("fill " + (-14 + i) + " 41 -30 " + (-14 + i) + " 54 -30 kelp_plant");
+                cmd("setblock " + (-14 + i) + " 55 -30 kelp[age=21]");
+            }
+            // amethyst: grown geode (8 clusters, 1 bud) and a fresh one (2 clusters, 6 buds)
+            cmd("fill 58 28 -42 100 28 -38 amethyst_block");
+            for (int i = 0; i < 8; i++) cmd("setblock " + (58 + i) + " 29 -40 amethyst_cluster[facing=up]");
+            cmd("setblock 66 29 -40 small_amethyst_bud[facing=up]");
+            for (int i = 0; i < 8; i++) cmd("setblock " + (90 + i) + " 29 -40 " + (i < 2 ? "amethyst_cluster" : "medium_amethyst_bud") + "[facing=up]");
             cmd("fill 30 0 30 45 40 45 stone");
             cmd("fill 31 20 38 44 21 38 air"); // straight 1x2 tunnel, 14 long
-            cmd("setblock 33 20 37 torch"); // not in the tunnel line (wall side) - wait, keep the tunnel clean
-            cmd("fill 33 20 37 33 20 37 stone");
             cmd("fill 34 25 34 38 27 36 air");
             cmd("setblock 36 25 35 torch");
             cmd("setblock 35 25 35 torch");
@@ -281,21 +301,58 @@ final class CartTest {
             cmd("summon wolf 44 152 44 {Owner:[I;0,0,0,1]}");
             cmd("tp @s 20 160 20 -45 30");
             for (Class<?> c : new Class<?>[]{BaseFinderModules.BaseBlocks.class, BaseFinderModules.Storage.class, BaseFinderModules.NewChunks.class,
-                    BaseFinderModules.Growth.class, BaseFinderModules.Light.class, BaseFinderModules.Portals.class, BaseFinderModules.Signs.class,
+                    BaseFinderModules.KelpEsp.class, BaseFinderModules.AmethystEsp.class, BaseFinderModules.Growth.class, BaseFinderModules.Light.class, BaseFinderModules.Portals.class, BaseFinderModules.Signs.class,
                     BaseFinderModules.EntityClues.class, BaseFinderModules.Tunnels.class, NoFogModule.class}) {
                 @SuppressWarnings("unchecked") hook.module.Module m = hook.Hook.INSTANCE.getModuleManager().getModuleByClass((Class) c);
                 if (m != null && !m.isEnabled()) m.setEnabled(true);
             }
         }
-        if (clock == 180) {
-            int[] tot = new int[BaseFinder.KINDS];
-            int chunks = 0;
-            for (BaseFinder.ChunkData cd : BaseFinder.all()) { chunks++; for (int k = 0; k < BaseFinder.KINDS; k++) tot[k] += cd.count(k); }
-            System.out.println("CARTTEST BASEFINDER chunks=" + chunks + " base=" + tot[BaseFinder.BASE] + " storage=" + tot[BaseFinder.STORAGE] + " light=" + tot[BaseFinder.LIGHT]
-                + " portal=" + tot[BaseFinder.PORTAL] + " sign=" + tot[BaseFinder.SIGN] + " tunnel=" + tot[BaseFinder.TUNNEL] + " litCave=" + tot[BaseFinder.LIT_CAVE] + " natLight=" + tot[BaseFinder.NATURAL_LIGHT]);
+        if (clock == 460) {
+            hook.module.ModuleManager mm = hook.Hook.INSTANCE.getModuleManager();
+            BaseFinderModules.BaseBlocks base = (BaseFinderModules.BaseBlocks) mm.getModuleByClass(BaseFinderModules.BaseBlocks.class);
+            BaseFinderModules.KelpEsp kelp = (BaseFinderModules.KelpEsp) mm.getModuleByClass(BaseFinderModules.KelpEsp.class);
+            BaseFinderModules.AmethystEsp ame = (BaseFinderModules.AmethystEsp) mm.getModuleByClass(BaseFinderModules.AmethystEsp.class);
+            BaseFinderModules.Tunnels tun = (BaseFinderModules.Tunnels) mm.getModuleByClass(BaseFinderModules.Tunnels.class);
+            int chunks = 0, settled = 0;
+            StringBuilder bases = new StringBuilder(), kelps = new StringBuilder(), ames = new StringBuilder(), tunnels = new StringBuilder(), stor = new StringBuilder(), lights = new StringBuilder(), signs = new StringBuilder();
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) {
+                chunks++;
+                if (BaseFinder.settled(cd)) settled++;
+                if (base.isBase(cd)) {
+                    java.util.TreeMap<String, Integer> types = new java.util.TreeMap<>();
+                    for (int k : new int[]{BaseFinder.BASE, BaseFinder.STORAGE, BaseFinder.LIGHT})
+                        for (net.minecraft.class_2338 q : cd.hits[k]) types.merge(BaseFinder.id(mc.field_1687.method_8320(q).method_26204()), 1, Integer::sum);
+                    bases.append(cd.cx).append(',').append(cd.cz).append("(score ").append(cd.score).append(' ').append(types).append(" zone=").append(BaseFinder.naturalZone(cd.cx, cd.cz)).append(") ");
+                }
+                if (kelp.grown(cd)) kelps.append(cd.cx).append(',').append(cd.cz).append(' ');
+                if (ame.grown(cd)) ames.append(cd.cx).append(',').append(cd.cz).append(' ');
+                if (tun.ok(cd)) tunnels.append(cd.cx).append(',').append(cd.cz).append(' ');
+                int sc = BaseFinder.finds(cd, BaseFinder.STORAGE, BaseFinder.STORAGE_W).size();
+                if (sc > 0) stor.append(cd.cx).append(',').append(cd.cz).append('=').append(sc).append(' ');
+                int lc = BaseFinder.finds(cd, BaseFinder.LIGHT, BaseFinder.LIGHT_W).size();
+                if (lc > 0) lights.append(cd.cx).append(',').append(cd.cz).append('=').append(lc).append(' ');
+                if (cd.count(BaseFinder.SIGN) > 0 && BaseFinder.settled(cd) && !BaseFinder.natural(cd)) signs.append(cd.cx).append(',').append(cd.cz).append(' ');
+            }
+            System.out.println("CARTTEST BASEFINDER chunks=" + chunks + " settled=" + settled);
+            System.out.println("CARTTEST BASEFINDER bases: " + bases + " (expect 2,2)");
+            System.out.println("CARTTEST BASEFINDER storage: " + stor);
+            System.out.println("CARTTEST BASEFINDER light: " + lights);
+            System.out.println("CARTTEST BASEFINDER signs: " + signs);
+            System.out.println("CARTTEST BASEFINDER kelp: " + kelps + " (expect -3,-2)");
+            System.out.println("CARTTEST BASEFINDER amethyst: " + ames + " (expect 3,-3)");
+            System.out.println("CARTTEST BASEFINDER tunnels: " + tunnels + " (expect 2,2)");
+            for (String[] st : STRUCTS) {
+                int cx = Integer.parseInt(st[1]) >> 4, cz = Integer.parseInt(st[2]) >> 4;
+                int raw = 0;
+                for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) {
+                    BaseFinder.ChunkData n = BaseFinder.get(cx + dx, cz + dz);
+                    if (n != null) raw += n.count(BaseFinder.BASE_W) + n.count(BaseFinder.STORAGE_W) + n.count(BaseFinder.LIGHT_W) + n.count(BaseFinder.BASE) + n.count(BaseFinder.STORAGE);
+                }
+                System.out.println("CARTTEST BASEFINDER struct " + st[0] + " zone=" + BaseFinder.naturalZone(cx, cz) + " scanned=" + (BaseFinder.get(cx, cz) != null) + " playerLookingBlocksAround=" + raw);
+            }
         }
-        if (clock == 185) net.minecraft.class_318.method_22690(mc.field_1697, "basefinder.png", mc.method_1522(), 1, msg -> {});
-        if (clock == 200) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+        if (clock == 465) net.minecraft.class_318.method_22690(mc.field_1697, "basefinder.png", mc.method_1522(), 1, msg -> {});
+        if (clock == 480) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static String refList(long seed) {

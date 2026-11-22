@@ -97,11 +97,15 @@ public final class NoFogModule extends Module {
                     : medium == class_5636.field_27887 && m.snow.getValue();
             env = on;
             edge = on || m.distance.getValue();
+            // under water / in lava vanilla also leaves the sky and clouds at distance 0 (the coloured wall you see
+            // instead of the sky) - clear them too
+            if (on) { fog[4] = custom ? e : FAR; fog[5] = custom ? e : FAR; }
         }
         if (env) { fog[0] = s; fog[1] = e; }
         if (edge) { fog[2] = s; fog[3] = e; }
         if (air && m.sky.getValue()) fog[4] = custom ? e : FAR;
         if (air && m.clouds.getValue()) fog[5] = custom ? Math.max(fog[5], e) : FAR;
+        if (effect) { fog[4] = Math.max(fog[4], custom ? e : FAR); fog[5] = Math.max(fog[5], custom ? e : FAR); }
 
         tint(camera, fogColor);
     }

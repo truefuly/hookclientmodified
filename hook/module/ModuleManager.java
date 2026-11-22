@@ -137,6 +137,8 @@ public final class ModuleManager {
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.BaseBlocks());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.Storage());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.NewChunks());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.KelpEsp());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.AmethystEsp());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.Growth());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.Light());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.Portals());
