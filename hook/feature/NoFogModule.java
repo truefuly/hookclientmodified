@@ -103,6 +103,13 @@ public final class NoFogModule extends Module {
         if (air && m.sky.getValue()) fog[4] = custom ? e : FAR;
         if (air && m.clouds.getValue()) fog[5] = custom ? Math.max(fog[5], e) : FAR;
 
+        tint(camera, fogColor);
+    }
+
+    /** Fog colour tint (on the upload; distances go through {@link #apply}). */
+    public static void tint(class_4184 camera, Vector4f fogColor) {
+        NoFogModule m = instance;
+        if (m == null || !m.isEnabled() || camera == null) return;
         if (m.tint.getValue() && fogColor != null) {
             int c = m.color.getArgb();
             float k = (float) (m.tintStrength.getValue() / 100.0);

@@ -134,6 +134,15 @@ public final class ModuleManager {
         this.in(Category.MISC, new AutoMinerModule());
         this.in(Category.MISC, new AutoBreedModule());
         this.in(Category.MISC, new hook.feature.CreativeModule());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.BaseBlocks());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Storage());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.NewChunks());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Growth());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Light());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Portals());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Signs());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.EntityClues());
+        this.in(Category.DONUT, new hook.feature.BaseFinderModules.Tunnels());
         // Render: seeing things in the world
         this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());

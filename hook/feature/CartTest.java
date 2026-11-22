@@ -53,6 +53,7 @@ final class CartTest {
         clock++;
         if ("slime".equals(ONLY)) { slime(mc, p); return; }
         if ("creative".equals(ONLY)) { creative(mc, p); return; }
+        if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -246,6 +247,55 @@ final class CartTest {
             System.out.println("CARTTEST CREATIVE t=" + clock + " client z=" + String.format("%.2f", p.method_23321()) + " server z=" + (sp == null ? "?" : String.format("%.2f", sp.method_23321())) + " noPhysics=" + p.field_5960 + " flySpeed=" + p.method_31549().method_7252());
         }
         if (clock == 210) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=basefinder: a fake base 40 blocks away, all Base Finder modules on, then what they found. */
+    private static void basefinder(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("time set day");
+            cmd("kill @e[type=!player]");
+            cmd("fill 30 0 30 45 40 45 stone");
+            cmd("fill 31 20 38 44 21 38 air"); // straight 1x2 tunnel, 14 long
+            cmd("setblock 33 20 37 torch"); // not in the tunnel line (wall side) - wait, keep the tunnel clean
+            cmd("fill 33 20 37 33 20 37 stone");
+            cmd("fill 34 25 34 38 27 36 air");
+            cmd("setblock 36 25 35 torch");
+            cmd("setblock 35 25 35 torch");
+            cmd("setblock 37 25 35 torch");
+            cmd("fill 40 151 40 46 151 46 oak_planks");
+            cmd("setblock 40 152 40 crafting_table");
+            cmd("setblock 41 152 40 furnace");
+            cmd("setblock 42 152 40 red_bed[part=foot,facing=north]");
+            cmd("setblock 42 152 39 red_bed[part=head,facing=north]");
+            cmd("setblock 43 152 40 anvil");
+            cmd("setblock 44 152 40 enchanting_table");
+            for (int i = 0; i < 6; i++) cmd("setblock " + (40 + i) + " 152 42 chest");
+            cmd("setblock 40 152 44 shulker_box");
+            cmd("setblock 41 152 44 barrel");
+            cmd("setblock 45 152 45 oak_sign{front_text:{messages:['\"Base of\"','\"Tester\"','\"\"','\"\"']}}");
+            cmd("fill 50 152 40 50 156 43 obsidian");
+            cmd("fill 50 153 41 50 155 42 nether_portal[axis=z]");
+            for (int i = 0; i < 12; i++) cmd("summon cow " + (60 + (i % 4)) + " 152 " + (40 + i / 4));
+            cmd("summon item_frame 45 153 46 {Facing:2}");
+            cmd("summon wolf 44 152 44 {Owner:[I;0,0,0,1]}");
+            cmd("tp @s 20 160 20 -45 30");
+            for (Class<?> c : new Class<?>[]{BaseFinderModules.BaseBlocks.class, BaseFinderModules.Storage.class, BaseFinderModules.NewChunks.class,
+                    BaseFinderModules.Growth.class, BaseFinderModules.Light.class, BaseFinderModules.Portals.class, BaseFinderModules.Signs.class,
+                    BaseFinderModules.EntityClues.class, BaseFinderModules.Tunnels.class, NoFogModule.class}) {
+                @SuppressWarnings("unchecked") hook.module.Module m = hook.Hook.INSTANCE.getModuleManager().getModuleByClass((Class) c);
+                if (m != null && !m.isEnabled()) m.setEnabled(true);
+            }
+        }
+        if (clock == 180) {
+            int[] tot = new int[BaseFinder.KINDS];
+            int chunks = 0;
+            for (BaseFinder.ChunkData cd : BaseFinder.all()) { chunks++; for (int k = 0; k < BaseFinder.KINDS; k++) tot[k] += cd.count(k); }
+            System.out.println("CARTTEST BASEFINDER chunks=" + chunks + " base=" + tot[BaseFinder.BASE] + " storage=" + tot[BaseFinder.STORAGE] + " light=" + tot[BaseFinder.LIGHT]
+                + " portal=" + tot[BaseFinder.PORTAL] + " sign=" + tot[BaseFinder.SIGN] + " tunnel=" + tot[BaseFinder.TUNNEL] + " litCave=" + tot[BaseFinder.LIT_CAVE] + " natLight=" + tot[BaseFinder.NATURAL_LIGHT]);
+        }
+        if (clock == 185) net.minecraft.class_318.method_22690(mc.field_1697, "basefinder.png", mc.method_1522(), 1, msg -> {});
+        if (clock == 200) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static String refList(long seed) {
