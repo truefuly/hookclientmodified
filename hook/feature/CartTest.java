@@ -52,6 +52,7 @@ final class CartTest {
         lastAge = p.field_6012;
         clock++;
         if ("slime".equals(ONLY)) { slime(mc, p); return; }
+        if ("creative".equals(ONLY)) { creative(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -222,6 +223,29 @@ final class CartTest {
         }
         if (clock == 170) net.minecraft.class_318.method_22690(mc.field_1697, "slime_top.png", mc.method_1522(), 1, msg -> {});
         if (clock == 190) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=creative: fly in creative straight into an obsidian wall with Fly Through on. */
+    private static void creative(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("time set day");
+            cmd("fill -3 150 3 3 156 9 obsidian");
+            cmd("tp @s 0.5 152 0.5 0 0");
+            hook.module.Module m = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(CreativeModule.class);
+            if (m != null && !m.isEnabled()) m.setEnabled(true);
+        }
+        if (clock == 120) { p.method_31549().field_7479 = true; p.method_7355(); }
+        if (clock >= 125 && clock < 175) {
+            p.method_31549().field_7479 = true;
+            p.method_18800(0.0, 0.0, 0.25); // fly south into the wall (z 3..9)
+        }
+        if (clock == 150) net.minecraft.class_318.method_22690(mc.field_1697, "creative_inside.png", mc.method_1522(), 1, msg -> {});
+        if (clock == 150 || clock == 180 || clock == 200) {
+            var sp = mc.method_1576().method_3760().method_14602(p.method_5667());
+            System.out.println("CARTTEST CREATIVE t=" + clock + " client z=" + String.format("%.2f", p.method_23321()) + " server z=" + (sp == null ? "?" : String.format("%.2f", sp.method_23321())) + " noPhysics=" + p.field_5960 + " flySpeed=" + p.method_31549().method_7252());
+        }
+        if (clock == 210) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static String refList(long seed) {

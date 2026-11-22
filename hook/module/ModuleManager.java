@@ -133,6 +133,7 @@ public final class ModuleManager {
         this.in(Category.MISC, new AntiBreakModule());
         this.in(Category.MISC, new AutoMinerModule());
         this.in(Category.MISC, new AutoBreedModule());
+        this.in(Category.MISC, new hook.feature.CreativeModule());
         // Render: seeing things in the world
         this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());
