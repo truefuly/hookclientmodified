@@ -56,6 +56,7 @@ final class CartTest {
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
+        if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -431,6 +432,40 @@ final class CartTest {
         if (clock == 280) mc.method_1507(null);
         if (clock == 295) shot(mc, "hud_play_small");
         if (clock == 310) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static int ncX;
+
+    /** -Dhook.carttest.only=newchunks: fly into never-generated land (should be red), then back home (green). */
+    private static void newChunks(class_310 mc, net.minecraft.class_746 p) {
+        BaseFinderModules.NewChunks nc = (BaseFinderModules.NewChunks) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(BaseFinderModules.NewChunks.class);
+        if (clock == 100) {
+            cmd("gamemode spectator");
+            cmd("time set noon");
+            cmd("weather clear");
+            if (nc != null && !nc.isEnabled()) nc.setEnabled(true);
+            ncX = 200_000 + (int) (System.currentTimeMillis() % 500_000L);
+            cmd("tp @s " + ncX + " -25 0 0 35");
+        }
+        // the test world is superflat (no natural liquid): pour water in 8 chunks of the just-generated land
+        if (clock == 200) for (int i = -1; i <= 1; i++) for (int j = -1; j <= 1; j++) if (i != 0 || j != 0)
+            cmd("setblock " + (ncX + i * 64 + 8) + " -60 " + (j * 64 + 8) + " water");
+        if (clock == 700) { ncReport(mc, nc, "fresh"); shot(mc, "nc_fresh"); }
+        if (clock == 710) cmd("tp @s 0 -25 0 0 35");
+        if (clock == 1300) { ncReport(mc, nc, "home"); shot(mc, "nc_home"); }
+        if (clock == 1310) cmd("tp @s " + ncX + " -25 0 0 35");
+        if (clock == 1900) { ncReport(mc, nc, "revisit"); shot(mc, "nc_revisit"); }
+        if (clock == 1920) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static void ncReport(class_310 mc, BaseFinderModules.NewChunks nc, String tag) {
+        int pcx = (int) Math.floor(mc.field_1724.method_23317()) >> 4, pcz = (int) Math.floor(mc.field_1724.method_23321()) >> 4;
+        int n = 0, o = 0, u = 0;
+        for (int x = -8; x <= 8; x++) for (int z = -8; z <= 8; z++) {
+            Boolean b = nc.stateOf(pcx + x, pcz + z);
+            if (b == null) u++; else if (b) n++; else o++;
+        }
+        System.out.println("CARTTEST NC " + tag + " near(17x17): new=" + n + " old=" + o + " unknown=" + u + " | total new=" + nc.count(true) + " old=" + nc.count(false));
     }
 
     private static void report(class_310 mc, String tag) {

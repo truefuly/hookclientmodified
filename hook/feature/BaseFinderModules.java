@@ -240,33 +240,81 @@ public final class BaseFinderModules {
 
     // =================================================================== 3. New Chunks
     public static final class NewChunks extends Module {
-        private final RgbSetting newColor = new RgbSetting(EncryptedString.of("New Color"), 0xFFFF4040);
-        private final RgbSetting oldColor = new RgbSetting(EncryptedString.of("Old Color"), 0xFF40FF70);
+        public enum HeightMode { BelowYou, Fixed }
+
+        private final RgbSetting newColor = new RgbSetting(EncryptedString.of("New Color"), 0xFFFF4D5E);
+        private final RgbSetting oldColor = new RgbSetting(EncryptedString.of("Old Color"), 0xFF3DDC84);
         private final BooleanSetting showOld = new BooleanSetting(EncryptedString.of("Show Old"), true);
-        private final NumberSetting fill = new NumberSetting(EncryptedString.of("Fill Opacity"), 0.0, 160.0, 35.0, 5.0);
-        private final NumberSetting height = new NumberSetting(EncryptedString.of("Height"), -64.0, 320.0, 0.0, 8.0);
-        private final BooleanSetting atFeet = new BooleanSetting(EncryptedString.of("At Your Feet"), true);
-        private final Set<Long> fresh = new HashSet<>();
-        private final Set<Long> old = new HashSet<>();
+        private final NumberSetting fill = new NumberSetting(EncryptedString.of("Fill Opacity"), 0.0, 160.0, 28.0, 4.0);
+        private final hook.module.setting.ModeSetting<HeightMode> heightMode = new hook.module.setting.ModeSetting<HeightMode>(EncryptedString.of("Height Mode"), HeightMode.BelowYou, HeightMode.class);
+        private final NumberSetting below = new NumberSetting(EncryptedString.of("Below You"), 0.0, 64.0, 10.0, 1.0);
+        private final NumberSetting height = new NumberSetting(EncryptedString.of("Height"), -64.0, 320.0, 0.0, 1.0);
+        private final NumberSetting maxChunks = new NumberSetting(EncryptedString.of("Remember"), 500.0, 20000.0, 5000.0, 500.0);
+
+        private final java.util.Map<Long, Boolean> state = new java.util.concurrent.ConcurrentHashMap<>(); // true = new, false = old
+        private final java.util.Map<Long, Long> loadedAt = new java.util.concurrent.ConcurrentHashMap<>();
+        private final java.util.Map<Long, Set<Long>> earlyFlow = new java.util.concurrent.ConcurrentHashMap<>();
+        private final Set<Long> checked = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        private final java.util.ArrayDeque<Long> order = new java.util.ArrayDeque<>();
         private Object world;
+        private double smoothY = Double.NaN;
 
         public NewChunks() {
-            super(EncryptedString.of("New Chunks"), EncryptedString.of("New vs. old chunks by liquid flow: water/lava that starts flowing when a chunk loads = it was just generated (nobody was here). Old chunks along a line = a travel trail."), -1, Category.DONUT);
-            this.showOld.setDescription(EncryptedString.of("Also draw chunks that were already generated before (someone was here)."));
-            this.height.setDescription(EncryptedString.of("Height of the squares (when not at your feet)."));
-            this.addSettings(this.newColor, this.oldColor, this.showOld, this.fill, this.atFeet, this.height);
+            super(EncryptedString.of("New Chunks"), EncryptedString.of("Shows which chunks were just generated (red: nobody was here) and which already existed (green: someone was here). Old = the chunk arrived with flowing water/lava or player-built blocks in it; new = liquid only starts flowing after it loaded. Connected chunks are drawn as one clean area."), -1, Category.DONUT);
+            this.showOld.setDescription(EncryptedString.of("Also draw chunks that existed before (travel trails, visited areas)."));
+            this.heightMode.setDescription(EncryptedString.of("Below You: a flat layer that glides along a few blocks under you (readable from above while flying). Fixed: always at the chosen height."));
+            this.below.setDescription(EncryptedString.of("How many blocks under your feet the layer sits."));
+            hook.module.setting.SettingVisibility.set(this.below, () -> this.heightMode.getValue() == HeightMode.BelowYou);
+            this.height.setDescription(EncryptedString.of("Height of the layer in Fixed mode."));
+            this.maxChunks.setDescription(EncryptedString.of("How many detected chunks are kept (oldest are forgotten)."));
+            hook.module.setting.SettingVisibility.set(this.height, () -> this.heightMode.getValue() == HeightMode.Fixed);
+            this.addSettings(this.newColor, this.oldColor, this.showOld, this.fill, this.heightMode, this.below, this.height, this.maxChunks);
         }
 
         @Override
         public void onDisable() {
-            this.fresh.clear();
-            this.old.clear();
+            this.reset();
             super.onDisable();
+        }
+
+        private void reset() {
+            this.state.clear();
+            this.loadedAt.clear();
+            this.earlyFlow.clear();
+            this.checked.clear();
+            synchronized (this.order) { this.order.clear(); }
+            this.smoothY = Double.NaN;
+        }
+
+        /** Self-test: what was decided for a chunk (null = unknown). */
+        Boolean stateOf(int cx, int cz) {
+            return this.state.get(BaseFinder.key(cx, cz));
+        }
+
+        int count(boolean fresh) {
+            int n = 0;
+            for (Boolean b : this.state.values()) if (b == fresh) n++;
+            return n;
         }
 
         @EventListener
         public void onTick(TickEvent event) {
-            if (this.mc.field_1687 != this.world) { this.world = this.mc.field_1687; this.fresh.clear(); this.old.clear(); }
+            if (this.mc.field_1687 != this.world) { this.world = this.mc.field_1687; this.reset(); }
+            long now = System.currentTimeMillis();
+            this.loadedAt.values().removeIf(t -> now - t > 60_000L);
+            synchronized (this.order) {
+                while (this.order.size() > this.maxChunks.getIntValue()) {
+                    Long k = this.order.pollFirst();
+                    if (k == null) break;
+                    this.state.remove(k);
+                    this.checked.remove(k);
+                }
+            }
+        }
+
+        private void mark(long k, boolean fresh) {
+            Boolean prev = this.state.put(k, fresh);
+            if (prev == null) synchronized (this.order) { this.order.addLast(k); }
         }
 
         @EventListener
@@ -280,43 +328,105 @@ public final class BaseFinderModules {
             if (pk instanceof net.minecraft.class_2626 u) this.fluid(u.method_11309(), u.method_11308());
             else if (pk instanceof net.minecraft.class_2637 s) s.method_30621((pos, st) -> this.fluid(pos, st));
             else if (pk instanceof net.minecraft.class_2672 cd) {
-                long k = BaseFinder.key(cd.method_11523(), cd.method_11524());
-                // checked a moment later, once the chunk is in the world: flowing liquid already there = old chunk
-                this.mc.execute(() -> this.checkLoaded(cd.method_11523(), cd.method_11524(), k));
+                int cx = cd.method_11523(), cz = cd.method_11524();
+                long k = BaseFinder.key(cx, cz);
+                this.loadedAt.put(k, System.currentTimeMillis());
+                this.checked.remove(k);
+                this.earlyFlow.remove(k);
+                // judged on the client thread once the chunk is in the world
+                this.mc.execute(() -> this.checkLoaded(cx, cz, k));
             }
         }
 
-        private void fluid(class_2338 pos, class_2680 st) {
-            if (st.method_26227().method_15769() || st.method_26227().method_15771()) return;
-            long k = BaseFinder.key(pos.method_10263() >> 4, pos.method_10260() >> 4);
-            synchronized (this.fresh) { if (!this.old.contains(k)) this.fresh.add(k); }
+        private static boolean flowing(class_2680 st) {
+            net.minecraft.class_3610 f = st.method_26227();
+            return !f.method_15769() && !f.method_15771();
         }
 
+        /** Liquid that starts flowing shortly after a chunk arrived = the chunk was just generated. */
+        private void fluid(class_2338 pos, class_2680 st) {
+            if (!flowing(st)) return;
+            long k = BaseFinder.key(pos.method_10263() >> 4, pos.method_10260() >> 4);
+            Long t = this.loadedAt.get(k);
+            if (t == null || System.currentTimeMillis() - t > 20_000L) return; // too long after loading to tell
+            if (Boolean.FALSE.equals(this.state.get(k))) return; // already known old
+            net.minecraft.class_746 me = this.mc.field_1724;
+            if (me != null) {
+                double dx = pos.method_10263() + 0.5 - me.method_23317(), dz = pos.method_10260() + 0.5 - me.method_23321();
+                if (dx * dx + dz * dz < 10 * 10) return; // you (buckets, mining) cause flows near yourself
+            }
+            if (!this.checked.contains(k)) this.earlyFlow.computeIfAbsent(k, x -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(pos.method_10063());
+            this.mark(k, true);
+        }
+
+        /** Flowing liquid or player-built blocks already in the chunk when it arrived = it existed before. */
         private void checkLoaded(int cx, int cz, long k) {
-            if (this.mc.field_1687 == null) return;
-            Object c = this.mc.field_1687.method_2935().method_2857(cx, cz, net.minecraft.class_2806.field_12803, false);
-            if (!(c instanceof net.minecraft.class_2818 chunk)) return;
-            net.minecraft.class_2826[] secs = chunk.method_12006();
-            for (net.minecraft.class_2826 s : secs) {
-                if (s == null || s.method_38292()) continue;
-                if (s.method_19523(o -> { class_2680 b = (class_2680) o; return !b.method_26227().method_15769() && !b.method_26227().method_15771(); })) {
-                    synchronized (this.fresh) { if (!this.fresh.contains(k)) this.old.add(k); }
-                    return;
+            try {
+                if (this.mc.field_1687 == null) return;
+                Object c = this.mc.field_1687.method_2935().method_2857(cx, cz, net.minecraft.class_2806.field_12803, false);
+                if (!(c instanceof net.minecraft.class_2818 chunk)) return;
+                Set<Long> early = this.earlyFlow.getOrDefault(k, Set.of());
+                net.minecraft.class_2826[] secs = chunk.method_12006();
+                int bottom = chunk.method_32891();
+                boolean old = false;
+                for (int i = 0; i < secs.length && !old; i++) {
+                    net.minecraft.class_2826 s = secs[i];
+                    if (s == null || s.method_38292()) continue;
+                    if (s.method_19523(o -> BaseFinder.playerBuilt(((class_2680) o).method_26204()))) { old = true; break; }
+                    if (!s.method_19523(o -> flowing((class_2680) o))) continue;
+                    int by = (bottom + i) << 4;
+                    for (int y = 0; y < 16 && !old; y++) for (int z = 0; z < 16 && !old; z++) for (int x = 0; x < 16; x++) {
+                        if (!flowing(s.method_12254(x, y, z))) continue;
+                        if (early.contains(class_2338.method_10064((cx << 4) + x, by + y, (cz << 4) + z))) continue; // flowed after loading
+                        old = true;
+                        break;
+                    }
                 }
+                if (old) this.mark(k, false);
+            } finally {
+                this.checked.add(k);
+                this.earlyFlow.remove(k);
             }
         }
 
         @EventListener
         public void onRender3D(Render3DEvent event) {
+            if (this.state.isEmpty() || this.mc.field_1724 == null) return;
+            double y;
+            if (this.heightMode.getValue() == HeightMode.Fixed) {
+                y = this.height.getValue();
+            } else {
+                double target = Math.floor(this.mc.field_1724.method_23318()) - this.below.getIntValue() + 0.02;
+                // glide to the new height instead of jumping with every block you climb
+                this.smoothY = Double.isNaN(this.smoothY) || Math.abs(this.smoothY - target) > 24 ? target : this.smoothY + (target - this.smoothY) * 0.15;
+                y = this.smoothY;
+            }
+            int pcx = (int) Math.floor(this.mc.field_1724.method_23317()) >> 4, pcz = (int) Math.floor(this.mc.field_1724.method_23321()) >> 4;
+            int range = this.mc.field_1690.method_38521() + 3;
             BaseFinder.Draw d = new BaseFinder.Draw();
-            double y = this.atFeet.getValue() ? BaseFinder.feetY() : this.height.getValue();
-            Color nc = BaseFinder.col(this.newColor.getArgb(), 220), oc = BaseFinder.col(this.oldColor.getArgb(), 200);
             int f = this.fill.getIntValue();
-            synchronized (this.fresh) {
-                for (long k : this.fresh) d.chunk(net.minecraft.class_1923.method_8325(k), net.minecraft.class_1923.method_8332(k), y, nc, f);
-                if (this.showOld.getValue()) for (long k : this.old) d.chunk(net.minecraft.class_1923.method_8325(k), net.minecraft.class_1923.method_8332(k), y, oc, f);
+            boolean showOld = this.showOld.getValue();
+            Color nc = BaseFinder.col(this.newColor.getArgb(), 235), oc = BaseFinder.col(this.oldColor.getArgb(), 215);
+            for (java.util.Map.Entry<Long, Boolean> e : this.state.entrySet()) {
+                boolean fresh = e.getValue();
+                if (!fresh && !showOld) continue;
+                long k = e.getKey();
+                int cx = net.minecraft.class_1923.method_8325(k), cz = net.minecraft.class_1923.method_8332(k);
+                int dist = Math.max(Math.abs(cx - pcx), Math.abs(cz - pcz));
+                if (dist > range) continue;
+                // fade out towards the edge of the render distance
+                float fade = dist <= range - 4 ? 1.0f : Math.max(0.15f, (range - dist) / 4.0f);
+                Color c = fresh ? nc : oc;
+                Color cf = new Color(c.getRed(), c.getGreen(), c.getBlue(), Math.round(c.getAlpha() * fade));
+                d.region(cx, cz, y, cf, Math.round(f * fade),
+                        this.same(cx, cz - 1, fresh), this.same(cx + 1, cz, fresh), this.same(cx, cz + 1, fresh), this.same(cx - 1, cz, fresh));
             }
             d.render(event, true);
+        }
+
+        private boolean same(int cx, int cz, boolean fresh) {
+            Boolean s = this.state.get(BaseFinder.key(cx, cz));
+            return s != null && s == fresh;
         }
     }
 

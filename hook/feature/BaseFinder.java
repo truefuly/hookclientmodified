@@ -181,6 +181,11 @@ public final class BaseFinder {
         return !IN_STRUCTURES.contains(id);
     }
 
+    /** Blocks worldgen never places outside structures (player bases): a chunk containing one was visited. */
+    static boolean playerBuilt(class_2248 b) {
+        return (kindOf(b) & (1 << BASE | 1 << STORAGE | 1 << LIGHT)) != 0;
+    }
+
     private static int kindOf(class_2248 b) {
         Integer k = KIND.get(b);
         if (k != null) return k;
@@ -698,6 +703,20 @@ public final class BaseFinder {
             this.lines.add(new RenderUtils.ColoredLine(b, e, c, 2.0f));
             this.lines.add(new RenderUtils.ColoredLine(e, f, c, 2.0f));
             this.lines.add(new RenderUtils.ColoredLine(f, a, c, 2.0f));
+        }
+
+        /**
+         * One chunk of a connected area at height y: seamless fill, and an outline only on the sides where the
+         * neighbour is not part of the same area (north, east, south, west), so touching chunks read as one shape.
+         */
+        void region(int cx, int cz, double y, Color c, int fillAlpha, boolean n, boolean e, boolean s, boolean w) {
+            double x1 = cx << 4, z1 = cz << 4, x2 = x1 + 16, z2 = z1 + 16;
+            if (fillAlpha > 0) this.boxes.add(new RenderUtils.ColoredBox(x1, y, z1, x2, y + 0.01, z2, new Color(c.getRed(), c.getGreen(), c.getBlue(), fillAlpha)));
+            double yy = y + 0.015;
+            if (!n) this.lines.add(new RenderUtils.ColoredLine(new class_243(x1, yy, z1), new class_243(x2, yy, z1), c, 2.0f));
+            if (!e) this.lines.add(new RenderUtils.ColoredLine(new class_243(x2, yy, z1), new class_243(x2, yy, z2), c, 2.0f));
+            if (!s) this.lines.add(new RenderUtils.ColoredLine(new class_243(x2, yy, z2), new class_243(x1, yy, z2), c, 2.0f));
+            if (!w) this.lines.add(new RenderUtils.ColoredLine(new class_243(x1, yy, z2), new class_243(x1, yy, z1), c, 2.0f));
         }
 
         void tracer(class_243 to, Color c) {
