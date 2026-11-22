@@ -59,6 +59,8 @@ public final class SchematicBuilderModule extends Module {
     private final ItemSetting scaffold = new ItemSetting(EncryptedString.of("Scaffold Block"), class_1802.field_20412).onlyBlocks();
     private final NumberSetting speed = new NumberSetting(EncryptedString.of("Blocks / Second"), 1.0, 10.0, 4.0, 0.5);
     private final BooleanSetting human = new BooleanSetting(EncryptedString.of("Human Movement"), true);
+    /** Only actions a vanilla player could do (Grim & co): real crosshair clicks, mouse-step rotations, no fake turns. */
+    private final BooleanSetting antiCheat = new BooleanSetting(EncryptedString.of("Anticheat Safe"), true);
     private final BooleanSetting breakWrong = new BooleanSetting(EncryptedString.of("Fix Wrong Blocks"), true);
     private final BooleanSetting clearArea = new BooleanSetting(EncryptedString.of("Clear Area"), false);
     private final BooleanSetting breakObstacles = new BooleanSetting(EncryptedString.of("Break Obstacles"), true);
@@ -88,6 +90,8 @@ public final class SchematicBuilderModule extends Module {
     private final Map<Long, Integer> failCount = new HashMap<>();
     private final Set<Long> scaffoldPlaced = new HashSet<>();
     private final Set<Long> helperPos = new HashSet<>();
+    /** Blocks given up on after many failed tries (counted like unbuildable blocks). */
+    private final Set<Long> skipped = new HashSet<>();
     private final ArrayDeque<long[]> doneLog = new ArrayDeque<>(); // {time ms, blocks}
     private int lastDone = -1;
 
@@ -114,6 +118,9 @@ public final class SchematicBuilderModule extends Module {
     private long tickNo;
     private long breakingTick = Long.MIN_VALUE;
     private int placedSincePause;
+    private int lastAge = Integer.MIN_VALUE;
+    private int freezeTicks;
+    private int aimMiss;
     private int nextPauseAt = 40;
     private boolean announcedDone;
 
@@ -147,7 +154,7 @@ public final class SchematicBuilderModule extends Module {
             this.saveStorage();
             this.say("All storage chests unmarked.");
         });
-        this.addSettings(this.scaffold, this.speed, this.human, this.breakWrong, this.clearArea, this.breakObstacles, this.useScaffold,
+        this.addSettings(this.scaffold, this.speed, this.human, this.antiCheat, this.breakWrong, this.clearArea, this.breakObstacles, this.useScaffold,
                 this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, this.pauseHealth, this.render);
         instance = this;
     }
@@ -256,6 +263,7 @@ public final class SchematicBuilderModule extends Module {
         this.dirtyChunks.clear();
         this.failedUntil.clear();
         this.failCount.clear();
+        this.skipped.clear();
         this.doneLog.clear();
         this.lastDone = -1;
         this.announcedDone = false;
@@ -276,10 +284,16 @@ public final class SchematicBuilderModule extends Module {
 
     @EventListener
     public void onTick(TickEvent event) {
-        this.tickNo++;
         class_746 pl = this.mc.field_1724;
         class_638 w = this.mc.field_1687;
         if (pl == null || w == null || this.mc.field_1761 == null) return;
+        // the tick event fires twice per game tick (client tick + player tick): act exactly once, at the start of
+        // the tick like real input does, so every click reaches the server before that tick's movement packet
+        if (pl.field_6012 == this.lastAge) return;
+        this.lastAge = pl.field_6012;
+        this.tickNo++;
+        if (this.freezeTicks > 0) this.freezeTicks--;
+        SbPlacer.forced = !this.antiCheat.getValue();
         String key = this.worldKey();
         if (!key.equals(this.storageKey)) { this.storageKey = key; this.loadStorage(); }
 
@@ -414,7 +428,7 @@ public final class SchematicBuilderModule extends Module {
                 else if (noItem) unb++;
                 continue;
             }
-            if (noItem) { unb++; continue; }
+            if (noItem || this.skipped.contains(m.method_10063())) { unb++; continue; }
             class_2338 p = m.method_10062();
             if (have.method_26215() || have.method_45474()) {
                 this.tasks.put(p.method_10063(), new Task(p, want, true));
@@ -490,7 +504,7 @@ public final class SchematicBuilderModule extends Module {
             this.nothingToDo(w, pl);
             return;
         }
-        class_243 eye = pl.method_33571();
+        class_243 eye = new class_243(pl.method_23317(), pl.method_23318() + 1.27, pl.method_23321());
         int sims = 0;
         for (Task t : cands) {
             if (!t.place) {
@@ -532,6 +546,8 @@ public final class SchematicBuilderModule extends Module {
             if (t.place && this.tryHelper(w, pl, t)) return;
             this.fail(t.pos, 20_000L, "nowalk");
         }
+        // everything left waits for something that is on cool-down: retry that instead of standing around
+        if (tries == 0) { this.nothingToDo(w, pl); return; }
         this.status = "Waiting (nothing reachable)";
     }
 
@@ -549,16 +565,22 @@ public final class SchematicBuilderModule extends Module {
             if (t.place) minY = Math.min(minY, t.pos.method_10264());
         }
         final int floorY = minY;
-        all.sort((a, b) -> Double.compare(this.taskScore(a, px, py, pz, floorY), this.taskScore(b, px, py, pz, floorY)));
+        final float yaw = pl.method_36454();
+        Map<Task, Double> sc = new HashMap<>();
+        for (Task t : all) sc.put(t, this.taskScore(t, px, py, pz, floorY, yaw));
+        all.sort((a, b) -> Double.compare(sc.get(a), sc.get(b)));
         return all.size() > max ? all.subList(0, max) : all;
     }
 
-    private double taskScore(Task t, double px, double py, double pz, int floorY) {
+    private double taskScore(Task t, double px, double py, double pz, int floorY, float yaw) {
         double dx = t.pos.method_10263() + 0.5 - px, dz = t.pos.method_10260() + 0.5 - pz, dy = t.pos.method_10264() - py;
         double horiz = Math.sqrt(dx * dx + dz * dz);
         double layer = Math.max(0, t.pos.method_10264() - floorY);
         // wrong blocks first in the area, layers bottom-up, nearby first; things above head are fine within reach
-        return (t.place ? 0 : -3) + layer * 2.5 + horiz + Math.abs(dy) * 0.5;
+        // and what is roughly in front of us before what needs a big head turn (faster and smoother)
+        float to = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+        double turn = horiz < 1.0 ? 0.0 : Math.abs(class_3532.method_15393(to - yaw)) / 60.0;
+        return (t.place ? 0 : -3) + layer * 2.5 + horiz + Math.abs(dy) * 0.5 + turn;
     }
 
     private void nothingToDo(class_638 w, class_746 pl) {
@@ -642,6 +664,26 @@ public final class SchematicBuilderModule extends Module {
         long k = p.method_10063();
         int n = this.failCount.merge(k, 1, Integer::sum);
         this.failedUntil.put(k, System.currentTimeMillis() + ms * Math.min(4, n));
+        Task t = this.tasks.get(k);
+        if (t == null || !t.place || this.helperPos.contains(k)) return;
+        boolean vertical = false;
+        for (var prop : t.want.method_28501()) {
+            Object v = t.want.method_11654(prop);
+            if (v == class_2350.field_11036 || v == class_2350.field_11033) vertical = true;
+        }
+        // no spot anywhere gives that facing with a real look (observer facing up on the ground...): give up sooner
+        int limit = vertical && this.antiCheat.getValue() && "nowalk".equals(why) ? 3 : 8;
+        if (n >= limit) {
+            // given up: don't let one impossible block hold up the whole build
+            this.skipped.add(k);
+            this.tasks.remove(k);
+            this.touched(p);
+            String name = t.want.method_26204().method_9518().getString();
+            this.say("§eSkipped " + name + " at " + p.method_10263() + " " + p.method_10264() + " " + p.method_10260()
+                    + (vertical && this.antiCheat.getValue() ? " - it can only be placed with a fake head rotation; turn off Anticheat Safe for it or place it yourself."
+                    : " - could not place it after many tries, place it yourself."));
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB skipped " + p.method_23854() + " " + name);
+        }
     }
 
     private void missing(class_1792 item) {
@@ -671,19 +713,124 @@ public final class SchematicBuilderModule extends Module {
             if (this.modeTicks > 3) { this.fail(t.pos, 8_000L, "nosolution"); this.toIdle(); }
             return;
         }
-        if (!this.rotateTo(pl, s.yaw(), s.pitch())) return;
-        if (this.modeTicks < this.placeDelay()) return;
-        if (this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665()) {
-            pl.method_6104(class_1268.field_5808);
+        int r;
+        if (s.score() >= 400.0) {
+            // a state that needs the head turned away from the clicked spot (Anticheat Safe is off)
+            if (!this.rotateTo(pl, s.yaw(), s.pitch(), 0.4f) || this.modeTicks < this.placeDelay()) return;
+            r = this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665() ? 1 : -1;
+            if (r == 1) pl.method_6104(class_1268.field_5808);
+        } else r = this.aimAndPlace(w, pl, t.pos, t.want, (class_1747) item, s.yaw(), s.pitch(), this.modeTicks >= this.placeDelay());
+        if (r == 0) return;
+        if (r < 0) {
+            if (++this.aimMiss > 6) { this.aimMiss = 0; this.fail(t.pos, 8_000L, "aim"); this.toIdle(); }
+            return;
+        }
+        this.aimMiss = 0;
+        {
             this.placedSincePause++;
             if (this.helperPos.remove(t.pos.method_10063())) this.scaffoldPlaced.add(t.pos.method_10063());
             this.touched(t.pos);
             this.waitTicks = 1;
             this.modeTicks = 0;
-        } else {
-            this.fail(t.pos, 8_000L, "interactfail");
-            this.toIdle();
         }
+    }
+
+    // ================================================================== legit actions (what a player could do)
+
+    /**
+     * Mouse step of the player's sensitivity: real mouse input only ever turns the head in multiples of this, and
+     * anticheats (Grim's aim checks) look for rotations that are not.
+     */
+    private float mouseStep() {
+        double s = 0.5;
+        try { s = ((Number) this.mc.field_1690.method_42495().method_41753()).doubleValue(); } catch (Throwable ignored) { }
+        double f = s * 0.6 + 0.2;
+        return (float) (f * f * f * 8.0 * 0.15);
+    }
+
+    /** The server already has the rotation we are looking with (it didn't change since the last movement packet). */
+    private boolean settled(class_746 pl) {
+        return pl.method_36454() == this.sentYaw && pl.method_36455() == this.sentPitch;
+    }
+
+    private float sentYaw = Float.NaN, sentPitch = Float.NaN;
+
+    /** The rotation that goes out with this tick's movement packet. */
+    @EventListener
+    public void onSendMovement(hook.event.events.SendMovementPacketsEvent e) {
+        class_746 pl = this.mc.field_1724;
+        if (pl == null) return;
+        this.sentYaw = pl.method_36454();
+        this.sentPitch = pl.method_36455();
+    }
+
+    /** What the crosshair really points at right now (exactly what vanilla would click). */
+    private class_3965 crosshair(class_746 pl) {
+        var r = pl.method_5745(pl.method_55754(), 1.0f, false);
+        return r instanceof class_3965 b && r.method_17783() == net.minecraft.class_239.class_240.field_1332 ? b : null;
+    }
+
+    /**
+     * Turns towards the aim, and once the head is still and the server knows that rotation, right-clicks whatever
+     * the crosshair hits - but only if that click really gives the wanted block at the target.
+     * 1 = placed, 0 = still aiming / waiting, -1 = the crosshair is on the wrong spot.
+     */
+    private int aimAndPlace(class_638 w, class_746 pl, class_2338 target, class_2680 want, class_1747 item, float yaw, float pitch, boolean mayClick) {
+        boolean there = this.rotateTo(pl, yaw, pitch, 0.4f);
+        if (!there || !settled(pl) || !mayClick) return 0;
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null) { dbg("aim: crosshair on nothing, target " + target.method_23854()); return -1; }
+        class_2680 st = SbPlacer.simulate(pl, w, item, hit, new float[]{pl.method_36454(), pl.method_36455()}, target, w.method_8320(target));
+        if (st == null || want != null && !SbWorld.matches(want, st)) {
+            dbg("aim: target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780() + " @" + hit.method_17784()
+                    + " gives " + st + " want " + want + " rot " + pl.method_36454() + "/" + pl.method_36455() + " aim " + yaw + "/" + pitch + " eye " + pl.method_33571());
+            return -1;
+        }
+        var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+        if (!res.method_23665()) {
+            dbg("aim: click refused " + res + " target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780()
+                    + " holding " + pl.method_6047() + " feet " + pfeet());
+            return -1;
+        }
+        pl.method_6104(class_1268.field_5808);
+        return 1;
+    }
+
+    /**
+     * Mines a block like holding the attack button: look at it first, then only ever hit what the crosshair is on.
+     * False while still turning.
+     */
+    private boolean aimAndMine(class_638 w, class_746 pl, class_2338 p, class_3965 face) {
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
+        boolean there = this.rotateTo(pl, rot[0], rot[1], 1.0f);
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null || !hit.method_17777().equals(p)) {
+            if (there && settled(pl)) this.rotateTo(pl, rot[0], rot[1], 0.2f);
+            return false;
+        }
+        this.breakingTick = this.tickNo;
+        this.mc.field_1761.method_2902(p, hit.method_17780());
+        pl.method_6104(class_1268.field_5808);
+        return true;
+    }
+
+    /**
+     * Inventory clicks only while standing still (not sprinting or sneaking), and closed again right after like
+     * opening and closing the inventory screen. False = stopping first.
+     */
+    private boolean readyForInventory(class_746 pl) {
+        var v = pl.method_18798();
+        if (v.field_1352 * v.field_1352 + v.field_1350 * v.field_1350 > 1.0E-4 || pl.method_5624() || pl.method_5715() || !pl.method_24828()) {
+            this.freezeTicks = Math.max(this.freezeTicks, 3);
+            this.keys(false, false, false, false);
+            return false;
+        }
+        return true;
+    }
+
+    private void inventorySwap(class_746 pl, int slot, int hotbar) {
+        this.mc.field_1761.method_2906(pl.field_7498.field_7763, slot, hotbar, class_1713.field_7791, (class_1657) pl);
+        this.mc.method_1562().method_52787(new net.minecraft.class_2815(pl.field_7498.field_7763));
     }
 
     private int placeDelay() {
@@ -722,6 +869,7 @@ public final class SchematicBuilderModule extends Module {
             class_2338 nb = t.pos.method_10093(d);
             if (!w.method_8320(nb).method_45474() || SbWorld.dangerous(w.method_8320(nb)) || !r.mayScaffold.test(nb)) continue;
             if (this.storage.contains(nb.method_10063()) || pl.method_5829().method_994(new class_238(nb))) continue;
+            if (this.failedUntil.containsKey(nb.method_10063())) continue;
             class_2350 side = d.method_10153();
             double[] ys = d.method_10164() == 0 ? new double[]{0.0, 0.3, -0.3} : new double[]{0.0};
             boolean ok = false;
@@ -810,11 +958,7 @@ public final class SchematicBuilderModule extends Module {
         if (face == null) { this.mc.field_1761.method_2925(); this.fail(p, 10_000L, "breakface"); this.toIdle(); return; }
         this.keys(false, false, false, false);
         this.holdTool(pl, st, p);
-        float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
-        if (!this.rotateTo(pl, rot[0], rot[1])) return;
-        this.breakingTick = this.tickNo;
-        this.mc.field_1761.method_2902(p, face.method_17780());
-        pl.method_6104(class_1268.field_5808);
+        this.aimAndMine(w, pl, p, face);
     }
 
     // ================================================================== walking
@@ -864,7 +1008,12 @@ public final class SchematicBuilderModule extends Module {
         List<SbPath.Step> p = SbPath.find(w, feet(pl), goal, hint, r);
         if (p == null) dbg("no path from " + feet(pl).method_23854() + " towards " + (hint == null ? "?" : hint.method_23854()));
         if (p == null) return false;
-        if (p.isEmpty()) return false;
+        if (p.isEmpty()) {
+            // the goal spot is the block we are on: step onto its middle (that is where the plan looked from)
+            double cx = feet(pl).method_10263() + 0.5 - pl.method_23317(), cz = feet(pl).method_10260() + 0.5 - pl.method_23321();
+            if (cx * cx + cz * cz < 0.04) return false;
+            p = new ArrayList<>(List.of(new SbPath.Step(feet(pl), SbPath.Move.WALK, List.of())));
+        }
         this.path = p;
         this.pathIdx = 0;
         this.arrived = onArrive;
@@ -895,12 +1044,7 @@ public final class SchematicBuilderModule extends Module {
                 class_3965 face = this.visibleFace(w, pl, b);
                 if (face == null) { this.replan(w, pl, s.pos()); return; }
                 this.holdTool(pl, w.method_8320(b), b);
-                float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
-                if (this.rotateTo(pl, rot[0], rot[1])) {
-                    this.breakingTick = this.tickNo;
-                    this.mc.field_1761.method_2902(b, face.method_17780());
-                    pl.method_6104(class_1268.field_5808);
-                }
+                this.aimAndMine(w, pl, b, face);
                 this.noProgress = 0;
                 return;
             }
@@ -918,15 +1062,11 @@ public final class SchematicBuilderModule extends Module {
             if (!this.hold(pl, this.scaffoldItem())) { if (this.count(this.scaffoldItem()) == 0) { this.missing(this.scaffoldItem()); this.toIdle(); } return; }
             boolean centered = horiz < 0.25;
             float yaw = centered ? pl.method_36454() : (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
-            this.rotateTo(pl, yaw, 90.0f);
+            boolean looking = this.rotateTo(pl, yaw, 89.0f, 1.0f);
             if (!centered) { this.keys(true, false, false, true); this.progress(horiz, w, pl, s); return; }
-            this.keys(false, ground && pl.method_36455() > 80.0f, false, false);
+            this.keys(false, ground && looking && settled(pl), false, false);
             if (pl.method_23318() > under.method_10264() + 1.05 && w.method_8320(under).method_45474()) {
-                SbPlacer.Solution sol = SbPlacer.find(this.mc, under, null, this.scaffoldItem(), pl.method_33571(), this.reach());
-                if (sol != null && this.mc.field_1761.method_2896(pl, class_1268.field_5808, sol.hit()).method_23665()) {
-                    pl.method_6104(class_1268.field_5808);
-                    this.scaffoldPlaced.add(under.method_10063());
-                }
+                if (this.aimAndPlace(w, pl, under, null, this.scaffoldItem(), yaw, 89.0f, true) == 1) this.scaffoldPlaced.add(under.method_10063());
             }
             this.progress(Math.abs(dy) + horiz, w, pl, s);
             return;
@@ -937,8 +1077,7 @@ public final class SchematicBuilderModule extends Module {
             SbPlacer.Solution sol = SbPlacer.find(this.mc, under, null, this.scaffoldItem(), pl.method_33571(), this.reach());
             if (sol != null) {
                 this.keys(false, false, false, true);
-                if (this.rotateTo(pl, sol.yaw(), sol.pitch()) && this.mc.field_1761.method_2896(pl, class_1268.field_5808, sol.hit()).method_23665()) {
-                    pl.method_6104(class_1268.field_5808);
+                if (this.aimAndPlace(w, pl, under, null, this.scaffoldItem(), sol.yaw(), sol.pitch(), true) == 1) {
                     this.scaffoldPlaced.add(under.method_10063());
                     this.waitTicks = 2;
                 }
@@ -953,7 +1092,8 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         // reached?
-        if (horiz < (this.pathIdx == this.path.size() - 1 ? 0.45 : 0.6) && Math.abs(dy) < 0.75 && (ground || s.move() == SbPath.Move.DROP && dy < 0.2)) {
+        boolean last = this.pathIdx == this.path.size() - 1;
+        if (horiz < (last ? 0.2 : 0.6) && Math.abs(dy) < 0.75 && (ground || s.move() == SbPath.Move.DROP && dy < 0.2)) {
             this.nextStep();
             return;
         }
@@ -961,7 +1101,8 @@ public final class SchematicBuilderModule extends Module {
         this.rotateTo(pl, yaw, this.human.getValue() ? 12.0f + (float) Math.sin(this.tickNo * 0.05) * 4.0f : 10.0f);
         float diff = Math.abs(class_3532.method_15393(yaw - pl.method_36454()));
         boolean jump = s.move() == SbPath.Move.UP && ground && horiz < 1.6 && dy < 0.5 || pl.method_5799() && s.pos().method_10264() >= pl.method_23318() - 0.2;
-        boolean sneak = this.edgeDanger(w, s.pos()) && s.move() != SbPath.Move.DROP && s.move() != SbPath.Move.UP;
+        boolean sneak = this.edgeDanger(w, s.pos()) && s.move() != SbPath.Move.DROP && s.move() != SbPath.Move.UP
+                || last && horiz < 0.7 && ground; // creep onto the exact spot
         boolean sprint = !sneak && this.path.size() - this.pathIdx > 5 && diff < 20 && !pl.method_5799();
         this.keys(diff < 60, jump, sprint, sneak);
         this.progress(horiz + Math.abs(dy), w, pl, s);
@@ -1238,9 +1379,12 @@ public final class SchematicBuilderModule extends Module {
         class_3965 face = this.visibleFace(w, pl, this.chestPos);
         if (face == null) { this.visitedThisTrip.add(this.chestPos.method_10063()); this.toIdle(); return; }
         float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
-        if (!this.rotateTo(pl, rot[0], rot[1])) return;
-        if (this.modeTicks % 20 == 5) {
-            this.mc.field_1761.method_2896(pl, class_1268.field_5808, face);
+        if (!this.rotateTo(pl, rot[0], rot[1], 0.8f) || !settled(pl) || !this.readyForInventory(pl)) return;
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null || !hit.method_17777().equals(this.chestPos)) { this.rotateTo(pl, rot[0], rot[1], 0.2f); return; }
+        if (this.modeTicks % 20 == 5 || this.modeTicks < 5) {
+            this.modeTicks = 6;
+            this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
             pl.method_6104(class_1268.field_5808);
         }
     }
@@ -1328,8 +1472,9 @@ public final class SchematicBuilderModule extends Module {
         if (pl.field_7512 != pl.field_7498) return false;
         for (int i = 9; i < 36; i++) {
             if (inv.method_5438(i).method_7909() != it) continue;
+            if (!this.readyForInventory(pl)) return false;
             int hb = this.freeHotbar(inv);
-            this.mc.field_1761.method_2906(pl.field_7498.field_7763, i, hb, class_1713.field_7791, (class_1657) pl);
+            this.inventorySwap(pl, i, hb);
             inv.method_61496(hb);
             this.swapCooldown = this.human.getValue() ? 3 + this.rnd.nextInt(3) : 1;
             return false;
@@ -1364,9 +1509,10 @@ public final class SchematicBuilderModule extends Module {
         if (best < 9) { inv.method_61496(best); return; }
         if (this.swapCooldown > 0) { this.swapCooldown--; return; }
         if (pl.field_7512 != pl.field_7498) return;
+        if (!this.readyForInventory(pl)) return;
         int hb = 0;
         for (int i = 0; i < 9; i++) if (isTool(inv.method_5438(i)) || inv.method_5438(i).method_7960()) { hb = i; break; }
-        this.mc.field_1761.method_2906(pl.field_7498.field_7763, best, hb, class_1713.field_7791, (class_1657) pl);
+        this.inventorySwap(pl, best, hb);
         inv.method_61496(hb);
         this.swapCooldown = 3;
     }
@@ -1375,6 +1521,7 @@ public final class SchematicBuilderModule extends Module {
 
     private void keys(boolean forward, boolean jump, boolean sprint, boolean sneak) {
         var o = this.mc.field_1690;
+        if (this.freezeTicks > 0) { forward = false; jump = false; sprint = false; sneak = false; }
         if (this.backTicks > 0) {
             this.backTicks--;
             o.field_1894.method_23481(false);
@@ -1405,25 +1552,36 @@ public final class SchematicBuilderModule extends Module {
         }
     }
 
-    /** Turns the head towards a rotation (smoothly in human mode). True once it is there. */
     private boolean rotateTo(class_746 pl, float yaw, float pitch) {
+        return this.rotateTo(pl, yaw, pitch, 1.2f);
+    }
+
+    /**
+     * Turns the head towards a rotation like a mouse would: only in whole mouse steps of the current sensitivity,
+     * never more than a fast flick per tick, easing out near the target (human mode). True once within {@code tol}.
+     */
+    private boolean rotateTo(class_746 pl, float yaw, float pitch, float tol) {
         float cy = pl.method_36454(), cp = pl.method_36455();
-        float dy = class_3532.method_15393(yaw - cy), dp = pitch - cp;
-        if (!this.human.getValue()) {
-            pl.method_36456(cy + dy);
-            pl.method_36457(pitch);
-            return true;
-        }
+        float dy = class_3532.method_15393(yaw - cy), dp = Math.max(-90.0f, Math.min(90.0f, pitch)) - cp;
         float dist = (float) Math.sqrt(dy * dy + dp * dp);
-        if (dist < 1.2f) return true;
-        // fast when far, slow when close (ease out), slightly uneven like a hand on a mouse
-        float step = Math.min(dist, Math.max(2.5f, dist * (0.32f + this.rnd.nextFloat() * 0.12f)));
-        step = Math.min(step, 32.0f);
+        float g = this.mouseStep();
+        if (dist < Math.max(tol, g * 0.75f)) return true;
+        float step;
+        if (this.human.getValue()) {
+            // fast when far, slow when close (ease out), slightly uneven like a hand on a mouse
+            step = Math.min(dist, Math.max(2.5f, dist * (0.32f + this.rnd.nextFloat() * 0.12f)));
+            step = Math.min(step, 30.0f);
+        } else {
+            step = Math.min(dist, 55.0f);
+        }
         float k = step / dist;
-        float jitter = dist > 8 ? (this.rnd.nextFloat() - 0.5f) * 0.6f : 0.0f;
-        pl.method_36456(cy + dy * k + jitter);
-        pl.method_36457(Math.max(-90.0f, Math.min(90.0f, cp + dp * k)));
-        return dist * (1.0f - k) < 1.2f;
+        float jitter = this.human.getValue() && dist > 8 ? (this.rnd.nextFloat() - 0.5f) * 0.6f : 0.0f;
+        float my = Math.round((dy * k + jitter) / g) * g, mp = Math.round((dp * k) / g) * g;
+        if (my == 0.0f && mp == 0.0f) return true; // closer than one mouse step
+        pl.method_36456(cy + my);
+        pl.method_36457(Math.max(-90.0f, Math.min(90.0f, cp + mp)));
+        float ry = class_3532.method_15393(yaw - pl.method_36454()), rp = pitch - pl.method_36455();
+        return Math.sqrt(ry * ry + rp * rp) < Math.max(tol, g * 0.75f);
     }
 
     // ================================================================== render

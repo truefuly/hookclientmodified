@@ -57,6 +57,40 @@ final class SbPlacer {
      * Best way to place {@code item} at {@code target} from {@code eye} so the result matches {@code want} (null = any
      * state, e.g. scaffolding), or null if it can't be done from there.
      */
+    /**
+     * Turning the head somewhere else than where you click is what anticheats look for, so it is off: placements that
+     * need it are done from another spot where the natural look gives the right state.
+     */
+    static boolean forced = false;
+
+    /** Where the crosshair lands when looking with that rotation (like Entity#raycast). */
+    static class_3965 rayRot(class_638 w, class_746 pl, class_243 eye, float yaw, float pitch, double reach) {
+        double f = Math.toRadians(pitch), g = Math.toRadians(-yaw);
+        class_243 d = new class_243(Math.sin(g) * Math.cos(f), -Math.sin(f), Math.cos(g) * Math.cos(f));
+        class_243 end = eye.method_1031(d.field_1352 * reach, d.field_1351 * reach, d.field_1350 * reach);
+        class_3965 r = w.method_17742(new class_3959(eye, end, class_3959.class_3960.field_17559, class_3959.class_242.field_1348, pl));
+        return r != null && r.method_17783() == class_239.class_240.field_1332 ? r : null;
+    }
+
+    /**
+     * The head never lands exactly on the spot (mouse steps, smoothing): the crosshair must stay on the same face and
+     * the click must still give the same result when the look is a bit off.
+     */
+    private static boolean robust(class_746 pl, class_638 w, class_1747 item, class_3965 r, float[] rot, class_2338 target, class_2680 cur, class_2680 want,
+            class_243 eye, double reach) {
+        float e = 1.5f;
+        float[][] d = {{e, 0}, {-e, 0}, {0, e}, {0, -e}, {e, e}, {-e, -e}, {e, -e}, {-e, e}};
+        for (float[] o : d) {
+            float[] rr = {rot[0] + o[0], Math.max(-90f, Math.min(90f, rot[1] + o[1]))};
+            class_3965 h = rayRot(w, pl, eye, rr[0], rr[1], reach + 0.5);
+            if (h == null || !h.method_17777().equals(r.method_17777()) || h.method_17780() != r.method_17780()) return false;
+            if (eye.method_1025(h.method_17784()) > reach * reach) return false;
+            class_2680 st = simulate(pl, w, item, h, rr, target, cur);
+            if (st == null || want != null && !SbWorld.matches(want, st)) return false;
+        }
+        return true;
+    }
+
     static Solution find(class_310 mc, class_2338 target, class_2680 want, class_1747 item, class_243 eye, double reach) {
         class_638 w = mc.field_1687;
         class_746 pl = mc.field_1724;
@@ -73,27 +107,32 @@ final class SbPlacer {
             if (ns.method_45474()) continue; // grass, snow layers, liquids: get replaced instead of clicked
             class_2350 side = dir.method_10153();
             double fx = cx + dir.method_10148() * 0.5, fy = cy + dir.method_10164() * 0.5, fz = cz + dir.method_10165() * 0.5;
-            double[][] offs = dir.method_10164() == 0
-                    ? new double[][]{{0, 0, 0}, {0, 0.28, 0}, {0, -0.28, 0}}
-                    : new double[][]{{0, 0, 0}, {0.22, 0, 0.22}, {-0.22, 0, -0.22}};
-            for (double[] o : offs) {
-                class_243 point = new class_243(fx + (dir.method_10148() == 0 ? o[0] : 0), fy + o[1], fz + (dir.method_10165() == 0 ? o[2] : 0));
+            // a grid of spots over the face: each one is a different, real way of looking at it
+            double[] g = {-0.36, -0.18, 0.0, 0.18, 0.36};
+            for (double u : g) for (double v : g) {
+                double ox, oy, oz;
+                if (dir.method_10164() != 0) { ox = u; oy = 0; oz = v; }
+                else if (dir.method_10148() != 0) { ox = 0; oy = v; oz = u; }
+                else { ox = u; oy = v; oz = 0; }
+                class_243 point = new class_243(fx + ox, fy + oy, fz + oz);
                 // the face must point towards the eye
                 double nx = side.method_10148(), ny = side.method_10164(), nz = side.method_10165();
                 if ((eye.field_1352 - point.field_1352) * nx + (eye.field_1351 - point.field_1351) * ny + (eye.field_1350 - point.field_1350) * nz <= 0.02) continue;
                 if (eye.method_1025(point) > reach * reach) continue;
+                float[] rot = lookAt(eye, point);
+                double score = angle(rot[0], rot[1], curYaw, curPitch) + eye.method_1025(point) * 2.0 + (Math.abs(u) + Math.abs(v)) * 4.0;
+                if (best != null && score >= best.score) continue;
                 class_3965 r = ray(w, pl, eye, point);
                 if (r == null || !r.method_17777().equals(nb) || r.method_17780() != side) continue;
                 hits.add(r);
-                float[] rot = lookAt(eye, r.method_17784());
                 class_2680 st = simulate(pl, w, item, r, rot, target, cur);
                 if (st == null) continue;
                 if (want != null && !SbWorld.matches(want, st)) continue;
-                double score = angle(rot[0], rot[1], curYaw, curPitch) + eye.method_1025(point) * 2.0;
-                if (best == null || score < best.score) best = new Solution(r, rot[0], rot[1], score);
+                if (!robust(pl, w, item, r, rot, target, cur, want, eye, reach)) continue;
+                best = new Solution(r, rot[0], rot[1], score);
             }
         }
-        if (best != null || want == null) return best;
+        if (best != null || want == null || !forced) return best;
         // some states can't come from looking at the clicked spot (an observer facing up on the ground, stairs
         // facing away from every free side...): turn the head into the needed direction first, then click
         float[][] rots = {{curYaw, -90f}, {curYaw, 90f}, {0f, 0f}, {90f, 0f}, {180f, 0f}, {-90f, 0f},
