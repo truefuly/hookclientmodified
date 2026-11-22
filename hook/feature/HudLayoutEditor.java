@@ -76,6 +76,7 @@ public final class HudLayoutEditor {
                 this.placeFromPixel(var14, nx, ny, var15[2], var15[3], var2, var3);
             }
         }
+        if (this.resizingSection != null || this.resizingPart != null) this.updateResize(var8, var10, var2, var3);
         if (var7) {
             this.drawGrid(var1, var2, var3, var6);
         }
@@ -105,6 +106,10 @@ public final class HudLayoutEditor {
         if (var7) {
             this.drawVanillaFrames(var1, var8, var10);
             this.drawResetButton(var1, var2, var8, var10);
+        } else if (chatOpen) {
+            this.drawEditorButton(var1, var2, var3, var8, var10);
+        } else {
+            this.editorButton[2] = 0.0f;
         }
         var1.popAlpha();
     }
@@ -113,6 +118,110 @@ public final class HudLayoutEditor {
 
     private VanillaHud.Part draggingPart;
     private final float[] resetBounds = new float[4];
+
+    // ------------------------------------------------------------------ editor mode (button in the chat) + corner resize handles
+
+    /** True while the HUD editor is on (chat open and the "HUD Editor" button was clicked). */
+    public static volatile boolean editing;
+    /** Set by HudModule every frame: the chat screen is open. */
+    public static volatile boolean chatOpen;
+    private final float[] editorButton = new float[4];
+    private HudSection resizingSection;
+    private VanillaHud.Part resizingPart;
+    private float rsX, rsY, rsW, rsH, rsScale;
+
+    /** "HUD Editor" button in the middle of the screen while the chat is open. */
+    private void drawEditorButton(UiRenderer ui, int sw, int sh, double mx, double my) {
+        String text = "HUD Editor";
+        // never tiny on small windows; sits just under the crosshair so it is not covered by it
+        float k = Math.max(1.0f, this.u) * 1.3f;
+        float th = 12.0f * k;
+        float w = this.textW(ui, text, th, 1) + 44.0f * k;
+        float h = 30.0f * k;
+        float x = sw / 2.0f - w / 2.0f, y = sh / 2.0f + 14.0f * k;
+        boolean hot = mx >= x && mx < x + w && my >= y && my < y + h;
+        float a = this.anim("editorbtn", hot ? 1.0f : 0.0f, 14.0f);
+        ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.88f, 20, 21, 25), UiPalette.accent(0.9f), a * 0.55f));
+        ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.22f), UiPalette.accent(0.95f), a));
+        // small 2x2 layout icon in front of the label
+        float ic = 4.0f * k, gap = 1.5f * k, ix = x + 14.0f * k, iy = y + h / 2.0f - ic - gap / 2.0f;
+        for (int i = 0; i < 4; i++) ui.round(ix + (i % 2) * (ic + gap), iy + (i / 2) * (ic + gap), ic, ic, k, UiRenderer.white(0.9f));
+        ui.text(text, ix + ic * 2.0f + gap + 8.0f * k, y + (h - th) / 2.0f - 0.5f * k, th, 1, UiRenderer.white(0.97f));
+        this.editorButton[0] = x; this.editorButton[1] = y; this.editorButton[2] = w; this.editorButton[3] = h;
+    }
+
+    /** Self-test: window-pixel center of the chat's HUD Editor button (or null). */
+    float[] editorButtonCenter() {
+        return this.editorButton[2] > 0.0f ? new float[]{this.editorButton[0] + this.editorButton[2] / 2.0f, this.editorButton[1] + this.editorButton[3] / 2.0f} : null;
+    }
+
+    private float handleSize() {
+        return Math.max(10.0f, this.d(11.0f));
+    }
+
+    /** Grip in the bottom-right corner of a frame: drag it to resize. */
+    private void drawHandle(UiRenderer ui, float fx, float fy, float fw, float fh, float hot) {
+        float s = this.handleSize();
+        float x = this.hx(fx + fw) - s / 2.0f, y = this.hy(fy + fh) - s / 2.0f;
+        ui.round(x, y, s, s, s * 0.3f, UiEasing.mix(UiRenderer.argb(0.95f, 28, 29, 34), UiPalette.accent(0.95f), 0.35f + 0.65f * hot));
+        ui.outline(x, y, s, s, s * 0.3f, Math.max(1.0f, this.u * 0.8f), UiRenderer.white(0.55f + 0.4f * hot));
+        // diagonal grip dots
+        float dot = Math.max(1.0f, s * 0.14f);
+        for (int i = 0; i < 3; i++) for (int j = 0; j <= i; j++) {
+            float px = x + s * 0.72f - j * s * 0.22f, py = y + s * 0.72f - (i - j) * s * 0.22f;
+            ui.rect(px - dot / 2.0f, py - dot / 2.0f, dot, dot, UiRenderer.white(0.9f));
+        }
+    }
+
+    private boolean onHandle(double mx, double my, float fx, float fy, float fw, float fh) {
+        float r = this.handleSize() * 0.9f + 2.0f;
+        return Math.abs(mx - this.hx(fx + fw)) <= r && Math.abs(my - this.hy(fy + fh)) <= r;
+    }
+
+    // a corner off the screen edge would be unreachable: keep the handle fully on screen
+    private float hx(float x) {
+        float s = this.handleSize();
+        return clamp(x, s / 2.0f + 1.0f, this.lastSw - s / 2.0f - 1.0f);
+    }
+
+    private float hy(float y) {
+        float s = this.handleSize();
+        return clamp(y, s / 2.0f + 1.0f, this.lastSh - s / 2.0f - 1.0f);
+    }
+
+    /** Self-test: window-pixel position of a section's corner handle (or null). */
+    float[] handleOf(HudSection section) {
+        float[] b = this.bounds.get(section);
+        if (b == null) return null;
+        float pad = this.d(4.0f);
+        return new float[]{this.hx(b[0] + b[2] + pad), this.hy(b[1] + b[3] + pad)};
+    }
+
+    float[] handleOf(VanillaHud.Part part) {
+        float[] r = this.partRect(part);
+        if (r == null) return null;
+        float pad = this.d(4.0f);
+        return new float[]{this.hx(r[0] + r[2] + pad), this.hy(r[1] + r[3] + pad)};
+    }
+
+    /** While a corner handle is held: size follows the mouse, the top-left corner stays where it is. */
+    private void updateResize(double mx, double my, int sw, int sh) {
+        float pad = this.d(4.0f);
+        float w0 = this.rsW + pad, h0 = this.rsH + pad; // grab point = frame corner
+        float diag = w0 * w0 + h0 * h0;
+        if (diag <= 1.0f) return;
+        float f = (float) (((mx - this.rsX) * w0 + (my - this.rsY) * h0) / diag);
+        if (this.resizingSection != null) {
+            float s = Math.max(0.5f, Math.min(2.5f, Math.round(this.rsScale * f * 100.0f) / 100.0f));
+            this.scales.put(this.resizingSection, s);
+            adsdzhecwnzmbs place = this.places.computeIfAbsent(this.resizingSection, k -> new adsdzhecwnzmbs());
+            float k = s / this.rsScale;
+            this.placeFromPixel(place, this.rsX, this.rsY, this.rsW * k, this.rsH * k, sw, sh);
+        } else if (this.resizingPart != null) {
+            VanillaHud.setScale(this.resizingPart, this.rsScale * f);
+        }
+    }
+
     private int lastSh = 1080;
     private boolean snappedX;
     private boolean snappedY;
@@ -193,6 +302,8 @@ public final class HudLayoutEditor {
             float pad = this.d(4.0f);
             if (!visible) ui.round(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), UiRenderer.argb(0.35f, 10, 10, 14));
             ui.outline(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), visible ? UiRenderer.white(0.22f + 0.35f * h) : UiRenderer.argb(0.5f + 0.3f * h, 230, 120, 120));
+            if (visible) this.drawHandle(ui, r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f,
+                    this.resizingPart == part ? 1.0f : this.onHandle(mx, my, r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f) ? 0.7f : h * 0.3f);
             if (visible && VanillaHud.preview(part)) ui.round(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), UiRenderer.white(0.06f));
             String label = part.label + (visible ? "  " + Math.round(VanillaHud.state(part).scale * 100.0f) + "%" : "  (hidden)");
             float lw = this.textW(ui, label, this.d(10.0f), 1) + this.d(12.0f);
@@ -219,7 +330,7 @@ public final class HudLayoutEditor {
         ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.85f, 20, 21, 25), UiPalette.accent(0.85f), a * 0.6f));
         ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.18f), UiPalette.accent(0.9f), a));
         ui.textCentered(text, sw / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
-        String hint = "Drag to move  \u00B7  Scroll on anything to resize  \u00B7  Right-click vanilla parts to hide or show  \u00B7  Snaps to the center lines";
+        String hint = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click vanilla parts to hide or show  \u00B7  Snaps to the center lines";
         ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
         this.resetBounds[0] = x; this.resetBounds[1] = y; this.resetBounds[2] = w; this.resetBounds[3] = h;
     }
@@ -234,6 +345,7 @@ public final class HudLayoutEditor {
 
     /** Right click in the editor: hide / show a vanilla part. */
     public boolean rightClick(double mx, double my) {
+        if (!editing) return false;
         VanillaHud.Part part = this.partAt(mx, my);
         if (part == null) return false;
         VanillaHud.toggle(part);
@@ -254,7 +366,7 @@ public final class HudLayoutEditor {
 
     /** Mouse wheel in the editor: resize whatever HUD element is under the mouse (ours, music HUD or vanilla). */
     public boolean scroll(double mx, double my, double amount) {
-        if (amount == 0.0) return false;
+        if (amount == 0.0 || !editing) return false;
         float step = amount > 0.0 ? 0.05f : -0.05f;
         HudSection[] sections = HudSection.values();
         for (int i = sections.length - 1; i >= 0; --i) {
@@ -798,6 +910,8 @@ public final class HudLayoutEditor {
         float var12 = this.anim("edit:" + var2.name(), var11 ? 1.0f : 0.0f, 14.0f);
         float var13 = this.d(4.0f);
         var1.outline(var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), UiRenderer.white(0.22f + 0.35f * var12));
+        this.drawHandle(var1, var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f,
+                this.resizingSection == var2 ? 1.0f : this.onHandle(var7, var9, var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f) ? 0.7f : var12 * 0.3f);
         String label = var2.label + "  " + Math.round(this.scaleOf(var2) * 100.0f) + "%";
         float var14 = this.textW(var1, label, this.d(10.0f), 1) + this.d(12.0f);
         float var15 = this.d(16.0f);
@@ -811,6 +925,30 @@ public final class HudLayoutEditor {
     }
 
     public boolean mousePressed(double var1, double var3) {
+        if (!editing) {
+            if (this.editorButton[2] > 0.0f && var1 >= this.editorButton[0] && var1 < this.editorButton[0] + this.editorButton[2] && var3 >= this.editorButton[1] && var3 < this.editorButton[1] + this.editorButton[3]) {
+                editing = true;
+                return true;
+            }
+            return false;
+        }
+        // corner handles first (they sit on the frame corner, partly outside the element)
+        HudSection[] secs = HudSection.values();
+        float pad = this.d(4.0f);
+        for (int i = secs.length - 1; i >= 0; --i) {
+            float[] b = this.bounds.get(secs[i]);
+            if (b == null || !this.onHandle(var1, var3, b[0] - pad, b[1] - pad, b[2] + pad * 2.0f, b[3] + pad * 2.0f)) continue;
+            this.resizingSection = secs[i];
+            this.rsX = b[0]; this.rsY = b[1]; this.rsW = b[2]; this.rsH = b[3]; this.rsScale = this.scaleOf(secs[i]);
+            return true;
+        }
+        for (VanillaHud.Part p : VanillaHud.Part.values()) {
+            float[] r = this.partRect(p);
+            if (r == null || !VanillaHud.state(p).visible || !this.onHandle(var1, var3, r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f)) continue;
+            this.resizingPart = p;
+            this.rsX = r[0]; this.rsY = r[1]; this.rsW = r[2]; this.rsH = r[3]; this.rsScale = VanillaHud.state(p).scale;
+            return true;
+        }
         if (this.resetBounds[2] > 0.0f && var1 >= this.resetBounds[0] && var1 < this.resetBounds[0] + this.resetBounds[2] && var3 >= this.resetBounds[1] && var3 < this.resetBounds[1] + this.resetBounds[3]) {
             this.resetLayout();
             return true;
@@ -836,6 +974,11 @@ public final class HudLayoutEditor {
     }
 
     public void mouseReleased() {
+        if (this.resizingSection != null || this.resizingPart != null) {
+            this.resizingSection = null;
+            this.resizingPart = null;
+            this.save();
+        }
         if (this.draggingPart != null) {
             this.draggingPart = null;
             this.save();

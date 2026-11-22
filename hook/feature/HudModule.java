@@ -121,7 +121,10 @@ extends Module {
                 float var10 = var7.method_4495();
                 double var11 = this.mc.field_1729.method_1603() * (double)var8 / (double)Math.max(1, var7.method_4480());
                 double var13 = this.mc.field_1729.method_1604() * (double)var9 / (double)Math.max(1, var7.method_4507());
-                boolean var15 = this.mc.field_1755 instanceof class_408;
+                boolean chat = this.mc.field_1755 instanceof class_408;
+                HudLayoutEditor.chatOpen = chat;
+                if (!chat) HudLayoutEditor.editing = false; // closing the chat leaves the editor
+                boolean var15 = chat && HudLayoutEditor.editing;
                 var1.context.method_51448().pushMatrix();
                 var1.context.method_51448().scale(1.0f / var10, 1.0f / var10);
                 try {

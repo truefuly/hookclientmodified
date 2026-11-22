@@ -13,6 +13,8 @@ public abstract class VerseFallDragScaleMixin {
     @WrapOperation(method = "onClick", at = @At(value = "INVOKE", target = "Lcom/spotifyclient/hud/DragController;tryGrab(FFFF)Z"), remap = false)
     private boolean hook$grab(DragController g, float mx, float my, float w, float h, Operation<Boolean> original) {
         if (VerseFallHudAnchors.managed(g)) return false; // moved by the HookVisuals HUD editor
+        // in the chat, music HUD elements only move once the HUD editor is on
+        if (net.minecraft.class_310.method_1551().field_1755 instanceof net.minecraft.class_408 && !hook.feature.HudLayoutEditor.editing) return false;
         float s = VerseFallHudAnchors.scaleOf(g);
         return original.call(g, mx, my, w * s, h * s);
     }

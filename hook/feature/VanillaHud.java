@@ -124,7 +124,7 @@ public final class VanillaHud {
 
     static boolean editorOpen() {
         try {
-            return class_310.method_1551().field_1755 instanceof class_408;
+            return HudLayoutEditor.editing && class_310.method_1551().field_1755 instanceof class_408;
         } catch (Throwable t) {
             return false;
         }
@@ -174,6 +174,10 @@ public final class VanillaHud {
     static void resize(Part part, float step) {
         State s = STATES.get(part);
         s.scale = Math.max(0.4f, Math.min(3.0f, Math.round((s.scale + step) * 20.0f) / 20.0f));
+    }
+
+    static void setScale(Part part, float scale) {
+        STATES.get(part).scale = Math.max(0.4f, Math.min(3.0f, Math.round(scale * 100.0f) / 100.0f));
     }
 
     static void toggle(Part part) {

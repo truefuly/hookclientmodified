@@ -412,7 +412,13 @@ final class CartTest {
         if (clock == 115) mc.field_1705.method_1743().method_1808(false);
         if (clock == 118) shot(mc, "hud_play_effects");
         if (clock == 125) mc.method_1507(new net.minecraft.class_408("", false));
-        if (clock == 145) {
+        if (clock == 135) {
+            float[] bc = HudModule.instance.editor().editorButtonCenter();
+            System.out.println("CARTTEST CLICK " + (bc == null ? "-1 -1" : (int) bc[0] + " " + (int) bc[1]) + " editing=" + HudLayoutEditor.editing);
+            shot(mc, "hud_chat_button");
+        }
+        if (clock == 165) {
+            System.out.println("CARTTEST EDITING " + HudLayoutEditor.editing);
             // window-pixel centers for the script to scroll on (real mouse wheel messages to the test window)
             float[] mb = HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.MUSIC_BAR);
             float[] et = HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.EFFECT_TIMER);
@@ -421,17 +427,24 @@ final class CartTest {
             report(mc, "before");
             shot(mc, "hud_editor_before");
         }
-        if (clock == 230) {
-            System.out.println("CARTTEST SCALES music=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.MUSIC_BAR)
+        if (clock == 250) {
+            System.out.println("CARTTEST SCALES wheel music=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.MUSIC_BAR)
                     + " effects=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.EFFECT_TIMER));
+            float[] eh = HudModule.instance.editor().handleOf(HudLayoutEditor.HudSection.EFFECT_TIMER);
+            float[] sh = HudModule.instance.editor().handleOf(VanillaHud.Part.SCOREBOARD);
+            System.out.println("CARTTEST DRAG " + (eh == null ? "-1 -1" : (int) eh[0] + " " + (int) eh[1]) + " " + (sh == null ? "-1 -1" : (int) sh[0] + " " + (int) sh[1]));
+        }
+        if (clock == 330) {
+            System.out.println("CARTTEST SCALES drag effects=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.EFFECT_TIMER)
+                    + " scoreboard=" + VanillaHud.state(VanillaHud.Part.SCOREBOARD).scale);
             report(mc, "big");
             shot(mc, "hud_editor_big");
         }
-        if (clock == 235) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
-        if (clock == 270) { report(mc, "small"); shot(mc, "hud_editor_small"); }
-        if (clock == 280) mc.method_1507(null);
-        if (clock == 295) shot(mc, "hud_play_small");
-        if (clock == 310) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+        if (clock == 335) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
+        if (clock == 370) { report(mc, "small"); shot(mc, "hud_editor_small"); }
+        if (clock == 380) mc.method_1507(null);
+        if (clock == 395) { shot(mc, "hud_play_small"); System.out.println("CARTTEST EDITING after close " + HudLayoutEditor.editing); }
+        if (clock == 410) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static int ncX;
