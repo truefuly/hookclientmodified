@@ -86,6 +86,9 @@ public final class HudLayoutEditor {
         var16 = this.element(var1, HudSection.PLAYER, var5.player && var4.inWorld(), var2, var3, var16, var7, var8, var10, () -> this.playerSize(var1, var4), (var3x, var4x) -> this.drawPlayer(var1, var3x, var4x, var4));
         this.element(var1, HudSection.COORDS, var5.coords && var4.inWorld(), var2, var3, var16, var7, var8, var10, () -> this.coordsSize(var1, var4, var5), (var4x, var5x) -> this.drawCoords(var1, var4x, var5x, var4, var5));
         this.drawModules(var1, var5.modules, var2, var3, var4, var7, var8, var10);
+        List<EffectRow> fx = this.effectRows(var4, var7);
+        this.element(var1, HudSection.EFFECT_TIMER, var5.effectTimer && !fx.isEmpty() && var4.inWorld(), var2, var3, 0.0f, var7, var8, var10, () -> this.effectsSize(var1, fx, var5), (ex, ey) -> this.drawEffects(var1, ex, ey, fx, var5));
+        this.musicBar(var1, var2, var3, var7, var8, var10);
         if (this.draggingPart != null) {
             float g = guiScale();
             float[] pr = this.partRect(this.draggingPart);
@@ -240,7 +243,11 @@ public final class HudLayoutEditor {
 
     private final Map<HudSection, Float> scales = new EnumMap<HudSection, Float>(HudSection.class);
 
-    private float scaleOf(HudSection section) {
+    float[] boundsOf(HudSection section) {
+        return this.bounds.get(section);
+    }
+
+    float scaleOf(HudSection section) {
         Float s = this.scales.get(section);
         return s == null ? 1.0f : s;
     }
@@ -628,6 +635,107 @@ public final class HudLayoutEditor {
         var1.outline(var2, var3, var4, var5, var5 / 2.0f, Math.max(1.0f, this.u * 0.85f), UiRenderer.white(0.065f));
     }
 
+    // ------------------------------------------------------------------ music bar (VerseFall lyrics bar as a normal element)
+
+    /**
+     * The music / lyrics bar is drawn by VerseFall, but placed, anchored and sized here like every other element:
+     * its size comes from VerseFall (HUD-space units -> window pixels), our layout decides where it goes and VerseFall
+     * is told to draw it there.
+     */
+    private void musicBar(UiRenderer ui, int sw, int sh, boolean editor, double mx, double my) {
+        com.spotifyclient.hud.Draggable bar = VerseFallHudAnchors.lyricsBar();
+        if (bar == null) {
+            this.bounds.remove(HudSection.MUSIC_BAR);
+            return;
+        }
+        float hudW = com.spotifyclient.hud.HudSpace.width();
+        float k = hudW > 0.0f ? sw / hudW : 1.0f; // window pixels per VerseFall HUD unit
+        float s = this.scaleOf(HudSection.MUSIC_BAR);
+        VerseFallHudAnchors.musicBarScale = s;
+        boolean show = bar.interactive() && bar.width() > 0.0f;
+        this.element(ui, HudSection.MUSIC_BAR, show, sw, sh, 0.0f, editor, mx, my,
+                () -> new float[]{bar.width() * s * k, bar.height() * s * k},
+                (ex, ey) -> {
+                    bar.drag().setTarget(ex / k, ey / k);
+                    bar.drag().syncToTarget();
+                });
+    }
+
+    // ------------------------------------------------------------------ effect timer
+
+    private static final List<EffectRow> PREVIEW = List.of(
+            new EffectRow(null, "Speed II", 1820, 3600, false, 0xFF33EBFF, false),
+            new EffectRow(null, "Strength", 160, 3600, false, 0xFFFFC700, false),
+            new EffectRow(null, "Fire Resistance", 0, 0, true, 0xFFFF9900, false));
+
+    /** Live effects, or a sample list while the HUD editor is open and nothing is active (so it can be placed). */
+    private List<EffectRow> effectRows(HudDataSource src, boolean editor) {
+        List<EffectRow> rows = src.inWorld() ? src.effects() : List.of();
+        return rows.isEmpty() && editor ? PREVIEW : rows;
+    }
+
+    private static String clockOf(EffectRow e) {
+        if (e.infinite()) return "";
+        int s = Math.max(0, e.ticks() / 20);
+        if (s >= 3600) return String.format(Locale.ROOT, "%d:%02d:%02d", s / 3600, s / 60 % 60, s % 60);
+        return String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
+    }
+
+    private float effectRowH(adhvjlahyjurfh o) {
+        return this.d(o.effectBars ? 30.0f : 26.0f);
+    }
+
+    private float[] effectsSize(UiRenderer ui, List<EffectRow> rows, adhvjlahyjurfh o) {
+        float nameW = 0.0f, timeW = 0.0f;
+        for (EffectRow e : rows) {
+            nameW = Math.max(nameW, this.textW(ui, e.name(), this.d(12.0f), 1));
+            timeW = Math.max(timeW, this.textW(ui, clockOf(e), this.d(11.5f), 0));
+        }
+        float icon = o.effectIcons ? this.d(18.0f) + this.d(8.0f) : 0.0f;
+        float w = this.d(10.0f) + icon + nameW + this.d(16.0f) + timeW + this.d(12.0f);
+        float h = this.d(6.0f) + rows.size() * this.effectRowH(o) + this.d(4.0f);
+        return new float[]{Math.max(this.d(120.0f), w), h};
+    }
+
+    private void drawEffects(UiRenderer ui, float x, float y, List<EffectRow> rows, adhvjlahyjurfh o) {
+        float[] size = this.effectsSize(ui, rows, o);
+        float w = size[0];
+        this.glass(ui, x, y, w, size[1], this.d(14.0f), o);
+        float rowH = this.effectRowH(o);
+        float ry = y + this.d(6.0f);
+        for (int i = 0; i < rows.size(); i++) {
+            EffectRow e = rows.get(i);
+            boolean ending = !e.infinite() && e.ticks() < 200;
+            // last 10 seconds: gentle blink
+            float blink = ending ? 0.55f + 0.45f * (float)Math.abs(Math.cos(this.time * 4.0f)) : 1.0f;
+            int rgb = e.color() & 0xFFFFFF;
+            float cx = x + this.d(10.0f);
+            float mid = ry + this.d(11.0f);
+            if (o.effectIcons) {
+                float is = this.d(18.0f);
+                ui.round(cx - this.d(2.0f), mid - is / 2.0f - this.d(2.0f), is + this.d(4.0f), is + this.d(4.0f), this.d(6.0f), (Math.round(0.16f * 255) << 24) | rgb);
+                ui.pushAlpha(blink);
+                if (e.icon() != null) ui.guiSprite(e.icon(), cx, mid - is / 2.0f, is);
+                else ui.circle(cx + is / 2.0f, mid, is / 3.0f, 0xFF000000 | rgb);
+                ui.popAlpha();
+                cx += is + this.d(8.0f);
+            }
+            ui.text(e.name(), cx, mid - this.d(12.0f) / 2.0f - this.d(1.0f), this.d(12.0f), 1, e.bad() ? UiRenderer.argb(0.95f, 255, 140, 140) : UiRenderer.white(0.95f));
+            String t = clockOf(e);
+            int tc = ending ? UiRenderer.argb(blink, 255, 120, 110) : UiRenderer.white(0.62f);
+            ui.textRight(t, x + w - this.d(12.0f), mid - this.d(11.5f) / 2.0f - this.d(1.0f), this.d(11.5f), 0, tc);
+            if (o.effectBars) {
+                float bx = cx, bw = x + w - this.d(12.0f) - bx;
+                float by = ry + this.d(22.0f);
+                float bh = Math.max(1.0f, this.d(2.5f));
+                ui.round(bx, by, bw, bh, bh / 2.0f, UiRenderer.white(0.08f));
+                float frac = e.infinite() || e.total() <= 0 ? 1.0f : Math.max(0.0f, Math.min(1.0f, e.ticks() / (float)e.total()));
+                if (frac > 0.0f) ui.round(bx, by, Math.max(bh, bw * frac), bh, bh / 2.0f, (Math.round(0.9f * blink * 255) << 24) | rgb);
+            }
+            ry += rowH;
+        }
+    }
+
     private float[] position(HudSection var1, float var2, float var3, int var4, int var5, float var6) {
         float[] fArray;
         adsdzhecwnzmbs var7 = this.places.get((Object)var1);
@@ -642,6 +750,14 @@ public final class HudLayoutEditor {
                 fArray2[0] = this.d(10.0f);
                 fArray = fArray2;
                 fArray2[1] = (float)var5 - this.d(10.0f) - var3;
+                break;
+            }
+            case 6: {
+                fArray = new float[]{(float)var4 / 2.0f - var2 / 2.0f, this.d(8.0f)};
+                break;
+            }
+            case 5: {
+                fArray = new float[]{(float)var4 - this.d(10.0f) - var2, (float)var5 * 0.34f};
                 break;
             }
             case 4: {
@@ -821,7 +937,9 @@ public final class HudLayoutEditor {
         INFO("Info"),
         PLAYER("Player"),
         COORDS("Coordinates"),
-        MODULES("Modules");
+        MODULES("Modules"),
+        EFFECT_TIMER("Effect Timer"),
+        MUSIC_BAR("Music Bar");
 
         final String label;
 
@@ -843,6 +961,9 @@ public final class HudLayoutEditor {
         public float opacity = 0.62f;
         public boolean rainbow;
         public float rainbowSpeed = 1.0f;
+        public boolean effectTimer;
+        public boolean effectIcons = true;
+        public boolean effectBars = true;
     }
 
     private static final class adsdzhecwnzmbs {
@@ -893,6 +1014,14 @@ public final class HudLayoutEditor {
         public float health();
 
         public List<String> modules();
+
+        default List<EffectRow> effects() {
+            return List.of();
+        }
+    }
+
+    /** One active potion effect for the Effect Timer (icon = GUI sprite id, ticks left, total for the bar). */
+    public record EffectRow(Object icon, String name, int ticks, int total, boolean infinite, int color, boolean bad) {
     }
 
     private static final class aemkvoltyxggkb {

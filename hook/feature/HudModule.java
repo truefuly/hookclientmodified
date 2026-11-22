@@ -54,6 +54,8 @@ extends Module {
     private final HudDataSourceAdapter data = new HudDataSourceAdapter();
     private float shown;
     private long last;
+    static HudModule instance;
+    private final java.util.Map<String, Integer> effectTotals = new java.util.HashMap<>();
 
     public HudModule() {
         super(EncryptedString.of("HUD"), EncryptedString.of("Glass HUD; open chat to move elements, resize/hide boss bar and scoreboard, or reset"), -1, Category.CLIENT);
@@ -65,6 +67,16 @@ extends Module {
         catch (Throwable throwable) {
             // empty catch block
         }
+        instance = this;
+    }
+
+    /** Draws only the Effect Timer (and lets it be edited) while the HUD module itself is off. */
+    HudLayoutEditor editor() {
+        return this.hud;
+    }
+
+    void renderEffectsOnly(Render2DEvent event) {
+        this.render(event, true);
     }
 
     /*
@@ -72,6 +84,10 @@ extends Module {
      */
     @EventListener
     public void onRender2D(Render2DEvent var1) {
+        this.render(var1, false);
+    }
+
+    private void render(Render2DEvent var1, boolean effectsOnly) {
         if (!this.mc.field_1690.field_1842 && this.mc.method_22683() != null) {
             long var2 = System.nanoTime();
             float var4 = this.last == 0L ? 0.016f : Math.min(0.1f, (float)(var2 - this.last) / 1.0E9f);
@@ -92,6 +108,13 @@ extends Module {
                 this.options.opacity = (float)this.opacity.getValue();
                 this.options.rainbow = this.rainbow.getValue();
                 this.options.rainbowSpeed = (float)this.rainbowSpeed.getValue();
+                this.options.effectTimer = EffectTimerModule.active();
+                this.options.effectIcons = EffectTimerModule.icons();
+                this.options.effectBars = EffectTimerModule.bars();
+                if (effectsOnly) {
+                    this.options.watermark = this.options.time = this.options.info = this.options.player = false;
+                    this.options.coords = this.options.netherCoords = this.options.modules = false;
+                }
                 class_1041 var7 = this.mc.method_22683();
                 int var8 = var7.method_4489();
                 int var9 = var7.method_4506();
@@ -220,6 +243,40 @@ extends Module {
         public List<String> modules() {
             return ModuleCatalog.enabled(HudModule.this);
         }
+
+        @Override
+        public List<HudLayoutEditor.EffectRow> effects() {
+            net.minecraft.class_746 p = HudModule.this.mc.field_1724;
+            if (p == null) return List.of();
+            java.util.ArrayList<HudLayoutEditor.EffectRow> out = new java.util.ArrayList<>();
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (net.minecraft.class_1293 e : p.method_6026()) {
+                if (!e.method_5592()) continue; // hidden icon
+                if (e.method_5591() && !EffectTimerModule.ambient()) continue; // beacon / conduit
+                net.minecraft.class_6880<net.minecraft.class_1291> type = e.method_5579();
+                net.minecraft.class_1291 effect = type.comp_349();
+                String key = e.method_5586();
+                seen.add(key);
+                int ticks = e.method_5584();
+                boolean inf = e.method_48559();
+                // the bar drains from the longest duration seen since the effect started (or was refreshed)
+                Integer total = HudModule.this.effectTotals.get(key);
+                if (total == null || ticks > total) total = ticks;
+                HudModule.this.effectTotals.put(key, total);
+                String name = effect.method_5560().getString();
+                int amp = e.method_5578();
+                if (amp > 0) name += " " + roman(amp + 1);
+                Object icon = net.minecraft.class_329.method_71644(type);
+                out.add(new HudLayoutEditor.EffectRow(icon, name, ticks, total, inf, effect.method_5556(), !effect.method_5573()));
+            }
+            HudModule.this.effectTotals.keySet().retainAll(seen);
+            out.sort((a, b) -> a.infinite() != b.infinite() ? (a.infinite() ? 1 : -1) : Integer.compare(a.ticks(), b.ticks()));
+            return out;
+        }
+    }
+
+    private static String roman(int n) {
+        String[] r = {"", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
+        return n >= 0 && n < r.length ? r[n] : String.valueOf(n);
     }
 }
-

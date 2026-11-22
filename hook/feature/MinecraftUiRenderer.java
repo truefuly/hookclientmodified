@@ -250,6 +250,19 @@ extends UiRenderer {
     }
 
     @Override
+    public void guiSprite(Object id, float x, float y, float size) {
+        if (!(id instanceof class_2960 sprite)) return;
+        this.barrier();
+        this.state.method_71059();
+        Matrix3x2fStack m = this.ctx.method_51448();
+        m.pushMatrix();
+        m.translate(x, y);
+        m.scale(size / 18.0f, size / 18.0f);
+        this.ctx.method_52707(class_10799.field_56883, sprite, 0, 0, 18, 18, this.mul(0xFFFFFFFF));
+        m.popMatrix();
+    }
+
+    @Override
     public void item(Object var1, float var2, float var3, float var4) {
         this.barrier();
         this.state.method_71059();

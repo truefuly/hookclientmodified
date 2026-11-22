@@ -158,6 +158,7 @@ public final class ModuleManager {
         this.in(Category.RENDER, new TargetHudModule());
         this.in(Category.RENDER, new NametagsModule());
         this.in(Category.RENDER, new NoFogModule());
+        this.in(Category.RENDER, new hook.feature.EffectTimerModule());
         this.in(Category.RENDER, new ForceRenderModule());
         this.in(Category.RENDER, new NoParticlesModule());
         this.in(Category.RENDER, new hook.feature.NoRenderModule());

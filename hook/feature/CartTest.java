@@ -395,37 +395,42 @@ final class CartTest {
             cmd("gamemode survival");
             cmd("time set noon");
             cmd("weather clear");
-            cmd("xp add @s 7 levels");
-            cmd("effect give @s speed infinite 0");
-            cmd("effect give @s resistance infinite 0");
-            HudModule.HIDE_POTION_HUD.setValue(false);
+            cmd("tp @s 0 200 0");
+            cmd("effect clear @s");
+            cmd("effect give @s speed 95 1");
+            cmd("effect give @s strength 8 0");
+            cmd("effect give @s night_vision infinite 0");
+            cmd("effect give @s slow_falling infinite 0");
             hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
             if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            hook.module.Module et = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(EffectTimerModule.class);
+            if (et != null && !et.isEnabled()) et.setEnabled(true);
             com.spotifyclient.ModSettings.enableHudLyrics = true;
             com.spotifyclient.ModSettings.hudLyricsStyle = 0;
         }
-        if (clock == 120) {
-            cmd("title @s times 0 2000 0");
-            cmd("title @s title {\"text\":\"Test Title\"}");
-            cmd("title @s actionbar {\"text\":\"Action bar message\"}");
-        }
+        if (clock == 115) mc.field_1705.method_1743().method_1808(false);
+        if (clock == 118) shot(mc, "hud_play_effects");
         if (clock == 125) mc.method_1507(new net.minecraft.class_408("", false));
-        if (clock == 135) {
-            // put the lyrics bar centered at the top, like the user has it
-            com.spotifyclient.hud.Draggable bar = com.spotifyclient.hud.DragSystem.get().byId("lyricsbar");
-            if (bar != null) {
-                float w = com.spotifyclient.hud.HudSpace.width();
-                bar.drag().setTarget(w / 2.0f - bar.width() / 2.0f, 20.0f);
-                bar.drag().syncToTarget();
-                com.spotifyclient.hud.DragSystem.get().savePositions();
-            }
+        if (clock == 145) {
+            // window-pixel centers for the script to scroll on (real mouse wheel messages to the test window)
+            float[] mb = HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.MUSIC_BAR);
+            float[] et = HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.EFFECT_TIMER);
+            System.out.println("CARTTEST SCROLLAT " + (mb == null ? "-1 -1" : (int) (mb[0] + mb[2] / 2) + " " + (int) (mb[1] + mb[3] / 2))
+                    + " " + (et == null ? "-1 -1" : (int) (et[0] + et[2] / 2) + " " + (int) (et[1] + et[3] / 2)));
+            report(mc, "before");
+            shot(mc, "hud_editor_before");
         }
-        if (clock == 150) { report(mc, "big"); shot(mc, "hud_editor_big"); }
-        if (clock == 160) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
-        if (clock == 200) { report(mc, "small"); shot(mc, "hud_editor_small"); }
-        if (clock == 210) mc.method_1507(null);
-        if (clock == 225) shot(mc, "hud_play_small");
-        if (clock == 240) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+        if (clock == 230) {
+            System.out.println("CARTTEST SCALES music=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.MUSIC_BAR)
+                    + " effects=" + HudModule.instance.editor().scaleOf(HudLayoutEditor.HudSection.EFFECT_TIMER));
+            report(mc, "big");
+            shot(mc, "hud_editor_big");
+        }
+        if (clock == 235) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
+        if (clock == 270) { report(mc, "small"); shot(mc, "hud_editor_small"); }
+        if (clock == 280) mc.method_1507(null);
+        if (clock == 295) shot(mc, "hud_play_small");
+        if (clock == 310) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static void report(class_310 mc, String tag) {

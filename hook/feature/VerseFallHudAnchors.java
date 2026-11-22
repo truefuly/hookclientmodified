@@ -30,6 +30,24 @@ public final class VerseFallHudAnchors {
     private static boolean loaded;
     private static String lastRaw;
     private static boolean broken;
+    /** Size of the music bar, owned by the HookVisuals HUD layout ("Music Bar" element). */
+    public static volatile float musicBarScale = 1.0f;
+    public static final String MUSIC_BAR = "lyricsbar";
+
+    /** VerseFall's lyrics bar, or null. */
+    public static Draggable lyricsBar() {
+        if (broken) return null;
+        try {
+            return DragSystem.get().byId(MUSIC_BAR);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** Elements placed by the HookVisuals layout instead of VerseFall's own dragging. */
+    public static boolean managed(DragController g) {
+        return MUSIC_BAR.equals(IDS.get(g));
+    }
 
     private VerseFallHudAnchors() {
     }
@@ -66,6 +84,7 @@ public final class VerseFallHudAnchors {
             DragController g = d.drag();
             String id = d.id();
             IDS.put(g, id);
+            if (MUSIC_BAR.equals(id)) continue; // placed by the HookVisuals layout
             float sc = scale(id);
             float w = d.width() * sc, h = d.height() * sc;
             if (w <= 0.0f || h <= 0.0f) continue;
@@ -174,6 +193,7 @@ public final class VerseFallHudAnchors {
     }
 
     static float scale(String id) {
+        if (MUSIC_BAR.equals(id)) return musicBarScale;
         Float s = SCALES.get(id);
         return s == null ? 1.0f : s;
     }
@@ -197,7 +217,7 @@ public final class VerseFallHudAnchors {
             java.util.List<Draggable> all = ds.all();
             for (int i = all.size() - 1; i >= 0; i--) {
                 Draggable d = all.get(i);
-                if (!d.interactive()) continue;
+                if (!d.interactive() || MUSIC_BAR.equals(d.id())) continue;
                 float sc = scale(d.id());
                 float x = d.drag().targetX(), y = d.drag().targetY();
                 if (mx < x || my < y || mx >= x + d.width() * sc || my >= y + d.height() * sc) continue;

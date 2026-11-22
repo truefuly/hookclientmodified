@@ -71,7 +71,7 @@ public abstract class VanillaHudMixin {
 
     @WrapMethod(method = "method_1765(Lnet/minecraft/class_332;Lnet/minecraft/class_9779;)V", remap = false)
     private void hook$effects(class_332 ctx, class_9779 tick, Operation<Void> original) {
-        if (HudModule.HIDE_POTION_HUD.getValue()) return;
+        if (HudModule.HIDE_POTION_HUD.getValue() || hook.feature.EffectTimerModule.hidesVanilla()) return;
         hook$part(VanillaHud.Part.EFFECTS, ctx, () -> original.call(ctx, tick));
     }
 

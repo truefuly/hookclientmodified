@@ -35,6 +35,10 @@ public abstract class UiRenderer {
 
     public abstract void item(Object var1, float var2, float var3, float var4);
 
+    /** Draws a GUI atlas sprite (e.g. a status effect icon, an Identifier) as a square of the given size. */
+    public void guiSprite(Object id, float x, float y, float size) {
+    }
+
     public void imageGradient(String var1, float var2, float var3, float var4, int var5, int var6) {
         float var7 = this.scale();
         int var8 = Math.max(4, Math.round(var4 * var7));

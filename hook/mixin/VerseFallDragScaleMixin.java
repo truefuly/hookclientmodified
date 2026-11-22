@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 public abstract class VerseFallDragScaleMixin {
     @WrapOperation(method = "onClick", at = @At(value = "INVOKE", target = "Lcom/spotifyclient/hud/DragController;tryGrab(FFFF)Z"), remap = false)
     private boolean hook$grab(DragController g, float mx, float my, float w, float h, Operation<Boolean> original) {
+        if (VerseFallHudAnchors.managed(g)) return false; // moved by the HookVisuals HUD editor
         float s = VerseFallHudAnchors.scaleOf(g);
         return original.call(g, mx, my, w * s, h * s);
     }
