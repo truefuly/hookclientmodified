@@ -60,7 +60,6 @@ import hook.feature.EntityEspModule;
 import hook.feature.ItemEspModule;
 import hook.feature.SkinProtectModule;
 import hook.feature.SpawnerNotifyModule;
-import hook.feature.StorageEspModule;
 import hook.feature.SwingSpeedModule;
 import hook.feature.TargetHudModule;
 import hook.feature.TriggerBotModule;
@@ -150,7 +149,6 @@ public final class ModuleManager {
         this.a(new FreelookModule());
         this.in(Category.RENDER, new EntityEspModule());
         this.in(Category.RENDER, new ItemEspModule());
-        this.in(Category.RENDER, new StorageEspModule());
         this.in(Category.RENDER, new BlockEspModule());
         this.in(Category.RENDER, new TunnelEspModule());
         this.in(Category.RENDER, new DeepslateRotationEspModule());
@@ -217,6 +215,11 @@ public final class ModuleManager {
         for (Module var2 : this.modules) {
             var2.addSetting(new BindSetting(EncryptedString.of("Keybind"), var2.getKeybind(), true).setDescription(EncryptedString.of("Key to enabled the module")));
         }
+    }
+
+    @EventListener
+    public void keepHudAnchored(hook.event.events.Render2DEvent event) {
+        hook.feature.VerseFallHudAnchors.update();
     }
 
     @EventListener

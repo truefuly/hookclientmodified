@@ -153,12 +153,41 @@ public final class BaseFinderModules {
     // =================================================================== 2. Storage
     public static final class Storage extends Esp {
         private final BooleanSetting entities = new BooleanSetting(EncryptedString.of("Chest Minecarts & Donkeys"), true);
+        private final BooleanSetting structureLoot = new BooleanSetting(EncryptedString.of("Show Structure Loot"), false);
         private final NumberSetting minChunk = new NumberSetting(EncryptedString.of("Stash Alert"), 2.0, 60.0, 6.0, 1.0);
+        private final hook.module.setting.StorageBlocksSetting types = new hook.module.setting.StorageBlocksSetting(EncryptedString.of("Storages"))
+                .add("chest", "Chest", net.minecraft.class_1802.field_8106, true, new Color(255, 179, 71))
+                .add("ender_chest", "Ender Chest", net.minecraft.class_1802.field_8466, true, new Color(60, 210, 170))
+                .add("shulker", "Shulker Box", net.minecraft.class_1802.field_8545, true, new Color(200, 110, 255))
+                .add("barrel", "Barrel", net.minecraft.class_1802.field_16307, true, new Color(232, 151, 70))
+                .add("hopper", "Hopper", net.minecraft.class_1802.field_8239, true, new Color(120, 130, 255))
+                .add("furnace", "Furnace / Smoker", net.minecraft.class_1802.field_8732, true, new Color(102, 168, 255))
+                .add("dispenser", "Dispenser", net.minecraft.class_1802.field_8357, false, new Color(95, 188, 255))
+                .add("dropper", "Dropper", net.minecraft.class_1802.field_8878, false, new Color(118, 134, 162))
+                .add("brewing_stand", "Brewing Stand", net.minecraft.class_1802.field_8740, false, new Color(249, 115, 140))
+                .add("crafter", "Crafter", net.minecraft.class_1802.field_46791, false, new Color(255, 195, 72))
+                .add("chiseled_bookshelf", "Chiseled Bookshelf", net.minecraft.class_1802.field_40215, false, new Color(189, 126, 255))
+                .add("decorated_pot", "Decorated Pot", net.minecraft.class_1802.field_42699, false, new Color(223, 119, 92));
 
         public Storage() {
-            super("Storage ESP", "Chests, barrels, shulkers, ender chests, hoppers, furnaces... plus chest minecarts and donkeys/llamas with chests. Loot chests of structures, shipwrecks and buried treasure are left out. Alerts on stashes.", 0xFFFFB347);
+            super("Storage ESP", "Chests, barrels, shulkers, ender chests, hoppers, furnaces... (pick which, each with its own color) plus chest minecarts and donkeys/llamas with chests. Loot chests of structures, shipwrecks and buried treasure are left out. Alerts on stashes.", 0xFFFFB347);
             this.minChunk.setDescription(EncryptedString.of("This many player containers in one chunk = stash alert."));
-            this.addSettings(this.color, this.entities, this.minChunk, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.structureLoot.setDescription(EncryptedString.of("Also show containers inside villages, mineshafts, strongholds and other structures."));
+            this.addSettings(this.types, this.entities, this.structureLoot, this.minChunk, this.range, this.fill, this.tracers, this.walls, this.alerts);
+        }
+
+        private static String typeKey(String id) {
+            if (id.equals("chest") || id.equals("trapped_chest")) return "chest";
+            if (id.endsWith("shulker_box")) return "shulker";
+            if (id.equals("blast_furnace") || id.equals("smoker")) return "furnace";
+            return id;
+        }
+
+        private List<class_2338> shown(BaseFinder.ChunkData cd) {
+            if (!this.structureLoot.getValue()) return BaseFinder.finds(cd, BaseFinder.STORAGE, BaseFinder.STORAGE_W);
+            List<class_2338> all = new java.util.ArrayList<>(cd.hits[BaseFinder.STORAGE]);
+            all.addAll(cd.hits[BaseFinder.STORAGE_W]);
+            return all;
         }
 
         @Override
@@ -176,13 +205,16 @@ public final class BaseFinderModules {
         @EventListener
         public void onRender3D(Render3DEvent event) {
             BaseFinder.Draw d = new BaseFinder.Draw();
-            Color c = BaseFinder.col(this.color.getArgb(), 230);
+            hook.module.setting.StorageBlocksSetting.Entry chestEntry = this.types.get("chest");
+            Color c = chestEntry != null ? new Color(chestEntry.color().getRed(), chestEntry.color().getGreen(), chestEntry.color().getBlue(), 230) : BaseFinder.col(this.color.getArgb(), 230);
             int n = 0;
             for (BaseFinder.ChunkData cd : BaseFinder.all()) {
-                for (class_2338 p : BaseFinder.finds(cd, BaseFinder.STORAGE, BaseFinder.STORAGE_W)) {
+                for (class_2338 p : this.shown(cd)) {
                     if (!this.inRange(p)) continue;
                     String id = BaseFinder.id(this.mc.field_1687.method_8320(p).method_26204());
-                    Color k = id.contains("shulker") ? new Color(200, 110, 255, 235) : id.equals("ender_chest") ? new Color(60, 210, 170, 235) : id.contains("chest") || id.equals("barrel") ? c : new Color(170, 170, 170, 200);
+                    hook.module.setting.StorageBlocksSetting.Entry entry = this.types.get(typeKey(id));
+                    if (entry == null || !entry.enabled()) continue;
+                    Color k = new Color(entry.color().getRed(), entry.color().getGreen(), entry.color().getBlue(), 235);
                     d.block(p, k, this.fill.getIntValue());
                     if (this.tracers.getValue()) d.tracer(class_243.method_24953(p), k);
                     if (++n > 2000) break;

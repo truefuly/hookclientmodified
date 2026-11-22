@@ -64,12 +64,20 @@ public final class HudLayoutEditor {
         this.lastOptions = var5;
         this.u = Math.max(0.5f, (float)var3 / 1080.0f * var5.scale);
         this.lastSw = var2;
+        this.lastSh = var3;
+        this.snappedX = false;
+        this.snappedY = false;
         if (this.dragging != null) {
             adsdzhecwnzmbs var14 = this.places.computeIfAbsent(this.dragging, var0 -> new adsdzhecwnzmbs());
             float[] var15 = this.bounds.get((Object)this.dragging);
             if (var15 != null) {
-                this.placeFromPixel(var14, (float)(var8 - this.grabX), (float)(var10 - this.grabY), var15[2], var15[3], var2, var3);
+                float nx = this.snapX((float)(var8 - this.grabX), var15[2], var2);
+                float ny = this.snapY((float)(var10 - this.grabY), var15[3], var3);
+                this.placeFromPixel(var14, nx, ny, var15[2], var15[3], var2, var3);
             }
+        }
+        if (var7) {
+            this.drawGrid(var1, var2, var3, var6);
         }
         var1.pushAlpha(var6);
         float var16 = this.d(10.0f);
@@ -80,7 +88,16 @@ public final class HudLayoutEditor {
         this.drawModules(var1, var5.modules, var2, var3, var4, var7, var8, var10);
         if (this.draggingPart != null) {
             float g = guiScale();
-            VanillaHud.move(this.draggingPart, (float)((var8 - this.grabX) / g), (float)((var10 - this.grabY) / g));
+            float[] pr = this.partRect(this.draggingPart);
+            float nx = (float)(var8 - this.grabX), ny = (float)(var10 - this.grabY);
+            if (pr != null) {
+                nx = this.snapX(nx, pr[2], var2);
+                ny = this.snapY(ny, pr[3], var3);
+            }
+            VanillaHud.move(this.draggingPart, nx / g, ny / g);
+        }
+        if (var7) {
+            this.drawSnapGuides(var1, var2, var3);
         }
         if (var7) {
             this.drawVanillaFrames(var1, var8, var10);
@@ -93,6 +110,59 @@ public final class HudLayoutEditor {
 
     private VanillaHud.Part draggingPart;
     private final float[] resetBounds = new float[4];
+    private int lastSh = 1080;
+    private boolean snappedX;
+    private boolean snappedY;
+
+    // ------------------------------------------------------------------ alignment grid + snapping
+
+    /** Grid every 10 GUI units (stronger every 50) with the screen's center lines highlighted. */
+    private void drawGrid(UiRenderer ui, int sw, int sh, float alpha) {
+        float step = Math.max(6.0f, guiScale() * 10.0f);
+        float cx = sw / 2.0f, cy = sh / 2.0f;
+        ui.pushAlpha(alpha);
+        int i = 1;
+        for (float o = step; cx + o < sw || cx - o > 0.0f; o += step, i++) {
+            int col = UiRenderer.white(i % 5 == 0 ? 0.10f : 0.045f);
+            ui.rect(cx + o, 0.0f, 1.0f, sh, col);
+            ui.rect(cx - o - 1.0f, 0.0f, 1.0f, sh, col);
+        }
+        i = 1;
+        for (float o = step; cy + o < sh || cy - o > 0.0f; o += step, i++) {
+            int col = UiRenderer.white(i % 5 == 0 ? 0.10f : 0.045f);
+            ui.rect(0.0f, cy + o, sw, 1.0f, col);
+            ui.rect(0.0f, cy - o - 1.0f, sw, 1.0f, col);
+        }
+        int center = UiPalette.accent(0.45f);
+        ui.rect(cx - 0.5f, 0.0f, 1.0f, sh, center);
+        ui.rect(0.0f, cy - 0.5f, sw, 1.0f, center);
+        ui.popAlpha();
+    }
+
+    /** Bright center line while a dragged element is snapped to it. */
+    private void drawSnapGuides(UiRenderer ui, int sw, int sh) {
+        float t = Math.max(2.0f, this.u * 2.0f);
+        if (this.snappedX) ui.rect(sw / 2.0f - t / 2.0f, 0.0f, t, sh, UiPalette.accent(0.95f));
+        if (this.snappedY) ui.rect(0.0f, sh / 2.0f - t / 2.0f, sw, t, UiPalette.accent(0.95f));
+    }
+
+    private float snapX(float x, float w, int sw) {
+        float c = sw / 2.0f;
+        if (Math.abs(x + w / 2.0f - c) < this.d(8.0f)) {
+            this.snappedX = true;
+            return c - w / 2.0f;
+        }
+        return x;
+    }
+
+    private float snapY(float y, float h, int sh) {
+        float c = sh / 2.0f;
+        if (Math.abs(y + h / 2.0f - c) < this.d(8.0f)) {
+            this.snappedY = true;
+            return c - h / 2.0f;
+        }
+        return y;
+    }
 
     private static float guiScale() {
         try {
@@ -120,6 +190,7 @@ public final class HudLayoutEditor {
             float pad = this.d(4.0f);
             if (!visible) ui.round(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), UiRenderer.argb(0.35f, 10, 10, 14));
             ui.outline(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), visible ? UiRenderer.white(0.22f + 0.35f * h) : UiRenderer.argb(0.5f + 0.3f * h, 230, 120, 120));
+            if (visible && VanillaHud.preview(part)) ui.round(r[0] - pad, r[1] - pad, r[2] + pad * 2.0f, r[3] + pad * 2.0f, this.d(10.0f), UiRenderer.white(0.06f));
             String label = part.label + (visible ? "  " + Math.round(VanillaHud.state(part).scale * 100.0f) + "%" : "  (hidden)");
             float lw = this.textW(ui, label, this.d(10.0f), 1) + this.d(12.0f);
             float lh = this.d(16.0f);
@@ -145,7 +216,7 @@ public final class HudLayoutEditor {
         ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.85f, 20, 21, 25), UiPalette.accent(0.85f), a * 0.6f));
         ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.18f), UiPalette.accent(0.9f), a));
         ui.textCentered(text, sw / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
-        String hint = "Drag to move  \u00B7  Scroll on boss bar / scoreboard to resize  \u00B7  Right-click to hide or show";
+        String hint = "Drag to move  \u00B7  Scroll on anything to resize  \u00B7  Right-click vanilla parts to hide or show  \u00B7  Snaps to the center lines";
         ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
         this.resetBounds[0] = x; this.resetBounds[1] = y; this.resetBounds[2] = w; this.resetBounds[3] = h;
     }
@@ -167,11 +238,30 @@ public final class HudLayoutEditor {
         return true;
     }
 
-    /** Mouse wheel in the editor over a vanilla part: resize it. */
+    private final Map<HudSection, Float> scales = new EnumMap<HudSection, Float>(HudSection.class);
+
+    private float scaleOf(HudSection section) {
+        Float s = this.scales.get(section);
+        return s == null ? 1.0f : s;
+    }
+
+    /** Mouse wheel in the editor: resize whatever HUD element is under the mouse (ours, music HUD or vanilla). */
     public boolean scroll(double mx, double my, double amount) {
+        if (amount == 0.0) return false;
+        float step = amount > 0.0 ? 0.05f : -0.05f;
+        HudSection[] sections = HudSection.values();
+        for (int i = sections.length - 1; i >= 0; --i) {
+            float[] b = this.bounds.get(sections[i]);
+            if (b == null || mx < b[0] || mx >= b[0] + b[2] || my < b[1] || my >= b[1] + b[3]) continue;
+            float s = Math.max(0.5f, Math.min(2.5f, Math.round((this.scaleOf(sections[i]) + step) * 20.0f) / 20.0f));
+            this.scales.put(sections[i], s);
+            this.save();
+            return true;
+        }
+        if (VerseFallHudAnchors.scrollAtMouse(step)) return true;
         VanillaHud.Part part = this.partAt(mx, my);
-        if (part == null || amount == 0.0) return false;
-        VanillaHud.resize(part, amount > 0.0 ? 0.05f : -0.05f);
+        if (part == null) return false;
+        VanillaHud.resize(part, step);
         this.save();
         return true;
     }
@@ -187,9 +277,12 @@ public final class HudLayoutEditor {
             this.bounds.remove((Object)var2);
             return var6;
         }
+        float baseU = this.u;
+        this.u = baseU * this.scaleOf(var2); // per-element size (mouse wheel in the HUD editor)
         float[] var15 = var12.get();
         float var16 = var15[0];
         float var17 = var15[1];
+        this.u = baseU;
         float[] var18 = this.position(var2, var16, var17, var4, var5, var6);
         float var19 = var18[0];
         float var20 = var18[1];
@@ -197,7 +290,12 @@ public final class HudLayoutEditor {
         float var21 = UiEasing.out(var14);
         var1.pushAlpha(var21);
         var1.pushTransform(0.0f, (1.0f - var21) * this.d(-6.0f), 1.0f);
-        var13.draw(var19, var20);
+        this.u = baseU * this.scaleOf(var2);
+        try {
+            var13.draw(var19, var20);
+        } finally {
+            this.u = baseU;
+        }
         var1.popTransform();
         var1.popAlpha();
         if (var7) {
@@ -419,6 +517,16 @@ public final class HudLayoutEditor {
     }
 
     private void drawModules(UiRenderer var1, boolean var2, int var3, int var4, HudDataSource var5, boolean var6, double var7, double var9) {
+        float baseU = this.u;
+        this.u = baseU * this.scaleOf(HudSection.MODULES);
+        try {
+            this.drawModules0(var1, var2, var3, var4, var5, var6, var7, var9, baseU);
+        } finally {
+            this.u = baseU;
+        }
+    }
+
+    private void drawModules0(UiRenderer var1, boolean var2, int var3, int var4, HudDataSource var5, boolean var6, double var7, double var9, float baseU) {
         List<String> var13;
         float var11 = this.anim("el:MODULES", var2 ? 1.0f : 0.0f, 9.0f);
         float var12 = this.d(12.5f);
@@ -454,7 +562,10 @@ public final class HudLayoutEditor {
         if (var11 < 0.01f && this.rows.isEmpty()) {
             this.bounds.remove((Object)HudSection.MODULES);
         } else {
+            float scaledU = this.u;
+            this.u = baseU;
             float[] var21 = this.position(HudSection.MODULES, var41, var42, var3, var4, 0.0f);
+            this.u = scaledU;
             float var22 = var21[0];
             float var23 = var21[1];
             boolean var24 = var22 + var41 / 2.0f > (float)var3 / 2.0f;
@@ -499,6 +610,7 @@ public final class HudLayoutEditor {
             }
             var1.popAlpha();
             if (var6) {
+                this.u = baseU;
                 this.editFrame(var1, HudSection.MODULES, var22, var23, var41, var42, var7, var9);
             }
         }
@@ -520,8 +632,8 @@ public final class HudLayoutEditor {
         float[] fArray;
         adsdzhecwnzmbs var7 = this.places.get((Object)var1);
         if (var7 != null && var7.moved) {
-            float var8 = var7.right ? (float)var4 - this.d(var7.ox) - var2 : this.d(var7.ox);
-            float var9 = var7.bottom ? (float)var5 - this.d(var7.oy) - var3 : this.d(var7.oy);
+            float var8 = var7.centerX ? (float)var4 / 2.0f + this.d(var7.ox) - var2 / 2.0f : var7.right ? (float)var4 - this.d(var7.ox) - var2 : this.d(var7.ox);
+            float var9 = var7.centerY ? (float)var5 / 2.0f + this.d(var7.oy) - var3 / 2.0f : var7.bottom ? (float)var5 - this.d(var7.oy) - var3 : this.d(var7.oy);
             return new float[]{HudLayoutEditor.clamp(var8, 0.0f, (float)var4 - var2), HudLayoutEditor.clamp(var9, 0.0f, (float)var5 - var3)};
         }
         switch (var1.ordinal()) {
@@ -553,10 +665,16 @@ public final class HudLayoutEditor {
         var2 = HudLayoutEditor.clamp(var2, 0.0f, (float)var6 - var4);
         var3 = HudLayoutEditor.clamp(var3, 0.0f, (float)var7 - var5);
         var1.moved = true;
-        var1.right = var2 + var4 / 2.0f > (float)var6 / 2.0f;
-        var1.bottom = var3 + var5 / 2.0f > (float)var7 / 2.0f;
-        var1.ox = (var1.right ? (float)var6 - var2 - var4 : var2) / this.u;
-        var1.oy = (var1.bottom ? (float)var7 - var3 - var5 : var3) / this.u;
+        // anchor to the nearest of left / center / right and top / middle / bottom, so a centered element stays
+        // centered (and edge elements stay at their edge) when the window is resized
+        float cx = var2 + var4 / 2.0f - (float)var6 / 2.0f;
+        float cy = var3 + var5 / 2.0f - (float)var7 / 2.0f;
+        var1.centerX = Math.abs(cx) < (float)var6 / 6.0f;
+        var1.centerY = Math.abs(cy) < (float)var7 / 6.0f;
+        var1.right = !var1.centerX && cx > 0.0f;
+        var1.bottom = !var1.centerY && cy > 0.0f;
+        var1.ox = (var1.centerX ? cx : var1.right ? (float)var6 - var2 - var4 : var2) / this.u;
+        var1.oy = (var1.centerY ? cy : var1.bottom ? (float)var7 - var3 - var5 : var3) / this.u;
     }
 
     private void editFrame(UiRenderer var1, HudSection var2, float var3, float var4, float var5, float var6, double var7, double var9) {
@@ -564,14 +682,15 @@ public final class HudLayoutEditor {
         float var12 = this.anim("edit:" + var2.name(), var11 ? 1.0f : 0.0f, 14.0f);
         float var13 = this.d(4.0f);
         var1.outline(var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), UiRenderer.white(0.22f + 0.35f * var12));
-        float var14 = this.textW(var1, var2.label, this.d(10.0f), 1) + this.d(12.0f);
+        String label = var2.label + "  " + Math.round(this.scaleOf(var2) * 100.0f) + "%";
+        float var14 = this.textW(var1, label, this.d(10.0f), 1) + this.d(12.0f);
         float var15 = this.d(16.0f);
         boolean var16 = var3 + var5 / 2.0f > (float)this.lastSw / 2.0f;
         float var17 = var16 ? var3 - var13 - this.d(6.0f) - var14 : var3 + var5 + var13 + this.d(6.0f);
         float var18 = var2 == HudSection.MODULES ? var4 : var4 + (var6 - var15) / 2.0f;
         var1.pushAlpha(0.5f + 0.5f * var12);
         var1.round(var17, var18, var14, var15, var15 / 2.0f, UiRenderer.argb(0.85f, 20, 21, 25));
-        var1.text(var2.label, var17 + this.d(6.0f), var18 + this.d(2.5f), this.d(10.0f), 1, UiRenderer.white(0.85f));
+        var1.text(label, var17 + this.d(6.0f), var18 + this.d(2.5f), this.d(10.0f), 1, UiRenderer.white(0.85f));
         var1.popAlpha();
     }
 
@@ -613,7 +732,9 @@ public final class HudLayoutEditor {
 
     public void resetLayout() {
         this.places.clear();
+        this.scales.clear();
         VanillaHud.reset();
+        VerseFallHudAnchors.reset();
         this.save();
     }
 
@@ -647,11 +768,20 @@ public final class HudLayoutEditor {
                     for (String var2 : Files.readAllLines(this.file, StandardCharsets.UTF_8)) {
                         String[] var3 = var2.trim().split(",");
                         if (VanillaHud.parse(var3)) continue;
+                        if (var3.length == 3 && var3[0].equals("SCALE")) {
+                            try {
+                                this.scales.put(HudSection.valueOf(var3[1]), Float.parseFloat(var3[2]));
+                            } catch (IllegalArgumentException ignored) {
+                            }
+                            continue;
+                        }
                         if (var3.length != 5) continue;
                         adsdzhecwnzmbs var4 = new adsdzhecwnzmbs();
                         var4.moved = true;
                         var4.right = var3[1].equals("R");
+                        var4.centerX = var3[1].equals("C");
                         var4.bottom = var3[2].equals("B");
+                        var4.centerY = var3[2].equals("M");
                         var4.ox = Float.parseFloat(var3[3]);
                         var4.oy = Float.parseFloat(var3[4]);
                         this.places.put(HudSection.valueOf(var3[0]), var4);
@@ -671,7 +801,10 @@ public final class HudLayoutEditor {
                 for (Map.Entry<HudSection, adsdzhecwnzmbs> var3 : this.places.entrySet()) {
                     adsdzhecwnzmbs var4 = var3.getValue();
                     if (!var4.moved) continue;
-                    var1.append(var3.getKey().name()).append(',').append(var4.right ? "R" : "L").append(',').append(var4.bottom ? "B" : "T").append(',').append(String.format(Locale.ROOT, "%.1f,%.1f", Float.valueOf(var4.ox), Float.valueOf(var4.oy))).append('\n');
+                    var1.append(var3.getKey().name()).append(',').append(var4.centerX ? "C" : var4.right ? "R" : "L").append(',').append(var4.centerY ? "M" : var4.bottom ? "B" : "T").append(',').append(String.format(Locale.ROOT, "%.1f,%.1f", Float.valueOf(var4.ox), Float.valueOf(var4.oy))).append('\n');
+                }
+                for (Map.Entry<HudSection, Float> sc : this.scales.entrySet()) {
+                    var1.append("SCALE,").append(sc.getKey().name()).append(',').append(String.format(Locale.ROOT, "%.2f", sc.getValue())).append('\n');
                 }
                 var1.append(VanillaHud.serialize());
                 Files.createDirectories(this.file.getParent(), new FileAttribute[0]);
@@ -716,6 +849,8 @@ public final class HudLayoutEditor {
         boolean moved;
         boolean right;
         boolean bottom;
+        boolean centerX;
+        boolean centerY;
         float ox;
         float oy;
         private static final String a7e2a8a8db56243c3 = "wjWs3DYET7y52zJ6Qq386ZoiUzd5Q-J9LK0tbGNZHUs";

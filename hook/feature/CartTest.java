@@ -55,6 +55,7 @@ final class CartTest {
         if ("creative".equals(ONLY)) { creative(mc, p); return; }
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
+        if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -386,6 +387,57 @@ final class CartTest {
         if (clock == 255) shot(mc, "fog_lava_on");
         if (clock == 260) System.out.println("CARTTEST FOG medium=" + mc.field_1773.method_19418().method_19334() + " enabled=" + nf.isEnabled());
         if (clock == 270) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=hud: HUD editor with grid, every vanilla part framed, window resize keeps anchors. */
+    private static void hud(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode survival");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("xp add @s 7 levels");
+            cmd("effect give @s speed infinite 0");
+            cmd("effect give @s resistance infinite 0");
+            HudModule.HIDE_POTION_HUD.setValue(false);
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            com.spotifyclient.ModSettings.enableHudLyrics = true;
+            com.spotifyclient.ModSettings.hudLyricsStyle = 0;
+        }
+        if (clock == 120) {
+            cmd("title @s times 0 2000 0");
+            cmd("title @s title {\"text\":\"Test Title\"}");
+            cmd("title @s actionbar {\"text\":\"Action bar message\"}");
+        }
+        if (clock == 125) mc.method_1507(new net.minecraft.class_408("", false));
+        if (clock == 135) {
+            // put the lyrics bar centered at the top, like the user has it
+            com.spotifyclient.hud.Draggable bar = com.spotifyclient.hud.DragSystem.get().byId("lyricsbar");
+            if (bar != null) {
+                float w = com.spotifyclient.hud.HudSpace.width();
+                bar.drag().setTarget(w / 2.0f - bar.width() / 2.0f, 20.0f);
+                bar.drag().syncToTarget();
+                com.spotifyclient.hud.DragSystem.get().savePositions();
+            }
+        }
+        if (clock == 150) { report(mc, "big"); shot(mc, "hud_editor_big"); }
+        if (clock == 160) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
+        if (clock == 200) { report(mc, "small"); shot(mc, "hud_editor_small"); }
+        if (clock == 210) mc.method_1507(null);
+        if (clock == 225) shot(mc, "hud_play_small");
+        if (clock == 240) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static void report(class_310 mc, String tag) {
+        StringBuilder sb = new StringBuilder("CARTTEST HUD " + tag + " gui=" + mc.method_22683().method_4486() + "x" + mc.method_22683().method_4502());
+        for (VanillaHud.Part part : VanillaHud.Part.values()) {
+            float[] r = VanillaHud.rect(part);
+            sb.append(" | ").append(part.name()).append(r == null ? "=null" : String.format(java.util.Locale.ROOT, "=%.0f,%.0f %.0fx%.0f%s", r[0], r[1], r[2], r[3], VanillaHud.preview(part) ? " preview" : ""));
+        }
+        com.spotifyclient.hud.Draggable bar = com.spotifyclient.hud.DragSystem.get().byId("lyricsbar");
+        if (bar != null) sb.append(String.format(java.util.Locale.ROOT, " | lyricsbar center=%.1f screenCenter=%.1f w=%.1f",
+                bar.drag().targetX() + bar.width() / 2.0f, com.spotifyclient.hud.HudSpace.width() / 2.0f, bar.width()));
+        System.out.println(sb);
     }
 
     private static void shot(class_310 mc, String name) {
