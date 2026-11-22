@@ -132,6 +132,7 @@ public final class ModuleManager {
         this.in(Category.MISC, new AntiBreakModule());
         this.in(Category.MISC, new AutoMinerModule());
         this.in(Category.MISC, new AutoBreedModule());
+        this.in(Category.MISC, new hook.feature.SchematicBuilderModule());
         this.in(Category.MISC, new hook.feature.CreativeModule());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.BaseBlocks());
         this.in(Category.DONUT, new hook.feature.BaseFinderModules.Storage());

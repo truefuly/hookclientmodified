@@ -90,6 +90,10 @@ public final class HudLayoutEditor {
         List<EffectRow> fx = this.effectRows(var4, var7);
         this.element(var1, HudSection.EFFECT_TIMER, var5.effectTimer && !fx.isEmpty() && var4.inWorld(), var2, var3, 0.0f, var7, var8, var10, () -> this.effectsSize(var1, fx, var5), (ex, ey) -> this.drawEffects(var1, ex, ey, fx, var5));
         this.musicBar(var1, var2, var3, var7, var8, var10);
+        SchematicBuilderModule.Progress bp = SchematicBuilderModule.progress();
+        if (bp == null && var7) bp = new SchematicBuilderModule.Progress("Pumpkin Farm", 1384, 2210, 62.6, "~4m 10s left \u00B7 done at 19:42", "Building", false);
+        final SchematicBuilderModule.Progress fbp = bp;
+        this.element(var1, HudSection.BUILDER, fbp != null && var4.inWorld(), var2, var3, 0.0f, var7, var8, var10, () -> this.builderSize(var1, fbp), (bx, by) -> this.drawBuilder(var1, bx, by, fbp, var5));
         if (this.draggingPart != null) {
             float g = guiScale();
             float[] pr = this.partRect(this.draggingPart);
@@ -797,6 +801,41 @@ public final class HudLayoutEditor {
         return this.d(o.effectBars ? 30.0f : 26.0f);
     }
 
+    // ------------------------------------------------------------------ schematic builder progress card
+
+    private float[] builderSize(UiRenderer ui, SchematicBuilderModule.Progress p) {
+        if (p == null) return new float[]{this.d(220.0f), this.d(64.0f)};
+        float w = Math.max(this.d(220.0f), Math.max(this.textW(ui, p.name(), this.d(12.0f), 1) + this.d(90.0f), this.textW(ui, p.eta(), this.d(10.0f), 0) + this.d(24.0f)));
+        return new float[]{Math.min(w, this.d(340.0f)), this.d(64.0f)};
+    }
+
+    private void drawBuilder(UiRenderer ui, float x, float y, SchematicBuilderModule.Progress p, adhvjlahyjurfh o) {
+        if (p == null) return;
+        float[] size = this.builderSize(ui, p);
+        float w = size[0], h = size[1];
+        this.glass(ui, x, y, w, h, this.d(14.0f), o);
+        float pad = this.d(12.0f);
+        String pct = p.total() <= 0 ? "--" : String.format(java.util.Locale.ROOT, "%.1f%%", p.percent());
+        ui.text(p.name(), x + pad, y + this.d(8.0f), this.d(12.0f), 1, UiRenderer.white(0.95f));
+        ui.textRight(pct, x + w - pad, y + this.d(8.0f), this.d(12.0f), 1, p.percent() >= 99.95 ? UiRenderer.argb(0.95f, 120, 235, 150) : this.accent(0.95f, 0.0f));
+        // progress bar
+        float bx = x + pad, by = y + this.d(27.0f), bw = w - pad * 2.0f, bh = this.d(6.0f);
+        ui.round(bx, by, bw, bh, bh / 2.0f, UiRenderer.white(0.08f));
+        float frac = (float) Math.max(0.0, Math.min(1.0, p.percent() / 100.0));
+        float shown = this.anim("builderbar", frac, 6.0f);
+        if (shown > 0.001f) {
+            int c1 = this.accent(0.95f, 0.0f), c2 = this.accent(0.95f, 0.35f);
+            ui.round(bx, by, Math.max(bh, bw * shown), bh, bh / 2.0f, UiEasing.mix(c1, c2, 0.5f));
+            // soft moving shine on the filled part
+            float sx = bx + (bw * shown) * ((this.time * 0.35f) % 1.0f);
+            ui.round(Math.max(bx, sx - this.d(10.0f)), by, Math.min(this.d(20.0f), bx + bw * shown - Math.max(bx, sx - this.d(10.0f))), bh, bh / 2.0f, UiRenderer.white(0.18f));
+        }
+        String count = String.format(java.util.Locale.ROOT, "%,d / %,d blocks", p.done(), p.total());
+        ui.text(count, bx, y + this.d(38.0f), this.d(10.0f), 0, UiRenderer.white(0.62f));
+        ui.textRight(p.state(), x + w - pad, y + this.d(38.0f), this.d(10.0f), 0, p.problem() ? UiRenderer.argb(0.95f, 255, 175, 90) : UiRenderer.white(0.62f));
+        ui.text(p.eta(), bx, y + this.d(50.0f), this.d(10.0f), 0, UiRenderer.white(0.8f));
+    }
+
     private float[] effectsSize(UiRenderer ui, List<EffectRow> rows, adhvjlahyjurfh o) {
         float nameW = 0.0f, timeW = 0.0f;
         for (EffectRow e : rows) {
@@ -870,6 +909,10 @@ public final class HudLayoutEditor {
             }
             case 5: {
                 fArray = new float[]{(float)var4 - this.d(10.0f) - var2, (float)var5 * 0.34f};
+                break;
+            }
+            case 7: {
+                fArray = new float[]{(float)var4 / 2.0f - var2 / 2.0f, this.d(64.0f)};
                 break;
             }
             case 4: {
@@ -1082,7 +1125,8 @@ public final class HudLayoutEditor {
         COORDS("Coordinates"),
         MODULES("Modules"),
         EFFECT_TIMER("Effect Timer"),
-        MUSIC_BAR("Music Bar");
+        MUSIC_BAR("Music Bar"),
+        BUILDER("Schematic Builder");
 
         final String label;
 

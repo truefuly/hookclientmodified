@@ -75,7 +75,12 @@ extends Module {
         return this.hud;
     }
 
+    private Render2DEvent standInFor;
+
+    /** HUD module off: other modules (Effect Timer, Schematic Builder) still get their own HUD elements drawn, once per frame. */
     void renderEffectsOnly(Render2DEvent event) {
+        if (this.isEnabled() || this.standInFor == event) return;
+        this.standInFor = event;
         this.render(event, true);
     }
 

@@ -57,6 +57,7 @@ final class CartTest {
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
+        if ("builder".equals(ONLY)) { builder(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -445,6 +446,139 @@ final class CartTest {
         if (clock == 380) mc.method_1507(null);
         if (clock == 395) { shot(mc, "hud_play_small"); System.out.println("CARTTEST EDITING after close " + HudLayoutEditor.editing); }
         if (clock == 410) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static net.minecraft.class_2338 sbOrigin, sbChest;
+    private static Object sbSchematic;
+    private static int sbLastPct = -1;
+
+    /** -Dhook.carttest.only=builder: Schematic Builder builds a Litematica schematic in survival, part of it from a chest. */
+    private static void builder(class_310 mc, net.minecraft.class_746 p) {
+        SchematicBuilderModule sb = (SchematicBuilderModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SchematicBuilderModule.class);
+        int bx = 3000, bz = 3000;
+        if (clock == 100) {
+            cmd("gamemode survival");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("gamerule doDaylightCycle false");
+            cmd("clear @s");
+            cmd("effect give @s resistance infinite 4 true");
+            cmd("effect give @s saturation infinite 0 true");
+            cmd("tp @s " + bx + " -60 " + bz + " 0 20");
+        }
+        if (clock == 140) {
+            // a clean flat test area (old test runs may have left blocks)
+            // vanilla /fill is limited to 32768 blocks: clear layer by layer
+            for (int y = -60; y <= -40; y++) cmd("fill " + (bx - 8) + " " + y + " " + (bz - 8) + " " + (bx + 24) + " " + y + " " + (bz + 24) + " air");
+            cmd("fill " + (bx - 6) + " -61 " + (bz - 6) + " " + (bx + 40) + " -61 " + (bz + 40) + " grass_block");
+            cmd("kill @e[type=item]");
+        }
+        if (clock == 150) {
+            // a small test build: floor, log pillars + a log beam, stairs in 4 directions, top / bottom slabs,
+            // an observer facing up, a piston facing west and a 9 high tower (needs climbing)
+            int ox = bx + 4, oy = -60, oz = bz + 4;
+            cmd("fill " + ox + " " + oy + " " + oz + " " + (ox + 6) + " " + oy + " " + (oz + 6) + " stone_bricks");
+            for (int[] c : new int[][]{{0, 0}, {6, 0}, {0, 6}, {6, 6}}) cmd("fill " + (ox + c[0]) + " " + (oy + 1) + " " + (oz + c[1]) + " " + (ox + c[0]) + " " + (oy + 4) + " " + (oz + c[1]) + " oak_log[axis=y]");
+            cmd("fill " + (ox + 1) + " " + (oy + 4) + " " + oz + " " + (ox + 5) + " " + (oy + 4) + " " + oz + " oak_log[axis=x]");
+            cmd("setblock " + (ox + 2) + " " + (oy + 1) + " " + (oz + 2) + " oak_stairs[facing=north]");
+            cmd("setblock " + (ox + 4) + " " + (oy + 1) + " " + (oz + 2) + " oak_stairs[facing=east]");
+            cmd("setblock " + (ox + 2) + " " + (oy + 1) + " " + (oz + 4) + " oak_stairs[facing=south]");
+            cmd("setblock " + (ox + 4) + " " + (oy + 1) + " " + (oz + 4) + " oak_stairs[facing=west]");
+            cmd("setblock " + (ox + 3) + " " + (oy + 1) + " " + (oz + 1) + " smooth_stone_slab[type=top]");
+            cmd("setblock " + (ox + 3) + " " + (oy + 1) + " " + (oz + 5) + " smooth_stone_slab[type=bottom]");
+            cmd("setblock " + (ox + 1) + " " + (oy + 1) + " " + (oz + 3) + " observer[facing=up]");
+            cmd("setblock " + (ox + 5) + " " + (oy + 1) + " " + (oz + 3) + " piston[facing=west]");
+            cmd("fill " + (ox + 3) + " " + (oy + 1) + " " + (oz + 3) + " " + (ox + 3) + " " + (oy + 9) + " " + (oz + 3) + " bricks");
+        }
+        if (clock == 170) {
+            try {
+                sbOrigin = new net.minecraft.class_2338(bx + 4, -60, bz + 4);
+                Class<?> as = Class.forName("fi.dy.masa.litematica.selection.AreaSelection");
+                Object area = as.getConstructor().newInstance();
+                Class<?> boxC = Class.forName("fi.dy.masa.litematica.selection.Box");
+                Object box = boxC.getConstructor(net.minecraft.class_2338.class, net.minecraft.class_2338.class, String.class).newInstance(sbOrigin, sbOrigin.method_10069(6, 9, 6), "main");
+                as.getMethod("addSubRegionBox", boxC, boolean.class).invoke(area, box, false);
+                as.getMethod("setName", String.class).invoke(area, "sbtest");
+                as.getMethod("setExplicitOrigin", net.minecraft.class_2338.class).invoke(area, sbOrigin);
+                Class<?> info = Class.forName("fi.dy.masa.litematica.schematic.LitematicaSchematic$SchematicSaveInfo");
+                Object si = info.getConstructor(boolean.class, boolean.class).newInstance(false, false);
+                Class<?> isc = Class.forName("fi.dy.masa.malilib.interfaces.IStringConsumer");
+                Object sink = java.lang.reflect.Proxy.newProxyInstance(isc.getClassLoader(), new Class<?>[]{isc}, (o, m, a) -> null);
+                Class<?> ls = Class.forName("fi.dy.masa.litematica.schematic.LitematicaSchematic");
+                sbSchematic = ls.getMethod("createFromWorld", net.minecraft.class_1937.class, as, info, String.class, isc).invoke(null, mc.field_1687, area, si, "test", sink);
+                System.out.println("CARTTEST SB schematic captured " + sbSchematic);
+            } catch (Throwable t) {
+                System.out.println("CARTTEST SB capture failed " + t);
+            }
+        }
+        if (clock == 180) {
+            cmd("fill " + (bx + 4) + " -60 " + (bz + 4) + " " + (bx + 10) + " -50 " + (bz + 10) + " air");
+            cmd("kill @e[type=item]");
+        }
+        if (clock == 200 && sbSchematic != null) {
+            try {
+                Class<?> plc = Class.forName("fi.dy.masa.litematica.schematic.placement.SchematicPlacement");
+                Object pl = plc.getMethod("createFor", sbSchematic.getClass(), net.minecraft.class_2338.class, String.class, boolean.class, boolean.class).invoke(null, sbSchematic, sbOrigin, "sbtest", true, true);
+                Object mgr = Class.forName("fi.dy.masa.litematica.data.DataManager").getMethod("getSchematicPlacementManager").invoke(null);
+                mgr.getClass().getMethod("addSchematicPlacement", plc, boolean.class).invoke(mgr, pl, false);
+                mgr.getClass().getMethod("setSelectedSchematicPlacement", plc).invoke(mgr, pl);
+                System.out.println("CARTTEST SB placement loaded at " + sbOrigin.method_23854() + " box=" + java.util.Arrays.toString(SbLitematica.box(pl)) + " total=" + SbLitematica.totalBlocks(pl));
+            } catch (Throwable t) {
+                System.out.println("CARTTEST SB load failed " + t);
+            }
+        }
+        if (clock == 260) {
+            // materials: everything in the inventory except the most used block, which waits in a marked chest
+            Object pl = SbLitematica.placement(p.method_23317(), p.method_23318(), p.method_23321());
+            int[] b = pl == null ? null : SbLitematica.box(pl);
+            net.minecraft.class_1937 sw = SbLitematica.world();
+            java.util.Map<net.minecraft.class_1792, Integer> need = new java.util.LinkedHashMap<>();
+            if (b != null && sw != null) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) {
+                net.minecraft.class_2680 st = sw.method_8320(new net.minecraft.class_2338(x, y, z));
+                if (st.method_26215() || SbWorld.secondaryPart(st)) continue;
+                net.minecraft.class_1792 it = st.method_26204().method_8389();
+                if (it instanceof net.minecraft.class_1747) need.merge(it, 1, Integer::sum);
+            }
+            net.minecraft.class_1792 most = null;
+            for (var e : need.entrySet()) if (most == null || e.getValue() > need.get(most)) most = e.getKey();
+            StringBuilder sb2 = new StringBuilder();
+            for (var e : need.entrySet()) {
+                String id = net.minecraft.class_7923.field_41178.method_10221(e.getKey()).toString();
+                sb2.append(id).append('=').append(e.getValue()).append(' ');
+                if (e.getKey() != most) cmd("give @s " + id + " " + (e.getValue() + 2));
+            }
+            cmd("give @s cobblestone 10");
+            cmd("give @s diamond_pickaxe");
+            cmd("give @s diamond_shovel");
+            cmd("give @s diamond_axe");
+            sbChest = new net.minecraft.class_2338(bx - 3, -60, bz);
+            cmd("setblock " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " chest");
+            if (most != null) {
+                String id = net.minecraft.class_7923.field_41178.method_10221(most).toString();
+                int left = need.get(most) + 2, slot = 0;
+                while (left > 0 && slot < 20) { int n = Math.min(64, left); cmd("item replace block " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " container." + slot++ + " with " + id + " " + n); left -= n; }
+            }
+            cmd("item replace block " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " container.25 with cobblestone 64");
+            cmd("item replace block " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " container.26 with cobblestone 64");
+            System.out.println("CARTTEST SB materials " + sb2 + "| in chest: " + (most == null ? "-" : net.minecraft.class_7923.field_41178.method_10221(most)));
+        }
+        if (clock == 300 && sb != null && !sb.isEnabled()) sb.setEnabled(true);
+        if (clock == 302 && sb != null) sb.testMarkStorage(sbChest);
+        if (clock > 300 && sb != null && clock % 100 == 0) {
+            SchematicBuilderModule.Progress pr = SchematicBuilderModule.progress();
+            System.out.println("CARTTEST SB t=" + (clock - 300) / 20 + "s " + (pr == null ? "-" : String.format(java.util.Locale.ROOT, "%d/%d %.1f%% eta=[%s] state=[%s]", pr.done(), pr.total(), pr.percent(), pr.eta(), pr.state()))
+                    + " | " + sb.testStatus() + " pos=" + p.method_24515().method_23854() + " hp=" + p.method_6032());
+            int pct = pr == null ? 0 : (int) pr.percent();
+            if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
+            sbLastPct = pct;
+            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * 300) {
+                shot(mc, "sb_end");
+                System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
+                sb.setEnabled(false);
+                mc.method_1592();
+                phase = 99;
+            }
+        }
     }
 
     private static int ncX;

@@ -12,6 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class AutoMinerBreakMixin {
     @Inject(method = "method_1590(Z)V", at = @At("HEAD"), cancellable = true, remap = false)
     private void hook$autoMinerKeepsBreaking(boolean breaking, CallbackInfo ci) {
-        if (!breaking && AutoMinerModule.ownsBreaking()) ci.cancel();
+        if (!breaking && (AutoMinerModule.ownsBreaking() || hook.feature.SchematicBuilderModule.ownsBreaking())) ci.cancel();
     }
 }
