@@ -14,7 +14,7 @@ public final class RenderModulesTest {
         class_310 mc = class_310.method_1551();
         var p = mc.field_1724;
         if (p == null || mc.method_1576() == null) return;
-        if (mc.field_1755 instanceof net.minecraft.class_433) mc.method_1507(null);
+        if (mc.field_1755 instanceof net.minecraft.class_433 && mc.field_1755.method_25421()) mc.method_1507(null);
         if (p.field_6012 == lastAge) return;
         lastAge = p.field_6012;
         clock++;

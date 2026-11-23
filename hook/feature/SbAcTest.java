@@ -68,6 +68,10 @@ final class SbAcTest {
 
     static void reset() {
         flags.clear();
+        teleports = 0;
+        teleportPending = false;
+        beforePlaceD = Float.NaN;
+        rotSincePlace = false;
         printed.clear();
         placeTicks.clear();
         pending.clear();
@@ -123,6 +127,13 @@ final class SbAcTest {
 
     static void onReceive(class_2596<?> p) {
         if (!ON) return;
+        if (p instanceof net.minecraft.class_2708) {
+            // a server teleport / setback: the client answers with an extra movement packet (not a timer cheat)
+            teleportPending = true;
+            teleports++;
+            class_746 pl = class_310.method_1551().field_1724;
+            if (teleports <= 5) System.out.println("CARTTEST AC dbg teleport from server at " + (pl == null ? "?" : pl.method_23317() + " " + pl.method_23318() + " " + pl.method_23321()));
+        }
         if (p instanceof net.minecraft.class_4463 ack) {
             lastAck = Math.max(lastAck, ack.comp_633());
             unconfirmed.values().removeIf(s -> s <= lastAck);
@@ -134,7 +145,19 @@ final class SbAcTest {
         return new double[]{1.27, 1.62};
     }
 
+    private static boolean teleportPending;
+    private static int teleports;
+    private static float beforePlaceD = Float.NaN;
+    private static boolean rotSincePlace;
+
     private static void move(net.minecraft.class_2828 m, int t, class_638 w) {
+        if (teleportPending) {
+            // the teleport confirmation: take its position / rotation as the new truth, nothing else
+            teleportPending = false;
+            if (m.method_36172()) { syaw = m.method_12271(syaw); spitch = m.method_12270(spitch); hasRot = true; }
+            if (m.method_36171()) { sx = m.method_12269(sx); sy = m.method_12268(sy); sz = m.method_12274(sz); hasPos = true; }
+            return;
+        }
         if (t == moveTick) {
             if (++movesThisTick > 1) flag("Grim.Timer", "two movement packets in one tick");
         } else {
@@ -159,6 +182,7 @@ final class SbAcTest {
             if (dy != 0 || dp != 0) {
                 grimDeltaX = Math.abs(dy);
                 grimRotated = true;
+                rotSincePlace = true;
                 rotPackets++;
                 lastRotChangeTick = t;
                 maxTurn = Math.max(maxTurn, Math.hypot(dy, dp));
@@ -179,9 +203,9 @@ final class SbAcTest {
         if (m.method_36172()) { syaw = ny; spitch = np; }
         if (m.method_36171()) { sx = nx; sy = nyy; sz = nz; }
         // Grim DuplicateRotPlace: the turn after a place must not be exactly the turn after the last place
-        if (placedSinceMove) {
+        if (placedSinceMove && grimRotated) {
             placedSinceMove = false;
-            if (grimRotated) {
+            {
                 if (grimDeltaX > 2 && Math.abs(grimDeltaX - lastPlaceDYaw) < 1.0E-4) flag("Grim.DuplicateRotPlace", "same turn after two places " + grimDeltaX);
                 lastPlaceDYaw = grimDeltaX;
                 grimRotated = false;
@@ -298,6 +322,11 @@ final class SbAcTest {
             if (t != placeTick) placesThisTick = 1;
             placeTick = t;
             if (t - lastRotChangeTick >= 1) stillPlaces++;
+            // the other way Grim can read it: the last turn before this place vs. the one before the last place
+            if (rotSincePlace && grimDeltaX > 2 && Math.abs(grimDeltaX - beforePlaceD) < 1.0E-4) flag("Grim.DuplicateRotPlace", "same last turn before two places " + grimDeltaX);
+            beforePlaceD = grimDeltaX;
+            rotSincePlace = false;
+            grimRotated = false;
             placedSinceMove = true;
             unconfirmed.put(pos.method_10093(hit.method_17780()).method_10063(), ib.method_42080());
         }
@@ -353,7 +382,7 @@ final class SbAcTest {
         }
         int total = 0;
         for (int v : flags.values()) total += v;
-        System.out.println("CARTTEST AC SUMMARY flags=" + total + " " + flags + " | places=" + places + " breaks=" + breaks + " invClicks=" + invClicks
+        System.out.println("CARTTEST AC SUMMARY flags=" + total + " " + flags + " | teleports=" + teleports + " places=" + places + " breaks=" + breaks + " invClicks=" + invClicks
                 + " maxPlaces/s=" + maxPerSec + " minPlaceGap=" + (minGap == Integer.MAX_VALUE ? "-" : minGap + "t")
                 + " breaksFasterThanAirSpeed=" + slowAir + String.format(java.util.Locale.ROOT, " maxReach=%.2f maxTurn/tick=%.1f rotations=%d offStep=%d stillClicks=%d%%",
                 maxReach, maxTurn, rotPackets, gcdBad, places == 0 ? 0 : stillPlaces * 100 / places));

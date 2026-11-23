@@ -501,6 +501,12 @@ final class CartTest {
                     {"6", "3", "1", "dispenser[facing=down]"},
                     {"6", "1", "3", "lever[face=wall,facing=east]"},
                     {"6", "1", "5", "oak_log[axis=z]"},
+                    // a little water basin (farms): the source has to be placed with a bucket, last
+                    {"4", "1", "1", "stone_bricks"},
+                    {"6", "1", "1", "stone_bricks"},
+                    {"5", "1", "0", "stone_bricks"},
+                    {"5", "1", "2", "stone_bricks"},
+                    {"5", "1", "1", "water"},
             };
             for (String[] b : more) cmd("setblock " + (ox + Integer.parseInt(b[0])) + " " + (oy + Integer.parseInt(b[1])) + " " + (oz + Integer.parseInt(b[2])) + " " + b[3]);
         }
@@ -562,6 +568,8 @@ final class CartTest {
                 if (e.getKey() != most) cmd("give @s " + id + " " + (e.getValue() + 2));
             }
             cmd("give @s cobblestone 10");
+            cmd("give @s water_bucket 1");
+            cmd("give @s bread 8");
             cmd("give @s diamond_pickaxe");
             cmd("give @s diamond_shovel");
             cmd("give @s diamond_axe");
@@ -578,10 +586,38 @@ final class CartTest {
         }
         if (clock == 300 && sb != null && !sb.isEnabled()) sb.setEnabled(true);
         if (clock == 302 && sb != null) sb.testMarkStorage(sbChest);
+        // the pause menu (made non-pausing like on a server) open for the first minute (chest trip included): it must keep building
+        if (clock == 340) {
+            sbMenuDone = SchematicBuilderModule.progress() == null ? 0 : SchematicBuilderModule.progress().done();
+            mc.method_1507(new net.minecraft.class_433(true) {
+                @Override
+                public boolean method_25421() { return false; }
+
+                @Override
+                public void method_25432() {
+                    super.method_25432();
+                    System.out.println("CARTTEST SB menu removed by:");
+                    for (StackTraceElement e : Thread.currentThread().getStackTrace()) System.out.println("CARTTEST SB   at " + e);
+                }
+            });
+            System.out.println("CARTTEST SB menu opened done=" + sbMenuDone);
+        }
+        if (clock > 340 && clock < 300 + 20 * 60 && clock % 20 == 0) {
+            String sn = mc.field_1755 == null ? "none" : mc.field_1755 instanceof net.minecraft.class_433 ? "pause" : mc.field_1755.getClass().getSimpleName();
+            if (clock % 100 == 0) System.out.println("CARTTEST SB menu screen=" + sn);
+        }
+        // get hungry mid-build: it has to stop, eat and go on
+        if (clock == 300 + 20 * 70) { cmd("difficulty easy"); cmd("effect clear @s saturation"); cmd("effect give @s hunger 8 250 true"); }
+        if (clock == 300 + 20 * 110) { cmd("effect give @s saturation infinite 0 true"); cmd("difficulty peaceful"); }
+        if (clock == 300 + 20 * 60) {
+            int d = SchematicBuilderModule.progress() == null ? 0 : SchematicBuilderModule.progress().done();
+            System.out.println("CARTTEST SB menu closed placedWhileOpen=" + (d - sbMenuDone) + " screen=" + (mc.field_1755 == null ? "none" : mc.field_1755.getClass().getSimpleName()));
+            mc.method_1507(null);
+        }
         if (clock > 300 && sb != null && clock % 100 == 0) {
             SchematicBuilderModule.Progress pr = SchematicBuilderModule.progress();
             System.out.println("CARTTEST SB t=" + (clock - 300) / 20 + "s " + (pr == null ? "-" : String.format(java.util.Locale.ROOT, "%d/%d %.1f%% eta=[%s] state=[%s]", pr.done(), pr.total(), pr.percent(), pr.eta(), pr.state()))
-                    + " | " + sb.testStatus() + " pos=" + p.method_24515().method_23854() + " hp=" + p.method_6032());
+                    + " | " + sb.testStatus() + " pos=" + p.method_24515().method_23854() + " hp=" + p.method_6032() + " food=" + p.method_7344().method_7586());
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
             sbLastPct = pct;
@@ -597,6 +633,7 @@ final class CartTest {
     }
 
     private static int ncX;
+    private static int sbMenuDone;
 
     /** -Dhook.carttest.only=newchunks: fly into never-generated land (should be red), then back home (green). */
     private static void newChunks(class_310 mc, net.minecraft.class_746 p) {

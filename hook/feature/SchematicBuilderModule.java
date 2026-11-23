@@ -71,6 +71,11 @@ public final class SchematicBuilderModule extends Module {
     private final BindSetting markKey = new BindSetting(EncryptedString.of("Mark Storage Key"), 74, false); // J
     private final NumberSetting pauseHealth = new NumberSetting(EncryptedString.of("Pause Below Health"), 0.0, 20.0, 8.0, 1.0);
     private final BooleanSetting render = new BooleanSetting(EncryptedString.of("Show Plan"), true);
+    private final BooleanSetting autoEat = new BooleanSetting(EncryptedString.of("Auto Eat"), true);
+    private final NumberSetting eatBelow = new NumberSetting(EncryptedString.of("Eat Below Hunger"), 1.0, 19.0, 14.0, 1.0);
+    private final BooleanSetting saveTools = new BooleanSetting(EncryptedString.of("Save Tools"), true);
+    private final BooleanSetting autoMend = new BooleanSetting(EncryptedString.of("Auto Mend"), true);
+    private final BooleanSetting placeWater = new BooleanSetting(EncryptedString.of("Place Water"), true);
 
     static SchematicBuilderModule instance;
     private final Random rnd = new Random();
@@ -101,6 +106,22 @@ public final class SchematicBuilderModule extends Module {
     private long lastClickTick = -1000;
     private boolean pauseLogged;
     private boolean escape;
+    /** The plan was told in chat for this schematic. */
+    private boolean planAnnounced;
+    /** A screen the player had open while the bot works (pause menu, chat...): brought back after a chest trip. */
+    private net.minecraft.class_437 bgScreen;
+    private int workSpots;
+    /** Spots we walked to that gave nothing: not again for a while. */
+    private final Map<Long, Long> badSpots = new HashMap<>();
+    private long lastSpot = Long.MIN_VALUE;
+    private int lastSpotPlaced, placedTotal;
+    /** Last time a block was placed or broken (watchdog against hanging around). */
+    private long lastProgressMs;
+    private boolean eating;
+    private int eatTicks, lastMendCheck, replans;
+    /** Head rotation at the start of this tick: the frames in between are drawn smoothly from it. */
+    private float renderYaw = Float.NaN, renderPitch;
+    private long renderTick = -1;
     private final ArrayDeque<long[]> doneLog = new ArrayDeque<>(); // {time ms, blocks}
     private int lastDone = -1;
 
@@ -163,8 +184,14 @@ public final class SchematicBuilderModule extends Module {
             this.saveStorage();
             this.say("All storage chests unmarked.");
         });
+        this.autoEat.setDescription(EncryptedString.of("Stops for a moment and eats when hungry (or hurt), then goes on building."));
+        this.eatBelow.setDescription(EncryptedString.of("Hunger level (out of 20) at which it eats."));
+        this.saveTools.setDescription(EncryptedString.of("Never uses a tool that is about to break."));
+        this.autoMend.setDescription(EncryptedString.of("When XP orbs are around, puts a damaged Mending item in the offhand so it gets repaired."));
+        this.placeWater.setDescription(EncryptedString.of("Places the water sources of the schematic (farms...) with water buckets - always last."));
         this.addSettings(this.scaffold, this.speed, this.human, this.antiCheat, this.breakWrong, this.clearArea, this.breakObstacles, this.useScaffold,
-                this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, this.pauseHealth, this.render);
+                this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, this.pauseHealth, this.autoEat, this.eatBelow, this.saveTools,
+                this.autoMend, this.placeWater, this.render);
         instance = this;
     }
 
@@ -257,14 +284,20 @@ public final class SchematicBuilderModule extends Module {
 
     @Override
     public void onDisable() {
+        if (this.eating) this.stopEat();
         this.releaseKeys();
-        if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB wrongPlaced=" + this.wrongPlaced);
+        if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB wrongPlaced=" + this.wrongPlaced + " workSpots=" + this.workSpots);
         if (this.mc.field_1761 != null) this.mc.field_1761.method_2925();
         super.onDisable();
     }
 
     private void resetAll() {
         this.placement = null;
+        this.badSpots.clear();
+        this.lastSpot = Long.MIN_VALUE;
+        this.lastProgressMs = 0;
+        this.planAnnounced = false;
+        this.workSpots = 0;
         this.placedByMe.clear();
         this.verify.clear();
         this.verifyWant.clear();
@@ -307,6 +340,9 @@ public final class SchematicBuilderModule extends Module {
         if (pl.field_6012 == this.lastAge) return;
         this.lastAge = pl.field_6012;
         this.tickNo++;
+        this.renderYaw = pl.method_36454();
+        this.renderPitch = pl.method_36455();
+        this.renderTick = this.tickNo;
         if (this.freezeTicks > 0) this.freezeTicks--;
         if (this.forceSneakTicks > 0) this.forceSneakTicks--;
         SbPlacer.forced = !this.antiCheat.getValue();
@@ -321,21 +357,31 @@ public final class SchematicBuilderModule extends Module {
         }
         this.scan(w, pl);
         this.logProgress();
+        this.announcePlan(w, pl);
 
-        // a screen the builder did not open (inventory, chat, menu): wait
         boolean ownScreen = this.mode == Mode.TRANSFER || this.mode == Mode.OPEN_CHEST;
-        if (this.mc.field_1755 instanceof net.minecraft.class_465 && !ownScreen && this.tickNo - this.lastClickTick <= 20) {
-            // a click opened a block's menu (shouldn't happen, we sneak): close it again right away
-            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB closed a menu our click opened: " + this.mc.field_1755.getClass().getSimpleName());
-            pl.method_7346();
+        net.minecraft.class_437 scr = this.mc.field_1755;
+        if ((scr instanceof net.minecraft.class_465 || scr instanceof net.minecraft.class_7743) && !ownScreen && this.tickNo - this.lastClickTick <= 20) {
+            // a click opened a block's menu or a sign editor (shouldn't happen for menus, we sneak): close it again
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB closed a menu our click opened: " + scr.getClass().getSimpleName());
+            if (scr instanceof net.minecraft.class_465) pl.method_7346();
+            else scr.method_25419();
+            this.restoreScreen();
         }
-        if (this.mc.field_1755 != null && !ownScreen) {
+        // the pause menu, chat, options, the click gui, an unfocused window... don't stop the build (on a server the
+        // game keeps running behind them). Only real inventories / containers and the death screen pause it.
+        scr = this.mc.field_1755;
+        boolean blocking = scr instanceof net.minecraft.class_465 || scr instanceof net.minecraft.class_418;
+        if (!(scr instanceof net.minecraft.class_465)) this.bgScreen = scr != null && !blocking ? scr : null;
+        if (scr != null && blocking && !ownScreen) {
             if (!this.pauseLogged && System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB paused by screen " + this.mc.field_1755.getClass().getName());
             this.pauseLogged = true;
             this.releaseKeys();
             this.status = "Paused (menu open)";
             return;
         }
+        // eat when hungry (also when hurt: health only comes back with a full enough hunger bar)
+        if (this.tickEat(pl)) return;
         // safety first
         if (this.pauseHealth.getValue() > 0 && pl.method_6032() < this.pauseHealth.getValue() && this.mode != Mode.ESCAPE) {
             this.releaseKeys();
@@ -349,6 +395,7 @@ public final class SchematicBuilderModule extends Module {
             this.keys(false, false, false, false);
             return;
         }
+        this.watchdog(w, pl);
         this.modeTicks++;
         switch (this.mode) {
             case IDLE -> this.decide(w, pl);
@@ -445,6 +492,22 @@ public final class SchematicBuilderModule extends Module {
                 continue;
             }
             total++;
+            if (want.method_26204() == class_2246.field_10382) {
+                // water: sources get placed with a bucket (farms), flowing water comes by itself
+                boolean src = want.toString().contains("level=0");
+                boolean haveSrc = have.method_26204() == class_2246.field_10382 && have.toString().contains("level=0");
+                if (!src || haveSrc) { done++; continue; }
+                if (!this.placeWater.getValue() || this.skipped.contains(m.method_10063())) { unb++; continue; }
+                class_2338 p = m.method_10062();
+                if (have.method_26215() || have.method_45474()) {
+                    this.tasks.put(p.method_10063(), new Task(p, want, true));
+                    list.add(p.method_10063());
+                } else if ((this.breakWrong.getValue() || this.placedByMe.contains(p.method_10063())) && SbWorld.breakable(w, p)) {
+                    this.tasks.put(p.method_10063(), new Task(p, want, false));
+                    list.add(p.method_10063());
+                }
+                continue;
+            }
             if (SbWorld.matches(want, have)) { done++; continue; }
             class_1792 item = want.method_26204().method_8389();
             boolean noItem = !(item instanceof class_1747) || !want.method_26227().method_15769() && want.method_26204() instanceof net.minecraft.class_2404;
@@ -508,6 +571,8 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
 
+        if (this.tryMend(w, pl)) return;
+        if (this.tryUnseal(w, pl)) return;
         // restock when the scaffold block runs low or the nearby work needs something we don't carry
         if (this.useStorage.getValue() && !this.storage.isEmpty() && this.wantsRestock(pl)) {
             if (this.startRestock(w, pl)) return;
@@ -518,7 +583,7 @@ public final class SchematicBuilderModule extends Module {
             // everything left needs material we don't have
             for (Task t : this.tasks.values()) {
                 if (!t.place || this.failedUntil.containsKey(t.pos.method_10063())) continue;
-                class_1792 it = t.want.method_26204().method_8389();
+                class_1792 it = itemFor(t.want);
                 if (this.count(it) == 0) {
                     if (this.useStorage.getValue() && !this.storage.isEmpty() && this.startRestock(w, pl)) return;
                     this.missing(it);
@@ -539,11 +604,11 @@ public final class SchematicBuilderModule extends Module {
                 }
                 continue;
             }
-            class_1792 item = t.want.method_26204().method_8389();
+            class_1792 item = itemFor(t.want);
             if (this.missingUntil.containsKey(item) || this.count(item) == 0) continue;
             if (eye.method_1025(class_243.method_24953(t.pos)) > (this.reach() + 0.8) * (this.reach() + 0.8)) continue;
             if (sims++ > 30) break;
-            if (SbPlacer.find(this.mc, t.pos, t.want, (class_1747) item, eye, this.reach()) != null) {
+            if (isWater(t.want) ? this.waterClick(w, pl, t.pos, eye) != null : SbPlacer.find(this.mc, t.pos, t.want, (class_1747) item, eye, this.reach()) != null) {
                 this.task = t;
                 this.mode = Mode.PLACE;
                 this.modeTicks = 0;
@@ -557,7 +622,7 @@ public final class SchematicBuilderModule extends Module {
             if (t.place && !this.supported(w, t.pos)) continue; // nothing to build it against yet: comes later
             if (tries++ >= 5) break;
             if (t.place) {
-                class_1792 item = t.want.method_26204().method_8389();
+                class_1792 item = itemFor(t.want);
                 if (this.missingUntil.containsKey(item)) continue;
                 if (this.count(item) == 0) {
                     if (this.useStorage.getValue() && !this.storage.isEmpty() && this.startRestock(w, pl)) return;
@@ -567,6 +632,7 @@ public final class SchematicBuilderModule extends Module {
             }
             // tried before and still impossible: put a helper block next to it (top slabs, upside-down stairs...)
             if (t.place && this.failCount.getOrDefault(t.pos.method_10063(), 0) > 2 && this.tryHelper(w, pl, t)) return;
+            if (t.place && this.failCount.getOrDefault(t.pos.method_10063(), 0) == 0 && this.walkToWorkSpot(w, pl, t)) return;
             if (this.walkNear(w, pl, t.pos, t)) return;
             if (t.place && this.tryHelper(w, pl, t)) return;
             this.fail(t.pos, 20_000L, "nowalk");
@@ -584,15 +650,20 @@ public final class SchematicBuilderModule extends Module {
         Map<class_1792, Boolean> carry = new HashMap<>();
         for (Task t : this.tasks.values()) {
             if (this.failedUntil.containsKey(t.pos.method_10063())) continue;
+            // water only once the blocks around it stand, or it floods the build
+            if (t.place && isWater(t.want) && this.waterTooEarly(t)) continue;
+            // never close the last open side of a block that still has to be placed (it could never be reached)
+            if (t.place && this.sealsPending(t.pos)) continue;
             // only work we can do right now (material in the inventory); the rest waits for a restock
-            if (t.place && !carry.computeIfAbsent(t.want.method_26204().method_8389(), it -> this.count(it) > 0)) continue;
+            if (t.place && !carry.computeIfAbsent(itemFor(t.want), it -> this.count(it) > 0)) continue;
             all.add(t);
             if (t.place) minY = Math.min(minY, t.pos.method_10264());
         }
         final int floorY = minY;
         final float yaw = pl.method_36454();
         Map<Task, Double> sc = new HashMap<>();
-        for (Task t : all) sc.put(t, this.taskScore(t, px, py, pz, floorY, yaw));
+        class_638 w = this.mc.field_1687;
+        for (Task t : all) sc.put(t, this.taskScore(t, px, py, pz, floorY, yaw) + this.planScore(w, t));
         all.sort((a, b) -> Double.compare(sc.get(a), sc.get(b)));
         return all.size() > max ? all.subList(0, max) : all;
     }
@@ -606,6 +677,390 @@ public final class SchematicBuilderModule extends Module {
         float to = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         double turn = horiz < 1.0 ? 0.0 : Math.abs(class_3532.method_15393(to - yaw)) / 60.0;
         return (t.place ? 0 : -3) + layer * 2.5 + horiz + Math.abs(dy) * 0.5 + turn;
+    }
+
+    /**
+     * The build plan on top of "bottom-up, nearby first":
+     * <ul>
+     * <li>inside out: the middle of a layer comes before its edge, so the bot ends every layer on the outside and
+     * doesn't wall itself in;</li>
+     * <li>things that hang on other blocks (torches, buttons, levers, rails...) after the solid blocks of their layer,
+     * so their wall / floor is there and they don't get in the way;</li>
+     * <li>blocks that others need as support first.</li>
+     * </ul>
+     */
+    private double planScore(class_638 w, Task t) {
+        if (!t.place || this.box == null || w == null) return 0;
+        class_2338 p = t.pos;
+        int edge = Math.min(Math.min(p.method_10263() - this.box[0], this.box[3] - p.method_10263()), Math.min(p.method_10260() - this.box[2], this.box[5] - p.method_10260()));
+        double s = -Math.min(edge, 8) * 0.7;
+        if (isWater(t.want)) return 30.0; // water flows: only when everything around it stands
+        if (t.want.method_26220(w, p).method_1110()) s += 3.0;
+        // something pending sits on / hangs on this one: do this first
+        for (class_2350 d : class_2350.values()) {
+            Task o = this.tasks.get(p.method_10093(d).method_10063());
+            if (o != null && o.place && o.want.method_26220(w, o.pos).method_1110()) { s -= 1.0; break; }
+        }
+        return s;
+    }
+
+    /**
+     * Where to stand: around the task, the free spot from which the most pending blocks of this layer (and the one
+     * above) are in reach, not standing where the build still needs a block. Then walk there.
+     */
+    private boolean walkToWorkSpot(class_638 w, class_746 pl, Task t) {
+        if (!(itemFor(t.want) instanceof class_1747 bi)) return false;
+        long nowMs = System.currentTimeMillis();
+        this.badSpots.values().removeIf(x -> x < nowMs);
+        // the last spot we walked to gave nothing: don't pick it again for a minute
+        if (this.lastSpot != Long.MIN_VALUE && this.placedTotal == this.lastSpotPlaced) this.badSpots.put(this.lastSpot, nowMs + 60_000L);
+        this.lastSpot = Long.MIN_VALUE;
+        double reach = this.reach() - 0.3;
+        class_1937 sw = SbLitematica.world();
+        List<class_2338> near = new ArrayList<>();
+        for (Task o : this.tasks.values()) {
+            if (!o.place || this.failedUntil.containsKey(o.pos.method_10063())) continue;
+            class_2338 q = o.pos;
+            if (Math.abs(q.method_10263() - t.pos.method_10263()) > 9 || Math.abs(q.method_10260() - t.pos.method_10260()) > 9) continue;
+            if (q.method_10264() < t.pos.method_10264() - 1 || q.method_10264() > t.pos.method_10264() + 1) continue;
+            near.add(q);
+        }
+        class_2338 me = feet(pl);
+        List<Object[]> spots = new ArrayList<>();
+        class_243 c = class_243.method_24953(t.pos);
+        for (int dx = -5; dx <= 5; dx++) for (int dz = -5; dz <= 5; dz++) for (int dy = -3; dy <= 2; dy++) {
+            class_2338 p = t.pos.method_10069(dx, dy, dz);
+            if (p.equals(t.pos) || p.method_10084().equals(t.pos)) continue;
+            double ex = p.method_10263() + 0.5 - c.field_1352, ey = p.method_10264() + 1.27 - c.field_1351, ez = p.method_10260() + 0.5 - c.field_1350;
+            double d2 = ex * ex + ey * ey + ez * ez;
+            if (d2 > reach * reach || d2 < 0.3) continue;
+            if (!SbWorld.standable(w, p) || this.badSpots.containsKey(p.method_10063())) continue;
+            double s = 0;
+            for (class_2338 q : near) {
+                if (q.equals(p) || q.equals(p.method_10084())) { s -= 4; continue; } // we'd stand in the way
+                double qx = q.method_10263() + 0.5 - (p.method_10263() + 0.5), qy = q.method_10264() + 0.5 - (p.method_10264() + 1.27), qz = q.method_10260() + 0.5 - (p.method_10260() + 0.5);
+                if (qx * qx + qy * qy + qz * qz <= reach * reach) s += 1;
+            }
+            // standing on a spot the build still needs: that block can't be placed while we are there
+            if (sw != null && this.inBox(p)) {
+                class_2680 a = SbLitematica.target(sw, p), b = SbLitematica.target(sw, p.method_10084());
+                if (!a.method_26215() && !SbWorld.matches(a, w.method_8320(p)) || !b.method_26215() && !SbWorld.matches(b, w.method_8320(p.method_10084()))) s -= 4;
+            }
+            s -= Math.sqrt(p.method_10262(me)) * 0.15;
+            spots.add(new Object[]{p, s});
+        }
+        spots.sort((a, b) -> Double.compare((double) b[1], (double) a[1]));
+        int sims = 0;
+        for (Object[] o : spots) {
+            if (sims++ >= 8) break;
+            class_2338 p = (class_2338) o[0];
+            class_243 eye = new class_243(p.method_10263() + 0.5, p.method_10264() + 1.27, p.method_10260() + 0.5);
+            if (SbPlacer.find(this.mc, t.pos, t.want, bi, eye, reach) == null) continue;
+            if (p.equals(me)) return false; // already here: the normal walk centres us
+            long pk = p.method_10063();
+            if (this.walk(w, pl, q -> q.method_10063() == pk, p, () -> {}, 9000)) {
+                this.workSpots++;
+                this.lastSpot = pk;
+                this.lastSpotPlaced = this.placedTotal;
+                dbg("work spot " + p.method_23854() + " covers " + String.format(java.util.Locale.ROOT, "%.1f", (double) o[1]) + " for " + t.pos.method_23854());
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Once everything is scanned: tell the plan and what material is missing before starting. */
+    private void announcePlan(class_638 w, class_746 pl) {
+        if (this.planAnnounced || this.box == null) return;
+        class_1937 sw = SbLitematica.world();
+        if (sw == null) return;
+        for (int cx = this.box[0] >> 4; cx <= this.box[3] >> 4; cx++) for (int cz = this.box[2] >> 4; cz <= this.box[5] >> 4; cz++) {
+            if (!w.method_2935().method_12123(cx, cz) || !SbLitematica.loaded(sw, cx, cz)) continue;
+            if (!this.chunkScannedAt.containsKey(BaseFinder.key(cx, cz))) return;
+        }
+        this.planAnnounced = true;
+        Map<class_1792, Integer> need = new LinkedHashMap<>();
+        Set<Integer> layers = new HashSet<>();
+        int place = 0, fix = 0;
+        for (Task t : this.tasks.values()) {
+            if (!t.place) { fix++; continue; }
+            place++;
+            layers.add(t.pos.method_10264());
+            need.merge(itemFor(t.want), 1, Integer::sum);
+        }
+        if (place == 0 && fix == 0) return;
+        Map<class_1792, Integer> stored = new HashMap<>();
+        for (Map<class_1792, Integer> m : this.storageSeen.values()) for (var e : m.entrySet()) stored.merge(e.getKey(), e.getValue(), Integer::sum);
+        StringBuilder miss = new StringBuilder();
+        int missKinds = 0;
+        for (var e : need.entrySet()) {
+            int have = this.count(e.getKey()) + stored.getOrDefault(e.getKey(), 0);
+            if (have >= e.getValue()) continue;
+            if (missKinds++ < 4) miss.append(miss.length() == 0 ? "" : ", ").append(e.getValue() - have).append("x ").append(e.getKey().method_63680().getString());
+        }
+        if (missKinds > 4) miss.append(" +").append(missKinds - 4).append(" more");
+        this.say("Plan: §e" + place + "§f blocks in §e" + layers.size() + "§f layers" + (fix > 0 ? ", §e" + fix + "§f to fix" : "")
+                + " - bottom up, inside out, decorations last, from the spots that reach the most blocks.");
+        if (missKinds > 0) this.say("§eNot in inventory" + (this.storage.isEmpty() ? "" : " or known storage") + ": §f" + miss);
+        if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB plan place=" + place + " fix=" + fix + " layers=" + layers.size() + " missing=" + miss);
+    }
+
+    private int openSides(class_2338 n, class_2338 except) {
+        class_638 w = this.mc.field_1687;
+        int open = 0;
+        for (class_2350 d : class_2350.values()) {
+            class_2338 m = n.method_10093(d);
+            if (m.equals(except)) continue;
+            class_2680 s = w.method_8320(m);
+            if (s.method_26215() || s.method_45474()) open++;
+        }
+        return open;
+    }
+
+    private boolean sealsPending(class_2338 p) {
+        for (class_2350 d : class_2350.values()) {
+            Task o = this.tasks.get(p.method_10093(d).method_10063());
+            if (o != null && o.place && !this.failedUntil.containsKey(o.pos.method_10063()) && this.openSides(o.pos, p) == 0) return true;
+        }
+        return false;
+    }
+
+    /** A block that has to be placed is walled in on all sides: open it up (that block gets placed again later). */
+    private boolean tryUnseal(class_638 w, class_746 pl) {
+        class_2338 p = this.unseal;
+        if (p == null) return false;
+        if (this.unsealTries++ > 3) { this.unseal = null; return false; }
+        class_2680 st = w.method_8320(p);
+        if (st.method_26215() || st.method_45474() || !SbWorld.breakable(w, p) || SbWorld.container(st)) { this.unseal = null; return false; }
+        class_1937 sw = SbLitematica.world();
+        class_2680 want = sw == null ? st : SbLitematica.target(sw, p);
+        Task t = new Task(p, want, !want.method_26215());
+        if (pl.method_33571().method_1025(class_243.method_24953(p)) <= this.reach() * this.reach() && this.visibleFace(w, pl, p) != null) {
+            dbg("unseal: breaking " + p.method_23854());
+            this.unseal = null;
+            this.startBreak(p, t);
+            return true;
+        }
+        return this.walkNear(w, pl, p, null);
+    }
+
+    private class_2338 unseal;
+    private int unsealTries;
+
+    private boolean waterTooEarly(Task w) {
+        for (Task o : this.tasks.values()) {
+            if (!o.place || isWater(o.want)) continue;
+            if (Math.abs(o.pos.method_10263() - w.pos.method_10263()) <= 4 && Math.abs(o.pos.method_10260() - w.pos.method_10260()) <= 4
+                    && o.pos.method_10264() <= w.pos.method_10264() + 1 && o.pos.method_10264() >= w.pos.method_10264() - 3) return true;
+        }
+        return false;
+    }
+
+    static boolean isWater(class_2680 s) {
+        return s.method_26204() == class_2246.field_10382;
+    }
+
+    /** The item that builds this state (a water bucket for water). */
+    static class_1792 itemFor(class_2680 s) {
+        return isWater(s) ? class_1802.field_8705 : s.method_26204().method_8389();
+    }
+
+    /**
+     * Where to click with a water bucket so the water lands at {@code target}: a visible face of a solid neighbour
+     * that doesn't take the water itself (waterloggable) and doesn't open a menu.
+     */
+    private class_3965 waterClick(class_638 w, class_746 pl, class_2338 target, class_243 eye) {
+        double reach = this.reach();
+        double cx = target.method_10263() + 0.5, cy = target.method_10264() + 0.5, cz = target.method_10260() + 0.5;
+        class_3965 best = null;
+        double bestD = Double.MAX_VALUE;
+        for (class_2350 dir : class_2350.values()) {
+            class_2338 nb = target.method_10093(dir);
+            class_2680 ns = w.method_8320(nb);
+            if (ns.method_26215() || ns.method_45474() || ns.method_26218(w, nb).method_1110()) continue;
+            if (ns.toString().contains("waterlogged=") || SbWorld.usable(w, nb)) continue;
+            class_2350 side = dir.method_10153();
+            double fx = cx + dir.method_10148() * 0.5, fy = cy + dir.method_10164() * 0.5, fz = cz + dir.method_10165() * 0.5;
+            double[] g = {0.0, -0.22, 0.22};
+            for (double u : g) for (double v : g) {
+                double ox, oy, oz;
+                if (dir.method_10164() != 0) { ox = u; oy = 0; oz = v; }
+                else if (dir.method_10148() != 0) { ox = 0; oy = v; oz = u; }
+                else { ox = u; oy = v; oz = 0; }
+                class_243 point = new class_243(fx + ox, fy + oy, fz + oz);
+                if ((eye.field_1352 - point.field_1352) * side.method_10148() + (eye.field_1351 - point.field_1351) * side.method_10164() + (eye.field_1350 - point.field_1350) * side.method_10165() <= 0.02) continue;
+                double d = eye.method_1025(point);
+                if (d > reach * reach || d >= bestD) continue;
+                class_3965 r = SbPlacer.ray(w, pl, eye, point);
+                if (r == null || !r.method_17777().equals(nb) || r.method_17780() != side) continue;
+                best = r;
+                bestD = d;
+            }
+        }
+        return best;
+    }
+
+    /** Places a water source like a player: look at the face next to it and right-click with the bucket. */
+    private void tickWater(class_638 w, class_746 pl, Task t) {
+        class_1792 b = class_1802.field_8705;
+        if (!this.hold(pl, b)) {
+            if (this.count(b) == 0) { this.missing(b); this.toIdle(); }
+            return;
+        }
+        this.keys(false, false, false, true); // sneaking: the clicked block is never used
+        if (!pl.method_5715() && this.modeTicks < 6) return;
+        class_3965 h = this.waterClick(w, pl, t.pos, pl.method_33571());
+        if (h == null) {
+            if (this.modeTicks > 3) { this.fail(t.pos, 8_000L, "nowater"); this.toIdle(); }
+            return;
+        }
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), h.method_17784());
+        if (!this.rotateTo(pl, rot[0], rot[1], 0.4f) || !settled(pl) || this.modeTicks < this.placeDelay()) return;
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null || !hit.method_17777().equals(h.method_17777()) || hit.method_17780() != h.method_17780()) {
+            this.rotateTo(pl, rot[0], rot[1], 0.2f);
+            if (++this.aimMiss > 20) { this.aimMiss = 0; this.fail(t.pos, 8_000L, "wateraim"); this.toIdle(); }
+            return;
+        }
+        // like vanilla: the click on the block first (does nothing while sneaking), then the bucket itself
+        var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+        if (!res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        pl.method_6104(class_1268.field_5808);
+        this.lastClickTick = this.tickNo;
+        this.aimMiss = 0;
+        this.placedTotal++;
+        this.lastProgressMs = System.currentTimeMillis();
+        this.placedByMe.add(t.pos.method_10063());
+        this.touched(t.pos);
+        dbg("water at " + t.pos.method_23854() + " " + res);
+        this.waitTicks = 4;
+        this.modeTicks = 0;
+    }
+
+    // ------------------------------------------------------------------ survival: eating, tools, mending
+
+    private static final Set<String> BAD_FOOD = Set.of("rotten_flesh", "spider_eye", "poisonous_potato", "pufferfish", "chorus_fruit", "suspicious_stew");
+
+    /** Best food in the inventory (most nutrition, nothing that poisons or teleports). */
+    private class_1792 foodItem(class_746 pl) {
+        class_1792 best = null;
+        int bestN = 0;
+        for (int i = 0; i < 36; i++) {
+            class_1799 st = pl.method_31548().method_5438(i);
+            if (st.method_7960()) continue;
+            net.minecraft.class_4174 f = st.method_58694(net.minecraft.class_9334.field_50075);
+            if (f == null || BAD_FOOD.contains(net.minecraft.class_7923.field_41178.method_10221(st.method_7909()).method_12832())) continue;
+            int n = f.comp_2491() + (i < 9 ? 1 : 0);
+            if (n > bestN) { bestN = n; best = st.method_7909(); }
+        }
+        return best;
+    }
+
+    private boolean tickEat(class_746 pl) {
+        int food = pl.method_7344().method_7586();
+        if (!this.autoEat.getValue()) { if (this.eating) this.stopEat(); return false; }
+        if (!this.eating) {
+            boolean hungry = food <= this.eatBelow.getIntValue() || pl.method_6032() < 14.0f && food < 18;
+            if (!hungry || food >= 20) return false;
+            if (this.mode == Mode.OPEN_CHEST || this.mode == Mode.TRANSFER || this.mode == Mode.ESCAPE || this.mode == Mode.WALK && !pl.method_24828()) return false;
+            if (this.foodItem(pl) == null) return false;
+            this.toIdle();
+            this.eating = true;
+            this.eatTicks = 0;
+            dbg("eat: hunger " + food);
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB eat start food=" + food);
+        }
+        boolean using = pl.method_6115();
+        class_1792 f = this.foodItem(pl);
+        if (!using && (f == null || food >= Math.min(20, this.eatBelow.getIntValue() + 6) || this.eatTicks > 600)) {
+            this.stopEat();
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB eat done food=" + food);
+            return false;
+        }
+        this.eatTicks++;
+        this.status = "Eating";
+        this.keys(false, false, false, false);
+        if (using) { this.mc.field_1690.field_1904.method_23481(true); return true; }
+        if (!this.hold(pl, f)) return true;
+        // eat looking up a bit, not at a block: a right-click on a block would be sent first (like holding the key)
+        if (this.crosshair(pl) != null && this.eatTicks < 40) {
+            this.mc.field_1690.field_1904.method_23481(false);
+            this.rotateTo(pl, pl.method_36454(), -45.0f, 4.0f);
+            return true;
+        }
+        this.mc.field_1690.field_1904.method_23481(true);
+        if (this.eatTicks % 8 == 2 && this.mc.field_1761.method_2919(pl, class_1268.field_5808).method_23665()) this.lastClickTick = this.tickNo;
+        return true;
+    }
+
+    private void stopEat() {
+        this.eating = false;
+        try { this.mc.field_1690.field_1904.method_23481(false); } catch (Throwable ignored) { }
+        this.lastProgressMs = System.currentTimeMillis();
+    }
+
+    private boolean nearlyBroken(class_1799 s) {
+        return this.saveTools.getValue() && !s.method_7960() && s.method_7963() && s.method_7936() - s.method_7919() <= 6;
+    }
+
+    private static boolean mendable(class_1799 s) {
+        return !s.method_7960() && s.method_7963() && s.method_7919() > 0 && s.method_58657().toString().contains("mending");
+    }
+
+    /** XP orbs around: a damaged Mending item from the bag goes to the (empty or repaired) offhand. */
+    private boolean tryMend(class_638 w, class_746 pl) {
+        if (!this.autoMend.getValue() || this.tickNo - this.lastMendCheck < 20) return false;
+        this.lastMendCheck = (int) this.tickNo;
+        if (w.method_8390(net.minecraft.class_1303.class, pl.method_5829().method_1014(8.0), e -> true).isEmpty()) return false;
+        class_1799 off = pl.method_6079();
+        if (mendable(off)) return false;
+        if (!off.method_7960() && !(off.method_7963() && off.method_7919() == 0 && off.method_58657().toString().contains("mending"))) return false;
+        if (pl.field_7512 != pl.field_7498) return false;
+        class_1661 inv = pl.method_31548();
+        for (int i = 9; i < 36; i++) {
+            if (!mendable(inv.method_5438(i))) continue;
+            if (!this.readyForInventory(pl)) return true;
+            this.mc.field_1761.method_2906(pl.field_7498.field_7763, i, 40, class_1713.field_7791, (class_1657) pl);
+            this.mc.method_1562().method_52787(new net.minecraft.class_2815(pl.field_7498.field_7763));
+            dbg("mend: " + inv.method_5438(i) + " <-> offhand");
+            this.waitTicks = 3;
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Nothing placed or broken for half a minute although there is work: something is wrong with the current idea
+     * (a spot that never works, built in, a desynced world). Drop it and make a new plan from scratch.
+     */
+    private void watchdog(class_638 w, class_746 pl) {
+        long now = System.currentTimeMillis();
+        boolean waiting = this.tasks.isEmpty() || this.eating || this.mode == Mode.OPEN_CHEST || this.mode == Mode.TRANSFER
+                || this.status.startsWith("Missing") || this.status.startsWith("Restock") || this.status.startsWith("Paused") || this.status.startsWith("Finished")
+                || this.status.startsWith("Walking to unbuilt") || this.status.startsWith("Removing");
+        if (this.lastProgressMs == 0 || waiting) { this.lastProgressMs = now; return; }
+        if (now - this.lastProgressMs < 30_000L) return;
+        this.lastProgressMs = now;
+        this.replans++;
+        class_2338 f = feet(pl);
+        dbg("watchdog: no progress for 30s at " + f.method_23854() + " (" + this.status + ") - new plan");
+        if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB replan " + this.replans + " at " + f.method_23854() + " " + this.status);
+        if (this.task != null) this.fail(this.task.pos, 20_000L, "watchdog");
+        if (this.lastSpot != Long.MIN_VALUE) this.badSpots.put(this.lastSpot, now + 90_000L);
+        this.badSpots.put(f.method_10063(), now + 90_000L);
+        this.lastSpot = Long.MIN_VALUE;
+        // look at everything again (the world may not be what we think) and allow digging out
+        this.chunkScannedAt.clear();
+        this.escape = true;
+        this.toIdle();
+        this.say("§eNo progress for a while - making a new plan.");
+    }
+
+    /** After the bot closed a screen it opened, bring back what the player had open (pause menu, chat...). */
+    private void restoreScreen() {
+        net.minecraft.class_437 s = this.bgScreen;
+        dbg("restore screen " + (s == null ? "-" : s.getClass().getSimpleName()) + " now " + (this.mc.field_1755 == null ? "-" : this.mc.field_1755.getClass().getSimpleName()));
+        if (s != null && this.mc.field_1755 == null) this.mc.method_1507(s);
     }
 
     private void nothingToDo(class_638 w, class_746 pl) {
@@ -661,7 +1116,7 @@ public final class SchematicBuilderModule extends Module {
             Task best = null;
             double rd = Double.MAX_VALUE;
             for (Task t : this.tasks.values()) {
-                if (t.place && this.count(t.want.method_26204().method_8389()) == 0) continue;
+                if (t.place && this.count(itemFor(t.want)) == 0) continue;
                 double d = pl.method_33571().method_1025(class_243.method_24953(t.pos));
                 if (d < rd) { rd = d; best = t; }
             }
@@ -710,6 +1165,14 @@ public final class SchematicBuilderModule extends Module {
         int n = this.failCount.merge(k, 1, Integer::sum);
         this.failedUntil.put(k, System.currentTimeMillis() + ms * Math.min(4, n));
         Task t = this.tasks.get(k);
+        // walled in on every side: open the side above (or any breakable one) so it can be placed
+        if (t != null && t.place && n >= 2 && this.unseal == null && this.openSides(p, null) == 0) {
+            for (class_2350 d : new class_2350[]{class_2350.field_11036, class_2350.field_11043, class_2350.field_11035, class_2350.field_11039, class_2350.field_11034}) {
+                class_2338 q = p.method_10093(d);
+                class_2680 qs = this.mc.field_1687.method_8320(q);
+                if (SbWorld.breakable(this.mc.field_1687, q) && !SbWorld.container(qs)) { this.unseal = q; this.unsealTries = 0; dbg("sealed " + p.method_23854() + " -> open " + q.method_23854()); break; }
+            }
+        }
         if (t == null || !t.place || this.helperPos.contains(k)) return;
         boolean vertical = false;
         for (var prop : t.want.method_28501()) {
@@ -744,9 +1207,10 @@ public final class SchematicBuilderModule extends Module {
         Task t = this.task;
         if (t == null) { this.toIdle(); return; }
         class_2680 have = w.method_8320(t.pos);
-        if (SbWorld.matches(t.want, have)) { this.finishedBlock(t); return; }
+        if (isWater(t.want) ? isWater(have) && have.toString().contains("level=0") : SbWorld.matches(t.want, have)) { this.finishedBlock(t); return; }
         if (!have.method_26215() && !have.method_45474()) { this.toIdle(); return; }
-        class_1792 item = t.want.method_26204().method_8389();
+        if (isWater(t.want)) { this.tickWater(w, pl, t); return; }
+        class_1792 item = itemFor(t.want);
         if (!this.hold(pl, item)) {
             if (this.count(item) == 0) { this.missing(item); this.toIdle(); }
             return;
@@ -774,6 +1238,8 @@ public final class SchematicBuilderModule extends Module {
         }
         this.aimMiss = 0;
         {
+            this.placedTotal++;
+            this.lastProgressMs = System.currentTimeMillis();
             this.placedSincePause++;
             this.stuckRetries = 0;
             this.escape = false;
@@ -826,6 +1292,18 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private float sentYaw = Float.NaN, sentPitch = Float.NaN;
+
+    /**
+     * The game only turns the head 20 times a second; the frames in between are drawn from the rotation of the last
+     * tick. Without this every bot turn would jump in steps on screen - now it glides like a mouse.
+     */
+    @EventListener
+    public void onSendMovementSmooth(hook.event.events.SendMovementPacketsEvent e) {
+        class_746 pl = this.mc.field_1724;
+        if (pl == null || this.renderTick != this.tickNo || Float.isNaN(this.renderYaw)) return;
+        pl.field_5982 = this.renderYaw;
+        pl.field_6004 = this.renderPitch;
+    }
 
     /** Self-test only: what an anticheat would think of every packet. */
     @EventListener
@@ -882,6 +1360,13 @@ public final class SchematicBuilderModule extends Module {
             this.aimTY = Float.NaN;
             return -1;
         }
+        // the last turn before this place equals the one before the last place: a tiny correction first
+        if (this.lastTurnAbs > 2.0f && Math.abs(this.lastTurnAbs - this.lastBeforePlace) < 1.0E-3f) {
+            float g = this.mouseStep();
+            pl.method_36456(pl.method_36454() + (this.rnd.nextBoolean() ? g : -g));
+            this.lastTurnAbs = g;
+            return 0;
+        }
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (!res.method_23665()) {
             dbg("aim: click refused " + res + " target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780()
@@ -890,6 +1375,8 @@ public final class SchematicBuilderModule extends Module {
         }
         pl.method_6104(class_1268.field_5808);
         this.lastClickTick = this.tickNo;
+        this.lastBeforePlace = this.lastTurnAbs;
+        this.afterPlace = true;
         return 1;
     }
 
@@ -956,7 +1443,7 @@ public final class SchematicBuilderModule extends Module {
             dbg("helper: no scaffold blocks (" + this.count(sc) + ")");
             return false;
         }
-        class_1792 item = t.want.method_26204().method_8389();
+        class_1792 item = itemFor(t.want);
         if (!(item instanceof class_1747 bi)) return false;
         SbPath.Rules r = this.rules();
         class_243 eye = pl.method_33571();
@@ -1045,6 +1532,7 @@ public final class SchematicBuilderModule extends Module {
             this.mc.field_1761.method_2925();
             this.scaffoldPlaced.remove(p.method_10063());
             this.touched(p);
+            this.lastProgressMs = System.currentTimeMillis();
             Task t = this.task;
             this.tasks.remove(p.method_10063());
             this.toIdle();
@@ -1089,7 +1577,7 @@ public final class SchematicBuilderModule extends Module {
         double reach = this.reach() - 0.3;
         class_243 c = class_243.method_24953(target);
         long tk = target.method_10063();
-        class_1792 item = t != null && t.place ? t.want.method_26204().method_8389() : null;
+        class_1792 item = t != null && t.place ? itemFor(t.want) : null;
         return this.walk(w, pl, p -> {
             if (p.method_10063() == tk || p.method_10084().method_10063() == tk) return false;
             double ex = p.method_10263() + 0.5 - c.field_1352, ey = p.method_10264() + 1.27 - c.field_1351, ez = p.method_10260() + 0.5 - c.field_1350;
@@ -1097,6 +1585,7 @@ public final class SchematicBuilderModule extends Module {
             if (d2 > reach * reach || d2 < 0.3) return false;
             // only spots from which the block can really be placed / hit (sneaking eye height)
             class_243 eye = new class_243(p.method_10263() + 0.5, p.method_10264() + 1.27, p.method_10260() + 0.5);
+            if (t != null && t.place && isWater(t.want)) return this.waterClick(w, pl, target, eye) != null;
             if (item instanceof class_1747 bi) return SbPlacer.find(this.mc, target, t.want, bi, eye, reach) != null;
             return this.visibleFace(w, pl, target, eye) != null;
         }, target, () -> {}, 9000);
@@ -1402,7 +1891,7 @@ public final class SchematicBuilderModule extends Module {
         int types = 0;
         for (Task t : near) {
             if (!t.place) continue;
-            class_1792 it = t.want.method_26204().method_8389();
+            class_1792 it = itemFor(t.want);
             if (!(it instanceof class_1747)) continue;
             if (!want.containsKey(it)) { if (++types > 12) break; }
             want.merge(it, 1, Integer::sum);
@@ -1498,7 +1987,7 @@ public final class SchematicBuilderModule extends Module {
 
     private void tickTransfer(class_638 w, class_746 pl) {
         class_1703 h = pl.field_7512;
-        if (!(h instanceof class_1707 || h instanceof class_1733)) { this.toIdle(); return; }
+        if (!(h instanceof class_1707 || h instanceof class_1733)) { this.restoreScreen(); this.toIdle(); return; }
         int size = h instanceof class_1707 g ? g.method_17388() * 9 : 27;
         // remember what is in there
         Map<class_1792, Integer> seen = new HashMap<>();
@@ -1522,7 +2011,7 @@ public final class SchematicBuilderModule extends Module {
         // drop off junk when the inventory is nearly full
         if (free < 4) {
             Set<class_1792> useful = new HashSet<>();
-            for (Task t : this.tasks.values()) if (t.place) useful.add(t.want.method_26204().method_8389());
+            for (Task t : this.tasks.values()) if (t.place) useful.add(itemFor(t.want));
             useful.add(this.scaffoldItem());
             for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
                 class_1799 st = h.method_7611(i).method_7677();
@@ -1534,6 +2023,7 @@ public final class SchematicBuilderModule extends Module {
         }
         // done here
         pl.method_7346();
+        this.restoreScreen();
         this.visitedThisTrip.add(this.chestPos.method_10063());
         boolean still = false;
         for (Map.Entry<class_1792, Integer> e : this.wanted.entrySet()) if (e.getValue() > 0 && this.count(e.getKey()) == 0) still = true;
@@ -1607,10 +2097,15 @@ public final class SchematicBuilderModule extends Module {
         float bestSpeed = 1.0f;
         for (int i = 0; i < 36; i++) {
             class_1799 s = inv.method_5438(i);
-            if (s.method_7960()) continue;
+            if (s.method_7960() || this.nearlyBroken(s)) continue;
             if (st.method_29291() && !s.method_7951(st)) continue;
             float sp = s.method_7924(st);
             if (sp > bestSpeed + 0.01f || sp > bestSpeed - 0.01f && best >= 9 && i < 9) { bestSpeed = sp; best = i; }
+        }
+        if (best < 0 && this.nearlyBroken(inv.method_5438(inv.method_67532()))) {
+            // only the almost broken tool would do: rather use the hand than break it
+            for (int i = 0; i < 9; i++) if (!isTool(inv.method_5438(i))) { inv.method_61496(i); return; }
+            return;
         }
         if (best < 0 || best == inv.method_67532()) return;
         if (best < 9) { inv.method_61496(best); return; }
@@ -1677,8 +2172,9 @@ public final class SchematicBuilderModule extends Module {
         // A target that only drifts (walking) keeps the current style so the head does not twitch.
         if (Float.isNaN(this.aimTY) || Math.abs(class_3532.method_15393(yaw - this.aimTY)) > 6.0f || Math.abs(pitch - this.aimTP) > 6.0f) {
             float far = (float) Math.hypot(class_3532.method_15393(yaw - cy), pitch - cp);
-            this.aimSpeed = 0.2f + this.rnd.nextFloat() * 0.3f;
-            this.aimCap = 18.0f + this.rnd.nextFloat() * 16.0f;
+            this.aimSpeed = 0.34f + this.rnd.nextFloat() * 0.22f;
+            this.aimCap = 26.0f + this.rnd.nextFloat() * 12.0f;
+            this.aimAccel = 0.5f + this.rnd.nextFloat() * 0.3f;
             this.aimLag = 0.6f + this.rnd.nextFloat() * 0.4f;
             this.aimCurve = (this.rnd.nextFloat() - 0.5f) * 0.3f;
             // never exactly the planned spot: somewhere around it (the click is checked with the real crosshair)
@@ -1702,17 +2198,23 @@ public final class SchematicBuilderModule extends Module {
         if (!this.aimOvershoot && dist < done) return true;
         float my, mp;
         if (human) {
-            if (this.aimHesitate > 0) { this.aimHesitate--; return false; }
-            if (dist > 12.0f && this.rnd.nextFloat() < 0.05f) { this.aimHesitate = this.rnd.nextInt(2); return false; } // a short hitch
-            // fast when far, slow when close (ease out), never two ticks alike
-            float f = this.aimSpeed * (0.8f + this.rnd.nextFloat() * 0.4f);
-            float step = Math.min(dist, Math.max(1.2f + this.rnd.nextFloat() * 1.2f, dist * f));
-            step = Math.min(step, this.aimCap);
+            if (this.aimHesitate > 0) { this.aimHesitate--; this.aimVel *= 0.3f; return false; }
+            // a smooth hand: speeds up over a tick or two, glides, and slows down softly before the target
+            // (no instant full-speed jumps, no random jitter from tick to tick)
+            float f = this.aimSpeed * (0.92f + this.rnd.nextFloat() * 0.16f);
+            float want = Math.min(this.aimCap, Math.max(0.9f + this.rnd.nextFloat() * 0.5f, dist * f));
+            float vel = want > this.aimVel ? this.aimVel + (want - this.aimVel) * this.aimAccel : want;
+            float step = Math.min(dist, Math.max(0.6f, vel));
+            this.aimVel = step;
             float k = step / dist;
             my = dy * k;
             mp = dp * k * (dist < 5.0f ? 1.0f : this.aimLag); // the wrist moves sideways first, up / down follows
             if (dist > 6.0f) mp += Math.abs(dy * k) * this.aimCurve; // an arc, not a ruler-straight line
-            if (dist > 2.0f) { my += (this.rnd.nextInt(5) - 2) * g; mp += (this.rnd.nextInt(3) - 1) * g; } // tremor
+            if (dist > 3.0f) {
+                // hand tremor as a slow wave, not noise
+                my += (float) Math.sin(this.tickNo * 0.83 + this.walkPhase[0]) * g * 1.5f;
+                mp += (float) Math.sin(this.tickNo * 0.61 + this.walkPhase[1]) * g * 1.0f;
+            }
         } else {
             float k = Math.min(dist, 55.0f) / dist;
             my = dy * k;
@@ -1723,6 +2225,10 @@ public final class SchematicBuilderModule extends Module {
         my = Math.round(my / g) * g;
         mp = Math.round(mp / g) * g;
         if (my == 0.0f && mp == 0.0f) { this.aimOvershoot = false; return true; } // closer than one mouse step
+        // never the very same first turn after two places in a row (Grim DuplicateRotPlace)
+        if (this.afterPlace && Math.abs(my) > 2.0f && Math.abs(Math.abs(my) - this.lastAfterPlace) < 1.0E-3f) my += Math.signum(my) * g;
+        if (this.afterPlace) { this.lastAfterPlace = Math.abs(my); this.afterPlace = false; }
+        this.lastTurnAbs = Math.abs(my);
         pl.method_36456(cy + my);
         pl.method_36457(Math.max(-90.0f, Math.min(90.0f, cp + mp)));
         float ry = class_3532.method_15393(gy - pl.method_36454()), rp = gp - pl.method_36455();
@@ -1730,7 +2236,8 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private float aimTY = Float.NaN, aimTP, aimOffY, aimOffP, aimSpeed, aimCap, aimLag, aimCurve, aimOSY, aimOSP;
-    private boolean aimOvershoot, aimPrecise;
+    private boolean aimOvershoot, aimPrecise, afterPlace;
+    private float lastTurnAbs, lastAfterPlace = Float.NaN, lastBeforePlace = Float.NaN, aimAccel = 0.6f, aimVel;
     private int aimHesitate, reactWait = -1;
     private final float[] walkPhase = {(float) (Math.random() * 6.3), (float) (Math.random() * 6.3), (float) (Math.random() * 6.3)};
     private float walkPitch = 14.0f;

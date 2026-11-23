@@ -151,7 +151,7 @@ public final class XbowCartModule extends Module {
         if (!CartTest.ENABLED) return;
         net.minecraft.class_310 mc = net.minecraft.class_310.method_1551();
         if (mc.field_1724 == null) return;
-        if (mc.field_1755 instanceof net.minecraft.class_433) mc.method_1507(null);
+        if (mc.field_1755 instanceof net.minecraft.class_433 && mc.field_1755.method_25421()) mc.method_1507(null);
         if (instance != null && !instance.isEnabled()) instance.setEnabled(true);
         hook.module.Module bow = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(BowCartModule.class);
         if (bow != null && !bow.isEnabled()) bow.setEnabled(true);
@@ -161,7 +161,7 @@ public final class XbowCartModule extends Module {
     public void onTick(TickEvent event) {
         class_746 p = this.mc.field_1724;
         if (p == null) return;
-        if (CartTest.ENABLED && this.mc.field_1755 instanceof net.minecraft.class_433) this.mc.method_1507(null); // self-test: never sit paused
+        if (CartTest.ENABLED && this.mc.field_1755 instanceof net.minecraft.class_433 && this.mc.field_1755.method_25421()) this.mc.method_1507(null); // self-test: never sit paused
         if (p.field_6012 == this.lastAge) return; // the tick event fires twice per game tick
         this.lastAge = p.field_6012;
         while (thetruetrident.cartcore.C.A.method_1436()) {
