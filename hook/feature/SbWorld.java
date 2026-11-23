@@ -17,7 +17,7 @@ final class SbWorld {
     }
 
     /** Properties that decide how a block looks once placed; everything else (connections, power...) updates itself. */
-    private static final Set<String> IMPORTANT = Set.of("facing", "axis", "half", "type", "rotation", "hinge", "face", "orientation", "attachment", "hanging");
+    private static final Set<String> IMPORTANT = Set.of("facing", "axis", "half", "type", "rotation", "hinge", "face", "orientation", "attachment", "hanging", "vertical_direction", "attach_face");
 
     static class_2680 state(class_638 w, class_2338 p) {
         return w.method_8320(p);
@@ -110,6 +110,17 @@ final class SbWorld {
         if (b == class_2246.field_10379 || b == class_2246.field_10008) return true;
         if (s.method_28498(net.minecraft.class_2741.field_12533) && s.method_11654(net.minecraft.class_2741.field_12533) == net.minecraft.class_2756.field_12609) return true;
         return s.method_28498(net.minecraft.class_2741.field_12483) && s.method_11654(net.minecraft.class_2741.field_12483) == net.minecraft.class_2742.field_12560;
+    }
+
+    /** Right-clicking it does something (opens a menu, flips it...): only place against it while sneaking. */
+    static boolean usable(class_638 w, class_2338 p) {
+        class_2680 s = w.method_8320(p);
+        if (w.method_8321(p) != null || s.method_26196(w, p) != null) return true;
+        class_2248 b = s.method_26204();
+        return b instanceof net.minecraft.class_2323 || b instanceof net.minecraft.class_2533 || b instanceof net.minecraft.class_2349
+                || b instanceof net.minecraft.class_2401 || b instanceof net.minecraft.class_2269 || b instanceof net.minecraft.class_2462
+                || b instanceof net.minecraft.class_2286 || b instanceof net.minecraft.class_2428 || b instanceof net.minecraft.class_2244
+                || b instanceof net.minecraft.class_3709;
     }
 
     static boolean container(class_2680 s) {

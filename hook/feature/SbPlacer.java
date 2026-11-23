@@ -148,6 +148,23 @@ final class SbPlacer {
         return best;
     }
 
+    private static java.lang.reflect.Method getPlacementState;
+
+    /**
+     * The state the item itself would place: torches, signs, banners, heads... become their wall version when a wall
+     * is clicked, which the block alone doesn't know.
+     */
+    private static class_2680 placementState(class_1747 item, class_1750 ctx) throws Exception {
+        if (getPlacementState == null) {
+            java.lang.reflect.Method m;
+            try { m = class_1747.class.getDeclaredMethod("method_7707", class_1750.class); }
+            catch (NoSuchMethodException e) { m = class_1747.class.getDeclaredMethod("getPlacementState", class_1750.class); }
+            m.setAccessible(true);
+            getPlacementState = m;
+        }
+        return (class_2680) getPlacementState.invoke(item, ctx);
+    }
+
     /** What block state placing would produce with that click and rotation (null = not placeable). */
     static class_2680 simulate(class_746 pl, class_638 w, class_1747 item, class_3965 hit, float[] rot, class_2338 target, class_2680 cur) {
         return simulate(pl, w, item, hit, rot, target, cur, false);
@@ -161,7 +178,7 @@ final class SbPlacer {
             pl.method_36457(rot[1]);
             class_1750 ctx = new class_1750(pl, class_1268.field_5808, new class_1799(item), hit);
             if (!ctx.method_8037().equals(target) || !ctx.method_7716()) return null;
-            class_2680 st = item.method_7711().method_9605(ctx);
+            class_2680 st = placementState(item, ctx);
             if (st == null || !st.method_26184(w, target)) return null;
             // never place a block into yourself
             if (!st.method_26220(w, target).method_1110() && !planning && pl.method_5829().method_994(new class_238(target))) return null;

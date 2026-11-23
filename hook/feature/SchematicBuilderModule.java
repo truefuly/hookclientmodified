@@ -92,6 +92,15 @@ public final class SchematicBuilderModule extends Module {
     private final Set<Long> helperPos = new HashSet<>();
     /** Blocks given up on after many failed tries (counted like unbuildable blocks). */
     private final Set<Long> skipped = new HashSet<>();
+    /** Blocks this bot placed: if one ends up wrong it is always fixed, even with "Fix Wrong Blocks" off. */
+    private final Set<Long> placedByMe = new HashSet<>();
+    /** Placed blocks waiting for the server to confirm them (pos -> tick placed). */
+    private final Map<Long, Long> verify = new HashMap<>();
+    private final Map<Long, class_2680> verifyWant = new HashMap<>();
+    private int wrongPlaced, stuckRetries, forceSneakTicks;
+    private long lastClickTick = -1000;
+    private boolean pauseLogged;
+    private boolean escape;
     private final ArrayDeque<long[]> doneLog = new ArrayDeque<>(); // {time ms, blocks}
     private int lastDone = -1;
 
@@ -249,12 +258,18 @@ public final class SchematicBuilderModule extends Module {
     @Override
     public void onDisable() {
         this.releaseKeys();
+        if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB wrongPlaced=" + this.wrongPlaced);
         if (this.mc.field_1761 != null) this.mc.field_1761.method_2925();
         super.onDisable();
     }
 
     private void resetAll() {
         this.placement = null;
+        this.placedByMe.clear();
+        this.verify.clear();
+        this.verifyWant.clear();
+        this.wrongPlaced = 0;
+        SbAcTest.reset();
         this.signature = "";
         this.chunkStats.clear();
         this.chunkScannedAt.clear();
@@ -293,7 +308,10 @@ public final class SchematicBuilderModule extends Module {
         this.lastAge = pl.field_6012;
         this.tickNo++;
         if (this.freezeTicks > 0) this.freezeTicks--;
+        if (this.forceSneakTicks > 0) this.forceSneakTicks--;
         SbPlacer.forced = !this.antiCheat.getValue();
+        SbAcTest.mouseStep = this.mouseStep();
+        this.checkPlaced(w);
         String key = this.worldKey();
         if (!key.equals(this.storageKey)) { this.storageKey = key; this.loadStorage(); }
 
@@ -306,7 +324,14 @@ public final class SchematicBuilderModule extends Module {
 
         // a screen the builder did not open (inventory, chat, menu): wait
         boolean ownScreen = this.mode == Mode.TRANSFER || this.mode == Mode.OPEN_CHEST;
+        if (this.mc.field_1755 instanceof net.minecraft.class_465 && !ownScreen && this.tickNo - this.lastClickTick <= 20) {
+            // a click opened a block's menu (shouldn't happen, we sneak): close it again right away
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB closed a menu our click opened: " + this.mc.field_1755.getClass().getSimpleName());
+            pl.method_7346();
+        }
         if (this.mc.field_1755 != null && !ownScreen) {
+            if (!this.pauseLogged && System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB paused by screen " + this.mc.field_1755.getClass().getName());
+            this.pauseLogged = true;
             this.releaseKeys();
             this.status = "Paused (menu open)";
             return;
@@ -433,7 +458,7 @@ public final class SchematicBuilderModule extends Module {
             if (have.method_26215() || have.method_45474()) {
                 this.tasks.put(p.method_10063(), new Task(p, want, true));
                 list.add(p.method_10063());
-            } else if (this.breakWrong.getValue() && SbWorld.breakable(w, p) || this.scaffoldPlaced.contains(p.method_10063())) {
+            } else if ((this.breakWrong.getValue() || this.placedByMe.contains(p.method_10063())) && SbWorld.breakable(w, p) || this.scaffoldPlaced.contains(p.method_10063())) {
                 this.tasks.put(p.method_10063(), new Task(p, want, false));
                 list.add(p.method_10063());
             }
@@ -640,8 +665,28 @@ public final class SchematicBuilderModule extends Module {
                 double d = pl.method_33571().method_1025(class_243.method_24953(t.pos));
                 if (d < rd) { rd = d; best = t; }
             }
-            if (best != null) this.failedUntil.remove(best.pos.method_10063());
-            else this.status = "Waiting (blocks not placeable yet)";
+            if (best != null) {
+                // everything is on cool-down: give all of them another go (the world around them changed since)
+                for (Task t : this.tasks.values()) this.failedUntil.remove(t.pos.method_10063());
+            } else this.status = "Waiting (blocks not placeable yet)";
+            // still nothing after a while: we may have built ourselves in - allow breaking finished blocks to get
+            // out (they get placed again later)
+            if (++this.stuckRetries >= 4 && !this.escape) { this.escape = true; dbg("stuck: may break finished blocks to get out"); }
+            if (this.stuckRetries >= 40) {
+                // nothing worked for a minute: what is left can't be reached or placed (it hangs on skipped
+                // blocks...). Give it up so the build finishes instead of standing here forever.
+                int n = 0;
+                for (Task t : new ArrayList<>(this.tasks.values())) {
+                    this.skipped.add(t.pos.method_10063());
+                    this.tasks.remove(t.pos.method_10063());
+                    this.touched(t.pos);
+                    n++;
+                }
+                this.stuckRetries = 0;
+                this.escape = false;
+                this.say("§eGave up on " + n + " block(s) that can't be reached or placed from anywhere - place them yourself.");
+                if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB gave up on " + n);
+            }
             this.waitTicks = 30;
         }
     }
@@ -717,7 +762,9 @@ public final class SchematicBuilderModule extends Module {
         if (s.score() >= 400.0) {
             // a state that needs the head turned away from the clicked spot (Anticheat Safe is off)
             if (!this.rotateTo(pl, s.yaw(), s.pitch(), 0.4f) || this.modeTicks < this.placeDelay()) return;
+            if (!pl.method_5715() && SbWorld.usable(w, s.hit().method_17777())) { this.forceSneakTicks = 10; return; }
             r = this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665() ? 1 : -1;
+            this.lastClickTick = this.tickNo;
             if (r == 1) pl.method_6104(class_1268.field_5808);
         } else r = this.aimAndPlace(w, pl, t.pos, t.want, (class_1747) item, s.yaw(), s.pitch(), this.modeTicks >= this.placeDelay());
         if (r == 0) return;
@@ -728,10 +775,35 @@ public final class SchematicBuilderModule extends Module {
         this.aimMiss = 0;
         {
             this.placedSincePause++;
+            this.stuckRetries = 0;
+            this.escape = false;
+            this.placedByMe.add(t.pos.method_10063());
+            if (!this.helperPos.contains(t.pos.method_10063())) { this.verify.put(t.pos.method_10063(), this.tickNo); this.verifyWant.put(t.pos.method_10063(), t.want); }
             if (this.helperPos.remove(t.pos.method_10063())) this.scaffoldPlaced.add(t.pos.method_10063());
             this.touched(t.pos);
             this.waitTicks = 1;
             this.modeTicks = 0;
+        }
+    }
+
+    /**
+     * Once the server had time to confirm a placed block: is it really the wanted state (facing, half...)? If not it
+     * gets broken and placed again (scanChunk sees placedByMe).
+     */
+    private void checkPlaced(class_638 w) {
+        if (this.verify.isEmpty()) return;
+        var it = this.verify.entrySet().iterator();
+        while (it.hasNext()) {
+            var e = it.next();
+            if (this.tickNo - e.getValue() < 15) continue;
+            it.remove();
+            class_2338 p = class_2338.method_10092(e.getKey());
+            class_2680 want = this.verifyWant.remove(e.getKey());
+            class_2680 have = w.method_8320(p);
+            if (want == null || SbWorld.matches(want, have)) continue;
+            this.wrongPlaced++;
+            this.touched(p);
+            if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB wrongstate " + p.method_23854() + " have " + have + " want " + want);
         }
     }
 
@@ -755,6 +827,17 @@ public final class SchematicBuilderModule extends Module {
 
     private float sentYaw = Float.NaN, sentPitch = Float.NaN;
 
+    /** Self-test only: what an anticheat would think of every packet. */
+    @EventListener
+    public void onPacketSend(hook.event.events.PacketSendEvent e) {
+        if (SbAcTest.ON) SbAcTest.onSend(e.packet);
+    }
+
+    @EventListener
+    public void onPacketReceive(hook.event.events.PacketReceiveEvent e) {
+        if (SbAcTest.ON) SbAcTest.onReceive(e.packet);
+    }
+
     /** The rotation that goes out with this tick's movement packet. */
     @EventListener
     public void onSendMovement(hook.event.events.SendMovementPacketsEvent e) {
@@ -777,13 +860,26 @@ public final class SchematicBuilderModule extends Module {
      */
     private int aimAndPlace(class_638 w, class_746 pl, class_2338 target, class_2680 want, class_1747 item, float yaw, float pitch, boolean mayClick) {
         boolean there = this.rotateTo(pl, yaw, pitch, 0.4f);
-        if (!there || !settled(pl) || !mayClick) return 0;
+        if (!there || !settled(pl) || !mayClick) { if (!there) this.reactWait = -1; return 0; }
+        // a moment to notice it is on target before clicking (varies like a real reaction)
+        if (this.human.getValue()) {
+            if (this.reactWait < 0) this.reactWait = this.rnd.nextInt(3);
+            if (this.reactWait-- > 0) return 0;
+        }
         class_3965 hit = this.crosshair(pl);
-        if (hit == null) { dbg("aim: crosshair on nothing, target " + target.method_23854()); return -1; }
+        if (hit == null) { dbg("aim: crosshair on nothing, target " + target.method_23854()); this.aimPrecise = true; this.aimTY = Float.NaN; return -1; }
+        // clicking a chest, furnace, trapdoor, lever... without sneaking uses it instead of placing against it
+        if (!pl.method_5715() && SbWorld.usable(w, hit.method_17777())) {
+            this.forceSneakTicks = 10;
+            this.mc.field_1690.field_1832.method_23481(true);
+            return 0;
+        }
         class_2680 st = SbPlacer.simulate(pl, w, item, hit, new float[]{pl.method_36454(), pl.method_36455()}, target, w.method_8320(target));
         if (st == null || want != null && !SbWorld.matches(want, st)) {
             dbg("aim: target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780() + " @" + hit.method_17784()
                     + " gives " + st + " want " + want + " rot " + pl.method_36454() + "/" + pl.method_36455() + " aim " + yaw + "/" + pitch + " eye " + pl.method_33571());
+            this.aimPrecise = true; // the next try aims at the exact planned spot
+            this.aimTY = Float.NaN;
             return -1;
         }
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
@@ -793,6 +889,7 @@ public final class SchematicBuilderModule extends Module {
             return -1;
         }
         pl.method_6104(class_1268.field_5808);
+        this.lastClickTick = this.tickNo;
         return 1;
     }
 
@@ -907,6 +1004,8 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private void finishedBlock(Task t) {
+        this.stuckRetries = 0;
+        this.escape = false;
         this.tasks.remove(t.pos.method_10063());
         this.failCount.remove(t.pos.method_10063());
         this.touched(t.pos);
@@ -973,6 +1072,7 @@ public final class SchematicBuilderModule extends Module {
         r.mayBreak = p -> {
             if (this.storage.contains(p.method_10063())) return false;
             if (sw != null && this.inBox(p)) {
+                if (this.escape) return !SbWorld.container(this.mc.field_1687.method_8320(p));
                 class_2680 want = SbLitematica.target(sw, p);
                 // never break what is already correct in the build
                 return want.method_26215() || !SbWorld.matches(want, this.mc.field_1687.method_8320(p));
@@ -994,7 +1094,7 @@ public final class SchematicBuilderModule extends Module {
             if (p.method_10063() == tk || p.method_10084().method_10063() == tk) return false;
             double ex = p.method_10263() + 0.5 - c.field_1352, ey = p.method_10264() + 1.27 - c.field_1351, ez = p.method_10260() + 0.5 - c.field_1350;
             double d2 = ex * ex + ey * ey + ez * ez;
-            if (d2 > reach * reach || d2 < 1.2) return false;
+            if (d2 > reach * reach || d2 < 0.3) return false;
             // only spots from which the block can really be placed / hit (sneaking eye height)
             class_243 eye = new class_243(p.method_10263() + 0.5, p.method_10264() + 1.27, p.method_10260() + 0.5);
             if (item instanceof class_1747 bi) return SbPlacer.find(this.mc, target, t.want, bi, eye, reach) != null;
@@ -1098,8 +1198,15 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
-        this.rotateTo(pl, yaw, this.human.getValue() ? 12.0f + (float) Math.sin(this.tickNo * 0.05) * 4.0f : 10.0f);
         float diff = Math.abs(class_3532.method_15393(yaw - pl.method_36454()));
+        if (this.human.getValue()) {
+            // eyes wander a bit while walking: slow, uneven drifts left / right and up / down, a new habit now and then
+            if (this.tickNo % 160 == 0) this.walkPitch = 5.0f + this.rnd.nextFloat() * 20.0f;
+            float t = this.tickNo;
+            float wy = (float) (Math.sin(t * 0.031 + this.walkPhase[0]) * 5.0 + Math.sin(t * 0.087 + this.walkPhase[1]) * 2.0);
+            float wp = (float) (Math.sin(t * 0.043 + this.walkPhase[2]) * 6.0);
+            this.rotateTo(pl, yaw + wy, Math.max(-10.0f, Math.min(45.0f, this.walkPitch + wp)), 2.5f);
+        } else this.rotateTo(pl, yaw, 10.0f);
         boolean jump = s.move() == SbPath.Move.UP && ground && horiz < 1.6 && dy < 0.5 || pl.method_5799() && s.pos().method_10264() >= pl.method_23318() - 0.2;
         boolean sneak = this.edgeDanger(w, s.pos()) && s.move() != SbPath.Move.DROP && s.move() != SbPath.Move.UP
                 || last && horiz < 0.7 && ground; // creep onto the exact spot
@@ -1521,6 +1628,7 @@ public final class SchematicBuilderModule extends Module {
 
     private void keys(boolean forward, boolean jump, boolean sprint, boolean sneak) {
         var o = this.mc.field_1690;
+        if (this.forceSneakTicks > 0) sneak = true;
         if (this.freezeTicks > 0) { forward = false; jump = false; sprint = false; sneak = false; }
         if (this.backTicks > 0) {
             this.backTicks--;
@@ -1561,28 +1669,71 @@ public final class SchematicBuilderModule extends Module {
      * never more than a fast flick per tick, easing out near the target (human mode). True once within {@code tol}.
      */
     private boolean rotateTo(class_746 pl, float yaw, float pitch, float tol) {
+        pitch = Math.max(-90.0f, Math.min(90.0f, pitch));
         float cy = pl.method_36454(), cp = pl.method_36455();
-        float dy = class_3532.method_15393(yaw - cy), dp = Math.max(-90.0f, Math.min(90.0f, pitch)) - cp;
-        float dist = (float) Math.sqrt(dy * dy + dp * dp);
         float g = this.mouseStep();
-        if (dist < Math.max(tol, g * 0.75f)) return true;
-        float step;
-        if (this.human.getValue()) {
-            // fast when far, slow when close (ease out), slightly uneven like a hand on a mouse
-            step = Math.min(dist, Math.max(2.5f, dist * (0.32f + this.rnd.nextFloat() * 0.12f)));
-            step = Math.min(step, 30.0f);
-        } else {
-            step = Math.min(dist, 55.0f);
+        boolean human = this.human.getValue();
+        // every new thing to look at gets its own "hand": speed, curve, how far off it lands, maybe an overshoot.
+        // A target that only drifts (walking) keeps the current style so the head does not twitch.
+        if (Float.isNaN(this.aimTY) || Math.abs(class_3532.method_15393(yaw - this.aimTY)) > 6.0f || Math.abs(pitch - this.aimTP) > 6.0f) {
+            float far = (float) Math.hypot(class_3532.method_15393(yaw - cy), pitch - cp);
+            this.aimSpeed = 0.2f + this.rnd.nextFloat() * 0.3f;
+            this.aimCap = 18.0f + this.rnd.nextFloat() * 16.0f;
+            this.aimLag = 0.6f + this.rnd.nextFloat() * 0.4f;
+            this.aimCurve = (this.rnd.nextFloat() - 0.5f) * 0.3f;
+            // never exactly the planned spot: somewhere around it (the click is checked with the real crosshair)
+            float om = !human || this.aimPrecise ? 0.0f : tol <= 0.6f ? 0.55f : Math.min(1.6f, tol * 1.2f);
+            this.aimOffY = (this.rnd.nextFloat() * 2.0f - 1.0f) * om;
+            this.aimOffP = (this.rnd.nextFloat() * 2.0f - 1.0f) * om * 0.8f;
+            this.aimPrecise = false;
+            this.aimOvershoot = human && far > 20.0f && this.rnd.nextFloat() < 0.35f;
+            this.aimOSY = class_3532.method_15393(yaw - cy) * (0.03f + this.rnd.nextFloat() * 0.05f);
+            this.aimOSP = (pitch - cp) * (0.02f + this.rnd.nextFloat() * 0.04f);
+            this.aimHesitate = human && this.rnd.nextFloat() < 0.25f ? this.rnd.nextInt(3) : 0; // reaction time
         }
-        float k = step / dist;
-        float jitter = this.human.getValue() && dist > 8 ? (this.rnd.nextFloat() - 0.5f) * 0.6f : 0.0f;
-        float my = Math.round((dy * k + jitter) / g) * g, mp = Math.round((dp * k) / g) * g;
-        if (my == 0.0f && mp == 0.0f) return true; // closer than one mouse step
+        this.aimTY = yaw;
+        this.aimTP = pitch;
+        float gy = yaw + this.aimOffY, gp = Math.max(-90.0f, Math.min(90.0f, pitch + this.aimOffP));
+        if (this.aimOvershoot) { gy += this.aimOSY; gp = Math.max(-90.0f, Math.min(90.0f, gp + this.aimOSP)); }
+        float dy = class_3532.method_15393(gy - cy), dp = gp - cp;
+        float dist = (float) Math.sqrt(dy * dy + dp * dp);
+        float done = Math.max(tol, g * 0.75f);
+        if (this.aimOvershoot && dist < 1.5f) { this.aimOvershoot = false; return false; } // past it: correct back
+        if (!this.aimOvershoot && dist < done) return true;
+        float my, mp;
+        if (human) {
+            if (this.aimHesitate > 0) { this.aimHesitate--; return false; }
+            if (dist > 12.0f && this.rnd.nextFloat() < 0.05f) { this.aimHesitate = this.rnd.nextInt(2); return false; } // a short hitch
+            // fast when far, slow when close (ease out), never two ticks alike
+            float f = this.aimSpeed * (0.8f + this.rnd.nextFloat() * 0.4f);
+            float step = Math.min(dist, Math.max(1.2f + this.rnd.nextFloat() * 1.2f, dist * f));
+            step = Math.min(step, this.aimCap);
+            float k = step / dist;
+            my = dy * k;
+            mp = dp * k * (dist < 5.0f ? 1.0f : this.aimLag); // the wrist moves sideways first, up / down follows
+            if (dist > 6.0f) mp += Math.abs(dy * k) * this.aimCurve; // an arc, not a ruler-straight line
+            if (dist > 2.0f) { my += (this.rnd.nextInt(5) - 2) * g; mp += (this.rnd.nextInt(3) - 1) * g; } // tremor
+        } else {
+            float k = Math.min(dist, 55.0f) / dist;
+            my = dy * k;
+            mp = dp * k;
+            if (this.antiCheat.getValue() && dist > 3.0f) { my += (this.rnd.nextInt(5) - 2) * g; mp += (this.rnd.nextInt(3) - 1) * g; }
+        }
+        // only whole mouse steps of the player's sensitivity, like real mouse input
+        my = Math.round(my / g) * g;
+        mp = Math.round(mp / g) * g;
+        if (my == 0.0f && mp == 0.0f) { this.aimOvershoot = false; return true; } // closer than one mouse step
         pl.method_36456(cy + my);
         pl.method_36457(Math.max(-90.0f, Math.min(90.0f, cp + mp)));
-        float ry = class_3532.method_15393(yaw - pl.method_36454()), rp = pitch - pl.method_36455();
-        return Math.sqrt(ry * ry + rp * rp) < Math.max(tol, g * 0.75f);
+        float ry = class_3532.method_15393(gy - pl.method_36454()), rp = gp - pl.method_36455();
+        return !this.aimOvershoot && Math.sqrt(ry * ry + rp * rp) < done;
     }
+
+    private float aimTY = Float.NaN, aimTP, aimOffY, aimOffP, aimSpeed, aimCap, aimLag, aimCurve, aimOSY, aimOSP;
+    private boolean aimOvershoot, aimPrecise;
+    private int aimHesitate, reactWait = -1;
+    private final float[] walkPhase = {(float) (Math.random() * 6.3), (float) (Math.random() * 6.3), (float) (Math.random() * 6.3)};
+    private float walkPitch = 14.0f;
 
     // ================================================================== render
 

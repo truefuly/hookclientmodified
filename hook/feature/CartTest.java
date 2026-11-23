@@ -489,6 +489,20 @@ final class CartTest {
             cmd("setblock " + (ox + 1) + " " + (oy + 1) + " " + (oz + 3) + " observer[facing=up]");
             cmd("setblock " + (ox + 5) + " " + (oy + 1) + " " + (oz + 3) + " piston[facing=west]");
             cmd("fill " + (ox + 3) + " " + (oy + 1) + " " + (oz + 3) + " " + (ox + 3) + " " + (oy + 9) + " " + (oz + 3) + " bricks");
+            // blocks whose direction depends on where you stand and what you click
+            String[][] more = {
+                    {"1", "1", "1", "stone_bricks"},
+                    {"2", "1", "1", "hopper[facing=west]"},
+                    {"3", "2", "2", "oak_stairs[facing=south,half=top]"},
+                    {"2", "3", "3", "wall_torch[facing=west]"},
+                    {"3", "5", "2", "stone_button[face=wall,facing=north]"},
+                    {"1", "2", "6", "oak_trapdoor[facing=east,half=top]"},
+                    {"4", "1", "5", "furnace[facing=east]"},
+                    {"6", "3", "1", "dispenser[facing=down]"},
+                    {"6", "1", "3", "lever[face=wall,facing=east]"},
+                    {"6", "1", "5", "oak_log[axis=z]"},
+            };
+            for (String[] b : more) cmd("setblock " + (ox + Integer.parseInt(b[0])) + " " + (oy + Integer.parseInt(b[1])) + " " + (oz + Integer.parseInt(b[2])) + " " + b[3]);
         }
         if (clock == 170) {
             try {
@@ -571,8 +585,9 @@ final class CartTest {
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
             sbLastPct = pct;
-            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * 300) {
+            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * 480) {
                 shot(mc, "sb_end");
+                SbAcTest.report();
                 System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
                 sb.setEnabled(false);
                 mc.method_1592();
