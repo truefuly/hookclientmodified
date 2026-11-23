@@ -58,6 +58,7 @@ final class CartTest {
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
         if ("builder".equals(ONLY)) { builder(mc, p); return; }
+        if ("seedcracker".equals(ONLY)) { seedcracker(mc, p); return; }
         if (clock == 100) {
             cmd("gamemode creative");
             cmd("effect give @s resistance infinite 255 true");
@@ -688,6 +689,128 @@ final class CartTest {
         StringBuilder sb = new StringBuilder();
         for (int x = -4; x <= 4; x++) for (int z = -4; z <= 4; z++) if (SlimeChunkModule.isSlimeChunk(seed, x, z)) sb.append(x).append(',').append(z).append(' ');
         return sb.toString();
+    }
+
+    // ------------------------------------------------------------------ seed cracker
+    private static final java.util.List<int[]> SC_FOUND = new java.util.concurrent.CopyOnWriteArrayList<>(); // type index, chunk x, chunk z
+    private static volatile boolean scLocated;
+    private static int scVisit, scNext, scEndAt = -1, scAddedAt = -1, scPhase2 = -1;
+    private static final String[] SC_SETS = {"desert_pyramids", "jungle_temples", "swamp_huts", "villages", "pillager_outposts", "ocean_monuments"};
+    private static final String[] SC_IDS = {"desert_pyramid", "jungle_temple", "swamp_hut", "village", "outpost", "monument"};
+    private static final String[] SC_PLACE = {"desert_pyramid", "jungle_pyramid", "swamp_hut"};
+    private static volatile String scDirect;
+
+    /**
+     * -Dhook.carttest.only=seedcracker: the test world is flat, so the chunks where this seed puts temples / huts /
+     * villages... are taken from the game's own placement code, three temples are built there with /place structure and
+     * must be found by the client on its own, the End pillars are read, then the rest is added and the crack must give the
+     * server's own seed. A second crack with temples only (no pillars) runs straight after.
+     */
+    private static void seedcracker(class_310 mc, net.minecraft.class_746 p) {
+        var server = mc.method_1576();
+        if (clock == 100) {
+            cmd("gamemode spectator");
+            cmd("time set day");
+            hook.module.Module m = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SeedCrackerModule.class);
+            if (m != null && !m.isEnabled()) m.setEnabled(true);
+            server.execute(() -> {
+                var level = server.method_30002();
+                long seed = level.method_8412();
+                net.minecraft.class_2378<net.minecraft.class_7059> sets = level.method_30349().method_30530(net.minecraft.class_7924.field_41248);
+                for (int ti = 0; ti < SC_SETS.length; ti++) {
+                    var pl = (net.minecraft.class_6872) sets.method_63535(net.minecraft.class_2960.method_60656(SC_SETS[ti])).comp_511();
+                    int sp = pl.method_41632();
+                    for (int rx = -1; rx <= 1; rx++) {
+                        for (int rz = -1; rz <= 1; rz++) {
+                            var c = pl.method_40169(seed, rx * sp, rz * sp);
+                            if (ti == 4 && !pl.method_56575(c.field_9181, c.field_9180, seed)) continue;
+                            SC_FOUND.add(new int[]{ti, c.field_9181, c.field_9180});
+                        }
+                    }
+                }
+                System.out.println("CARTTEST SEED placement chunks " + SC_FOUND.size());
+                scLocated = true;
+            });
+        }
+        if (clock == 110) {
+            long seed = server.method_30002().method_8412();
+            long h = SeedCracker.hashSeed(SeedCracker.sha(), seed);
+            SeedCracker.debugTruth = seed;
+            System.out.println("CARTTEST SEED real seed=" + seed + " myHash=" + h + " fast=" + SeedCracker.hashFast(seed, new int[64]) + " guava=" + com.google.common.hash.Hashing.sha256().hashLong(seed).asLong() + " module " + SeedCrackerModule.testState());
+        }
+        // build one of each temple kind at its real chunk and let the client find it
+        if (scLocated && scVisit < 3 && clock >= scNext && clock > 120) {
+            int[] f = null;
+            for (int[] g : SC_FOUND) if (g[0] == scVisit) { f = g; break; }
+            int x = f[1] * 16 + 8, z = f[2] * 16 + 8;
+            cmd("tp @s " + x + " 0 " + z);
+            System.out.println("CARTTEST SEED visiting " + SC_IDS[f[0]] + " chunk " + f[1] + " " + f[2]);
+            final int[] ff = f;
+            scNext = clock + 260;
+            scVisit++;
+            new Thread(() -> {
+                try { Thread.sleep(3000); } catch (InterruptedException ignored) { }
+                mc.execute(() -> { cmd("place structure minecraft:" + SC_PLACE[ff[0]] + " " + x + " -60 " + z); SeedCrackerModule.testRescan(); });
+                try { Thread.sleep(5000); } catch (InterruptedException ignored) { }
+                mc.execute(SeedCrackerModule::testRescan);
+            }).start();
+        }
+        if (scVisit == 3 && clock >= scNext && scEndAt < 0) {
+            System.out.println("CARTTEST SEED after visits: auto found " + SeedCrackerModule.testObs());
+            // the flat test world also holds temples an older test built anywhere: those fit no seed, drop them
+            SeedCrackerModule.testRetain(o -> SC_FOUND.stream().anyMatch(f -> SC_IDS[f[0]].equals(o.type.id()) && f[1] == o.cx && f[2] == o.cz));
+            System.out.println("CARTTEST SEED kept " + SeedCrackerModule.testObs());
+            cmd("execute in minecraft:the_end run tp @s 0 120 0");
+            scEndAt = clock;
+        }
+        if (scEndAt > 0 && clock == scEndAt + 300) {
+            System.out.println("CARTTEST SEED in the end: " + SeedCrackerModule.testState());
+            int[] last = null;
+            for (int[] g : SC_FOUND) if (g[0] == 2) { last = g; break; }
+            cmd("execute in minecraft:overworld run tp @s " + (last[1] * 16 + 8) + " 0 " + (last[2] * 16 + 8));
+        }
+        if (scEndAt > 0 && clock == scEndAt + 360) {
+            // the rest by hand, like ".seed add" would: two of each temple kind, two villages a chunk off (radius 1), an outpost, a monument
+            int[] per = new int[SC_SETS.length];
+            for (int[] f : SC_FOUND) {
+                int lim = f[0] <= 3 ? 2 : 1;
+                if (per[f[0]]++ >= lim) continue;
+                int off = f[0] == 3 ? 1 : 0;
+                SeedCrackerModule.testAdd(new SeedCracker.Obs(SeedCracker.TYPES.get(SC_IDS[f[0]]), f[1] + off, f[2] - off, f[0] >= 3 ? 1 : 0, false));
+            }
+            SeedCrackerModule.testRetain(o -> SC_FOUND.stream().anyMatch(f -> SC_IDS[f[0]].equals(o.type.id()) && Math.abs(f[1] - o.cx) <= 1 && Math.abs(f[2] - o.cz) <= 1));
+            scAddedAt = clock;
+            System.out.println("CARTTEST SEED all added: " + SeedCrackerModule.testState());
+        }
+        if (scAddedAt > 0 && scPhase2 < 0 && (clock - scAddedAt) % 100 == 0) {
+            Long got = SeedCrackerModule.crackedSeed();
+            long real = server.method_30002().method_8412();
+            System.out.println("CARTTEST SEED t+" + (clock - scAddedAt) / 20 + "s " + SeedCrackerModule.testState());
+            if (got != null || clock - scAddedAt > 20 * 240) {
+                System.out.println("CARTTEST SEED RESULT1 " + (got != null && got == real ? "OK" : "FAIL") + " cracked=" + got + " real=" + real);
+                scPhase2 = clock;
+                // second: five temples only, no pillars (the low-20-bit path), straight on the math
+                java.util.List<SeedCracker.Obs> five = new java.util.ArrayList<>();
+                int[] per2 = new int[3];
+                for (int[] f : SC_FOUND) if (f[0] <= 2 && five.size() < 8 && per2[f[0]]++ < 3) five.add(new SeedCracker.Obs(SeedCracker.TYPES.get(SC_IDS[f[0]]), f[1], f[2], 0, false));
+                long h = SeedCracker.hashSeed(SeedCracker.sha(), real);
+                new Thread(() -> {
+                    long t0 = System.currentTimeMillis();
+                    SeedCracker.Result r = new SeedCracker.Result();
+                    SeedCracker.run(five, null, h, Math.max(1, Runtime.getRuntime().availableProcessors() - 1), r, new java.util.concurrent.atomic.AtomicBoolean(), s -> System.out.println("CARTTEST SEED direct: " + s));
+                    scDirect = (r.seed != null && r.seed == real ? "OK" : "FAIL") + " seed=" + r.seed + " err=" + r.error + " in " + (System.currentTimeMillis() - t0) + " ms, ready said " + SeedCracker.ready(five, null, h);
+                }).start();
+            }
+        }
+        if (scPhase2 > 0 && (scDirect != null || clock - scPhase2 > 20 * 240)) {
+            Long got = SeedCrackerModule.crackedSeed();
+            long real = server.method_30002().method_8412();
+            boolean ok1 = got != null && got == real, ok2 = scDirect != null && scDirect.startsWith("OK");
+            System.out.println("CARTTEST SEED RESULT2 " + scDirect);
+            System.out.println("CARTTEST DONE ok=" + ((ok1 ? 1 : 0) + (ok2 ? 1 : 0)) + "/2");
+            mc.method_1592();
+            phase = 99;
+        }
     }
 
     private static void cmd(String c) {

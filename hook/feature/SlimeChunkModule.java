@@ -60,6 +60,12 @@ public final class SlimeChunkModule extends Module {
         this.addSettings(this.seed, this.learn, this.range, this.color, this.fill, this.throughWalls, this.notify);
     }
 
+    /** Seed Cracker result: used when no seed is typed in yet (slime chunks only need the lower 48 bits). */
+    public void offerSeed(long s) {
+        String v = this.seed.getValue();
+        if (v == null || v.isBlank()) this.seed.setValue(Long.toString(s));
+    }
+
     /** Vanilla slime chunk rule (WorldgenRandom.seedSlimeChunk(x, z, seed, 987234911L).nextInt(10) == 0). */
     static boolean isSlimeChunk(long seed, int x, int z) {
         Random r = new Random(seed + (long) (x * x * 4987142) + (long) (x * 5947611) + (long) (z * z) * 4392871L + (long) (z * 389711) ^ 987234911L);

@@ -49,6 +49,11 @@ public abstract class ClientPlayNetworkHandlerMixin {
         EventManager.b(new ChunkDataEvent(var1));
     }
 
+    @Inject(method={"method_45729"}, at={@At(value="HEAD")}, cancellable=true, remap=false)
+    private void onSendChat(String msg, CallbackInfo ci) {
+        if (hook.feature.SeedCrackerModule.onChat(msg)) ci.cancel();
+    }
+
     @Inject(method={"method_11143"}, at={@At(value="TAIL")}, remap=false)
     private void onLightUpdate(class_2676 var1, CallbackInfo var2) {
         EventManager.b(new LightUpdateEvent(var1));
