@@ -770,7 +770,7 @@ final class CartTest {
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
             sbLastPct = pct;
-            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * (HOUSE ? 1020 : 540)) {
+            if (pr != null && pr.state().startsWith("Finished") || clock > 300 + 20 * (HOUSE ? 1020 : 540)) {
                 shot(mc, "sb_end");
                 // every block of the schematic: is it really what was wanted (states included)?
                 Object plc = SbLitematica.placement(p.method_23317(), p.method_23318(), p.method_23321());
@@ -803,7 +803,7 @@ final class CartTest {
                 }
                 System.out.println("CARTTEST SB torches around the build: " + torches);
                 SbAcTest.report();
-                System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
+                System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().startsWith("Finished") ? 1 : 0) + "/1");
                 sb.setEnabled(false);
                 mc.method_1592();
                 phase = 99;

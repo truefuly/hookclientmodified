@@ -1289,10 +1289,17 @@ public final class SchematicBuilderModule extends Module {
             }
         }
         if (this.tasks.isEmpty() && !this.chunkStats.isEmpty()) {
-            this.status = "Finished";
+            // blocks it had to skip: say so instead of a plain "finished"
+            int skippedLeft = 0;
+            for (Long l : this.skipped) {
+                class_2338 p = class_2338.method_10092(l);
+                if (!SbWorld.matches(SbLitematica.target(sw, p), w.method_8320(p))) skippedLeft++;
+            }
+            this.status = skippedLeft > 0 ? "Finished (" + skippedLeft + " skipped)" : "Finished";
             if (!this.announcedDone) {
                 this.announcedDone = true;
-                this.say("§a" + this.schematicName + " is finished!");
+                this.say(skippedLeft > 0 ? "§e" + this.schematicName + " is finished except " + skippedLeft + " skipped block(s) - place them yourself."
+                        : "§a" + this.schematicName + " is finished!");
             }
         } else if (this.tasks.isEmpty()) {
             this.status = "Scanning";
@@ -1319,8 +1326,12 @@ public final class SchematicBuilderModule extends Module {
             if (this.stuckRetries >= 40) {
                 // nothing worked for a minute: what is left can't be reached or placed (it hangs on skipped
                 // blocks...). Give it up so the build finishes instead of standing here forever.
-                int n = 0;
+                // blocks we simply have no material for are not impossible: they stay and wait for a restock
+                int n = 0, waiting = 0;
+                class_1792 lacking = null;
                 for (Task t : new ArrayList<>(this.tasks.values())) {
+                    class_1792 need = t.place ? this.requiredItem(t) : null;
+                    if (need != null && this.count(need) == 0) { waiting++; lacking = need; continue; }
                     this.skipped.add(t.pos.method_10063());
                     this.tasks.remove(t.pos.method_10063());
                     this.touched(t.pos);
@@ -1328,8 +1339,12 @@ public final class SchematicBuilderModule extends Module {
                 }
                 this.stuckRetries = 0;
                 this.escape = false;
-                this.say("§eGave up on " + n + " block(s) that can't be reached or placed from anywhere - place them yourself.");
-                if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB gave up on " + n);
+                if (n > 0) this.say("§eGave up on " + n + " block(s) that can't be reached or placed from anywhere - place them yourself.");
+                if (waiting > 0 && lacking != null) {
+                    this.missingUntil.remove(lacking);
+                    this.missing(lacking);
+                }
+                if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB gave up on " + n + " (" + waiting + " wait for material)");
             }
             this.waitTicks = 30;
         }
@@ -3055,6 +3070,26 @@ public final class SchematicBuilderModule extends Module {
                 return;
             }
         }
+        // the inventory is full of useful things and the chest still has what we came for: put back stacks we
+        // carry more of than the rest of the build needs (else we'd open this chest over and over for nothing)
+        if (!unpacking && this.freeSlots(pl) == 0 && this.chestHasWanted(h, size)) {
+            Map<class_1792, Integer> left = new HashMap<>();
+            for (Task t : this.tasks.values()) {
+                class_1792 it = t.place ? this.requiredItem(t) : null;
+                if (it != null) left.merge(it, 1, Integer::sum);
+            }
+            left.merge(this.scaffoldItem(), 16, Integer::sum);
+            class_1792 held = pl.method_6047().method_7909();
+            for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
+                class_1799 st = h.method_7611(i).method_7677();
+                if (st.method_7960() || isTool(st) || isShulker(st) || st.method_7909() == held || this.wanted.getOrDefault(st.method_7909(), 0) > 0) continue;
+                if (this.count(st.method_7909()) - st.method_7947() < left.getOrDefault(st.method_7909(), 0)) continue;
+                dbg("restock: inventory full, putting back spare " + st.method_7947() + "x " + st.method_7909());
+                this.mc.field_1761.method_2906(h.field_7763, i, 0, class_1713.field_7794, (class_1657) pl);
+                this.waitTicks = this.human.getValue() ? 2 + this.rnd.nextInt(3) : 1;
+                return;
+            }
+        }
         // still no free slot for the box: put the smallest stack of what we carry most of into it
         if (unpacking && this.freeSlots(pl) == 0) {
             Map<class_1792, Integer> have = new HashMap<>();
@@ -3103,6 +3138,14 @@ public final class SchematicBuilderModule extends Module {
         class_1799 off = this.mc.field_1724.method_6079();
         if (off.method_7909() == it) n += off.method_7947();
         return n;
+    }
+
+    private boolean chestHasWanted(class_1703 h, int size) {
+        for (int i = 0; i < size; i++) {
+            class_1799 st = h.method_7611(i).method_7677();
+            if (!st.method_7960() && this.wanted.getOrDefault(st.method_7909(), 0) > 0) return true;
+        }
+        return false;
     }
 
     private int freeSlots(class_746 pl) {
