@@ -36,6 +36,8 @@ final class SbPath {
         Predicate<class_2338> mayBreak = p -> true;
         /** May a scaffold block go here (false inside the schematic where something else belongs)? */
         Predicate<class_2338> mayScaffold = p -> true;
+        /** A plain block of the build belongs here and we have it: pillar up by placing that instead of scaffold. */
+        Predicate<class_2338> mayBuildPillar = p -> false;
     }
 
     private static final class Node implements Comparable<Node> {
@@ -175,8 +177,10 @@ final class SbPath {
             out.add(below, 3.0, Move.DOWN, List.of(below));
         }
         // pillar straight up with the scaffold block
-        if (r.scaffold && SbWorld.passable(w, p.method_10086(2)) && underUs && r.mayScaffold.test(p) && safeAt(w, p.method_10084())) {
-            out.add(p.method_10084(), 5.0, Move.PILLAR, List.of());
+        boolean build = r.mayBuildPillar.test(p);
+        if ((r.scaffold || build) && SbWorld.passable(w, p.method_10086(2)) && underUs && (build || r.mayScaffold.test(p)) && safeAt(w, p.method_10084())) {
+            // with a block of the build it is part of the work anyway (nothing to tear down later): cheap
+            out.add(p.method_10084(), build ? 2.5 : 5.0, Move.PILLAR, List.of());
         }
     }
 }

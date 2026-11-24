@@ -65,6 +65,10 @@ public class CameraMixin {
     @Inject(method={"update"}, at={@At(value="HEAD")})
     private void onUpdateHead(class_1937 var1, class_1297 var2, boolean var3, boolean var4, float var5, CallbackInfo var6) {
         this.tickDelta = var5;
+        try {
+            hook.feature.SchematicBuilderModule.cameraFrame(var5);
+        } catch (Throwable ignored) {
+        }
         FreecamModule var7 = CameraMixin.hook$freecam();
         if (var7 != null && var7.isEnabled()) {
             var7.updateCameraMovement();

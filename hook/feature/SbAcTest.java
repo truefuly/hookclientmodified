@@ -62,6 +62,104 @@ final class SbAcTest {
     private static boolean invOpen;
     private static int invClicks;
 
+    // camera smoothness: how much the turn speed changes from one drawn frame to the next
+    private static long lastFrameNs;
+    private static float lastFy = Float.NaN, lastFp;
+    private static double lastV = Double.NaN, sumJerk, maxJerk;
+    private static int frames, bigJerks;
+
+    static void frame(float y, float p) {
+        long now = System.nanoTime();
+        if (!Float.isNaN(lastFy) && now > lastFrameNs) {
+            double dt = (now - lastFrameNs) / 1.0e9;
+            double v = Math.hypot(y - lastFy, p - lastFp) / dt; // degrees per second
+            if (!Double.isNaN(lastV) && dt < 0.1) {
+                double j = Math.abs(v - lastV);
+                sumJerk += j;
+                maxJerk = Math.max(maxJerk, j);
+                if (j > 120.0) bigJerks++;
+                frames++;
+            }
+            lastV = dt < 0.1 ? v : Double.NaN;
+        }
+        lastFrameNs = now;
+        lastFy = y;
+        lastFp = p;
+    }
+
+    // the same ticks drawn at a fixed 60 fps by several smoothing variants (yaw + pitch combined):
+    // 0 straight line per tick (old), 1 curve from the past only, 2 Catmull-Rom one tick late,
+    // 3 Catmull-Rom one tick late + soft follower, 4 soft follower only
+    private static final int V = 5;
+    private static final String[] VN = {"line", "hermite", "catmull", "catmull+follow", "follow"};
+    private static final double[][] simLast = new double[V][], simLastV = new double[V][];
+    private static final double[] simSum = new double[V], simMax = new double[V], simLag = new double[V];
+    private static final int[] simBig = new int[V];
+    private static final double[][] hist = new double[4][]; // yaw/pitch of the last 4 ticks, [3] newest
+    private static final double[][] follow = new double[V][];
+    private static int simFrames, simTicks;
+
+    static void simulateTick(float y0, float y1, float m0, float m1, float p0, float p1, float n0, float n1) {
+        System.arraycopy(hist, 1, hist, 0, 3);
+        hist[3] = new double[]{y1, p1};
+        if (++simTicks < 5) return;
+        for (int k = 1; k <= 3; k++) {
+            double t = k / 3.0;
+            double[][] v = new double[V][];
+            v[0] = new double[]{y0 + (y1 - y0) * t, p0 + (p1 - p0) * t};
+            v[1] = new double[]{herm(y0, y1, m0, m1, t), herm(p0, p1, n0, n1, t)};
+            v[2] = new double[2];
+            for (int c = 0; c < 2; c++) {
+                double a = hist[1][c], b = hist[2][c], ma = (hist[2][c] - hist[0][c]) / 2.0, mb = (hist[3][c] - hist[1][c]) / 2.0;
+                v[2][c] = herm(a, b, ma, mb, t);
+            }
+            double al = 1.0 - Math.exp(-(1.0 / 60.0) / 0.045);
+            v[3] = foll(3, v[2], al);
+            v[4] = foll(4, v[0], al);
+            double[] truth = v[0];
+            for (int i = 0; i < V; i++) {
+                simLag[i] += Math.hypot(v[i][0] - truth[0], v[i][1] - truth[1]);
+                if (simLast[i] != null) {
+                    double[] vel = {(v[i][0] - simLast[i][0]) * 60.0, (v[i][1] - simLast[i][1]) * 60.0};
+                    if (simLastV[i] != null) {
+                        double j = Math.hypot(vel[0] - simLastV[i][0], vel[1] - simLastV[i][1]);
+                        simSum[i] += j;
+                        simMax[i] = Math.max(simMax[i], j);
+                        if (j > 120.0) simBig[i]++;
+                    }
+                    simLastV[i] = vel;
+                }
+                simLast[i] = v[i];
+            }
+            simFrames++;
+        }
+    }
+
+    private static double[] foll(int i, double[] target, double al) {
+        if (follow[i] == null) follow[i] = target.clone();
+        follow[i][0] += (target[0] - follow[i][0]) * al;
+        follow[i][1] += (target[1] - follow[i][1]) * al;
+        return follow[i].clone();
+    }
+
+    private static double herm(double a, double b, double m0, double m1, double t) {
+        double t2 = t * t, t3 = t2 * t;
+        return (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * b + (t3 - t2) * m1;
+    }
+
+    static String cameraReport() {
+        StringBuilder sb = new StringBuilder(cameraReport0()).append(" | 60fps sim (" + simFrames + " frames):");
+        int n = Math.max(1, simFrames);
+        for (int i = 0; i < V; i++)
+            sb.append(String.format(java.util.Locale.ROOT, " [%s mean=%.1f max=%.0f jumps=%.2f%% offFromTicks=%.2fdeg]", VN[i], simSum[i] / n, simMax[i], simBig[i] * 100.0 / n, simLag[i] / n));
+        return sb.toString();
+    }
+
+    private static String cameraReport0() {
+        return String.format(java.util.Locale.ROOT, "frames=%d meanSpeedChange=%.1f deg/s maxSpeedChange=%.0f deg/s jumps>120=%d (%.2f%%)",
+                frames, frames == 0 ? 0.0 : sumJerk / frames, maxJerk, bigJerks, frames == 0 ? 0.0 : bigJerks * 100.0 / frames);
+    }
+
     // rotations
     private static int rotPackets, gcdBad, slowAir;
     private static double maxTurn;
@@ -397,5 +495,6 @@ final class SbAcTest {
                 + " maxPlaces/s=" + maxPerSec + " minPlaceGap=" + (minGap == Integer.MAX_VALUE ? "-" : minGap + "t")
                 + " breaksFasterThanAirSpeed=" + slowAir + String.format(java.util.Locale.ROOT, " maxReach=%.2f maxTurn/tick=%.1f rotations=%d offStep=%d stillClicks=%d%%",
                 maxReach, maxTurn, rotPackets, gcdBad, places == 0 ? 0 : stillPlaces * 100 / places));
+        System.out.println("CARTTEST CAMERA " + cameraReport());
     }
 }

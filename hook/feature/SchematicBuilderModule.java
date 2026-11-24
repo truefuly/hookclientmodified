@@ -122,7 +122,7 @@ public final class SchematicBuilderModule extends Module {
     /** Spots we walked to that gave nothing: not again for a while. */
     private final Map<Long, Long> badSpots = new HashMap<>();
     private long lastSpot = Long.MIN_VALUE;
-    private int lastSpotPlaced, placedTotal;
+    private int lastSpotPlaced, placedTotal, pillarBuilt;
     /** Last time a block was placed or broken (watchdog against hanging around). */
     private long lastProgressMs;
     private boolean eating;
@@ -233,7 +233,7 @@ public final class SchematicBuilderModule extends Module {
     String testStatus() {
         StringBuilder r = new StringBuilder();
         if (this.tasks.size() <= 10) for (Task t : this.tasks.values()) r.append(' ').append(t.place ? "" : "x").append(t.pos.method_23854().replace(" ", "")).append(this.failedUntil.containsKey(t.pos.method_10063()) ? "F" : "");
-        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + " cut=" + this.walksCut + r;
+        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + " cut=" + this.walksCut + " pillarBuilt=" + this.pillarBuilt + r;
     }
 
     // ================================================================== HUD
@@ -861,8 +861,11 @@ public final class SchematicBuilderModule extends Module {
             double ex = p.method_10263() + 0.5 - c.field_1352, ey = p.method_10264() + 1.27 - c.field_1351, ez = p.method_10260() + 0.5 - c.field_1350;
             double d2 = ex * ex + ey * ey + ez * ez;
             if (d2 > reach * reach || d2 < 0.3) continue;
-            if (!SbWorld.standable(w, p) || this.badSpots.containsKey(p.method_10063())) continue;
-            double s = 0;
+            if (this.badSpots.containsKey(p.method_10063())) continue;
+            // up in the air: fine if we can pillar up to it from a floor below (high walls, towers, roofs)
+            int lift = SbWorld.standable(w, p) ? 0 : this.pillarLift(w, sw, p);
+            if (lift < 0) continue;
+            double s = -lift * 0.9;
             for (class_2338 q : near) {
                 if (q.equals(p) || q.equals(p.method_10084())) { s -= 4; continue; } // we'd stand in the way
                 double qx = q.method_10263() + 0.5 - (p.method_10263() + 0.5), qy = q.method_10264() + 0.5 - (p.method_10264() + 1.27), qz = q.method_10260() + 0.5 - (p.method_10260() + 0.5);
@@ -894,6 +897,25 @@ public final class SchematicBuilderModule extends Module {
             }
         }
         return false;
+    }
+
+    /**
+     * How many blocks we would pillar up from a floor straight below to stand at {@code p}, or -1 when that isn't
+     * possible (no scaffold, something in the way, the column is part of the build, more than 6 high).
+     */
+    private int pillarLift(class_638 w, class_1937 sw, class_2338 p) {
+        if (!this.useScaffold.getValue() || this.scaffoldItem() == null) return -1;
+        if (!SbWorld.passable(w, p) || !SbWorld.passable(w, p.method_10084())) return -1;
+        int have = this.count(this.scaffoldItem());
+        for (int k = 1; k <= 6 && k <= have; k++) {
+            class_2338 q = p.method_10087(k);
+            if (!SbWorld.passable(w, q)) return -1;
+            if (sw != null && this.inBox(q) && !SbLitematica.target(sw, q).method_26215() && SbLitematica.target(sw, q).method_26204() != this.scaffoldItem().method_7711()
+                    && this.pillarItem(sw, q) == null) return -1;
+            if (this.besideCactus(sw, q)) return -1;
+            if (SbWorld.standable(w, q)) return k;
+        }
+        return -1;
     }
 
     /** Once everything is scanned: tell the plan and what material is missing before starting. */
@@ -1052,6 +1074,7 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         // like vanilla: the click on the block first (does nothing while sneaking), then the bucket itself
+        if (this.dupRotRisk(pl)) return;
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (!res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
         this.clickedBlock(); // Grim counts every block click as a place
@@ -1444,6 +1467,7 @@ public final class SchematicBuilderModule extends Module {
             // a state that needs the head turned away from the clicked spot (Anticheat Safe is off)
             if (!this.rotateTo(pl, s.yaw(), s.pitch(), 0.4f) || this.modeTicks < this.placeDelay()) return;
             if (!pl.method_5715() && SbWorld.usable(w, s.hit().method_17777())) { this.forceSneakTicks = 10; return; }
+            if (this.dupRotRisk(pl)) return;
             r = this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665() ? 1 : -1;
             this.clickedBlock(); // Grim counts every block click as a place
             this.lastClickTick = this.tickNo;
@@ -1656,6 +1680,7 @@ public final class SchematicBuilderModule extends Module {
             var sh = have.method_26218(w, t.pos);
             SbAcTest.intendedBox = sh.method_1110() ? new class_238(t.pos) : sh.method_1107().method_996(t.pos);
         }
+        if (this.dupRotRisk(pl)) return;
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (t.kind == SbFix.WATERLOG && !res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
         this.clickedBlock(); // Grim counts every block click as a place
@@ -1849,6 +1874,7 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         class_3965 hit = this.crosshair(pl);
+        if (hit != null && this.dupRotRisk(pl)) return;
         if (hit != null) this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         var res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
         this.clickedBlock(); // Grim counts every block click as a place
@@ -2103,11 +2129,77 @@ public final class SchematicBuilderModule extends Module {
         if (pl == null || this.renderTick != this.tickNo || Float.isNaN(this.renderYaw)) return;
         pl.field_5982 = this.renderYaw;
         pl.field_6004 = this.renderPitch;
+        // this tick's turn as one piece of a smooth curve: it starts as fast as the last piece ended, so the speed
+        // never jumps at a tick (a straight line per tick changes speed 20 times a second - that is the stutter)
+        float chordY = pl.method_36454() - this.renderYaw, chordP = pl.method_36455() - this.renderPitch;
+        this.segM0Y = limitTangent(this.segTanY, chordY);
+        this.segM0P = limitTangent(this.segTanP, chordP);
+        this.segM1Y = limitTangent(chordY, chordY);
+        this.segM1P = limitTangent(chordP, chordP);
+        this.segTanY = this.segM1Y;
+        this.segTanP = this.segM1P;
+        this.segY1 = pl.method_36454();
+        this.segP1 = pl.method_36455();
+        this.segTick = this.tickNo;
+        if (SbAcTest.ON) SbAcTest.simulateTick(this.renderYaw, this.segY1, this.segM0Y, this.segM1Y, this.renderPitch, this.segP1, this.segM0P, this.segM1P);
     }
+
+    private static final boolean LINEAR = Boolean.getBoolean("hook.sb.linear");
+    private float segTanY, segTanP, segM0Y, segM0P, segM1Y, segM1P, segY1, segP1;
+    private long segTick = -1;
+
+    /** Monotone (Fritsch-Carlson style): no tangent against the move or more than 3x it, so the curve never wobbles. */
+    private static float limitTangent(float m, float chord) {
+        if (chord == 0.0f || Math.signum(m) != Math.signum(chord)) return 0.0f;
+        return Math.abs(m) > Math.abs(chord) * 3.0f ? chord * 3.0f : m;
+    }
+
+    private static float hermite(float a, float b, float m0, float m1, float t) {
+        float t2 = t * t, t3 = t2 * t;
+        return (2 * t3 - 3 * t2 + 1) * a + (t3 - 2 * t2 + t) * m0 + (-2 * t3 + 3 * t2) * b + (t3 - t2) * m1;
+    }
+
+    /**
+     * Every frame, right before the camera is placed: the drawn view follows the bot's head softly instead of in
+     * 20 straight pieces a second (only what is drawn - what the server gets is untouched).
+     */
+    public static void cameraFrame(float t) {
+        SchematicBuilderModule m = instance;
+        if (m == null || !m.isEnabled()) return;
+        class_746 pl = m.mc.field_1724;
+        if (pl == null || LINEAR) { m.camY = Float.NaN; return; }
+        if (m.renderTick != m.tickNo || m.segTick != m.tickNo || t >= 0.999f || t < 0.0f) return;
+        // where the plain game would draw the head this frame (a straight line per tick, plus any turn of the
+        // user's own mouse since the tick) ...
+        float ly = m.renderYaw + (m.segY1 - m.renderYaw) * t + (pl.method_36454() - m.segY1);
+        float lp = m.renderPitch + (m.segP1 - m.renderPitch) * t + (pl.method_36455() - m.segP1);
+        long now = System.nanoTime();
+        if (Float.isNaN(m.camY) || Math.abs(ly - m.camY) > 60.0f || Math.abs(lp - m.camP) > 60.0f || now - m.camNs > 200_000_000L) {
+            m.camY = ly;
+            m.camP = lp;
+        } else {
+            // ... and the view glides after it like a heavy camera: speed changes at the ticks get rounded off
+            float a = (float) (1.0 - Math.exp(-((now - m.camNs) / 1.0e9) / CAMERA_SMOOTH));
+            m.camY += (ly - m.camY) * a;
+            m.camP += (lp - m.camP) * a;
+        }
+        m.camNs = now;
+        // the game draws lerp(t, last, now): pick "last" so that lands exactly on the smoothed view
+        pl.field_5982 = (m.camY - t * pl.method_36454()) / (1.0f - t);
+        pl.field_6004 = (m.camP - t * pl.method_36455()) / (1.0f - t);
+        if (SbAcTest.ON) SbAcTest.frame(m.camY, m.camP);
+    }
+
+    /** Seconds the view takes to catch up (63%) - long enough to hide the 20-per-second steps, short enough to feel direct. */
+    private static final double CAMERA_SMOOTH = 0.04;
+    private float camY = Float.NaN, camP;
+    private long camNs;
 
     /** Self-test only: what an anticheat would think of every packet. */
     @EventListener
     public void onPacketSend(hook.event.events.PacketSendEvent e) {
+        // any block click counts as a place for Grim: remember the turn that went before it
+        if (e.packet instanceof net.minecraft.class_2885 && this.gRotated) { this.gLastPlaced = this.gDeltaX; this.gRotated = false; }
         if (SbAcTest.ON) SbAcTest.onSend(e.packet);
     }
 
@@ -2121,6 +2213,11 @@ public final class SchematicBuilderModule extends Module {
     public void onSendMovement(hook.event.events.SendMovementPacketsEvent e) {
         class_746 pl = this.mc.field_1724;
         if (pl == null) return;
+        // what Grim DuplicateRotPlace sees: the yaw turn of the last rotating movement packet
+        if (!Float.isNaN(this.sentYaw) && (pl.method_36454() != this.sentYaw || pl.method_36455() != this.sentPitch)) {
+            this.gDeltaX = Math.abs(pl.method_36454() - this.sentYaw);
+            this.gRotated = true;
+        }
         this.sentYaw = pl.method_36454();
         this.sentPitch = pl.method_36455();
     }
@@ -2161,12 +2258,7 @@ public final class SchematicBuilderModule extends Module {
             return -1;
         }
         // the last turn before this place equals the one before the last place: a tiny correction first
-        if (this.lastTurnAbs > 2.0f && Math.abs(this.lastTurnAbs - this.lastBeforePlace) < 1.0E-3f) {
-            float g = this.mouseStep();
-            pl.method_36456(pl.method_36454() + (this.rnd.nextBoolean() ? g : -g));
-            this.lastTurnAbs = g;
-            return 0;
-        }
+        if (this.dupRotRisk(pl)) return 0;
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (!res.method_23665()) {
             dbg("aim: click refused " + res + " target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780()
@@ -2401,7 +2493,23 @@ public final class SchematicBuilderModule extends Module {
         };
         r.mayScaffold = p -> (sw == null || !this.inBox(p) || SbLitematica.target(sw, p).method_26215()
                 || SbLitematica.target(sw, p).method_26204() == this.scaffoldItem().method_7711()) && !this.besideCactus(sw, p);
+        r.mayBuildPillar = p -> this.pillarItem(sw, p) != null;
         return r;
+    }
+
+    /**
+     * The item to pillar up with at {@code p} when the build wants a plain full block there (stone, planks, bricks,
+     * an upright log...) that is still missing and that we carry - placed from above it comes out exactly right.
+     */
+    private class_1747 pillarItem(class_1937 sw, class_2338 p) {
+        if (sw == null || !this.inBox(p)) return null;
+        Task t = this.tasks.get(p.method_10063());
+        if (t == null || !t.place || t.kind != SbFix.PLACE) return null;
+        class_2680 want = t.want;
+        if (want != want.method_26204().method_9564() || !want.method_26234(sw, p) || SbWorld.container(want) || SbFix.cactus(want)) return null;
+        if (!(itemFor(want) instanceof class_1747 bi) || this.count(bi) == 0) return null;
+        if (!this.mc.field_1687.method_8320(p).method_45474()) return null;
+        return bi;
     }
 
     /** A block here would break a cactus beside it (one that stands or one the schematic wants). */
@@ -2498,14 +2606,19 @@ public final class SchematicBuilderModule extends Module {
         if (s.move() == SbPath.Move.PILLAR) {
             class_2338 under = s.pos().method_10074();
             if (SbWorld.floor(w, under) && Math.abs(dy) < 0.6 && ground) { this.nextStep(); return; }
-            if (!this.hold(pl, this.scaffoldItem())) { if (this.count(this.scaffoldItem()) == 0) { this.missing(this.scaffoldItem()); this.toIdle(); } return; }
+            class_1747 buildItem = this.pillarItem(SbLitematica.world(), under);
+            class_1747 pillarWith = buildItem != null ? buildItem : this.scaffoldItem();
+            if (!this.hold(pl, pillarWith)) { if (this.count(pillarWith) == 0) { this.missing(pillarWith); this.toIdle(); } return; }
             boolean centered = horiz < 0.25;
             float yaw = centered ? pl.method_36454() : (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
             boolean looking = this.rotateTo(pl, yaw, 89.0f, 1.0f);
             if (!centered) { this.keys(true, false, false, true); this.progress(horiz, w, pl, s); return; }
             this.keys(false, ground && looking && settled(pl), false, false);
             if (pl.method_23318() > under.method_10264() + 1.05 && w.method_8320(under).method_45474()) {
-                if (this.aimAndPlace(w, pl, under, null, this.scaffoldItem(), yaw, 89.0f, true) == 1) this.scaffoldPlaced.add(under.method_10063());
+                if (this.aimAndPlace(w, pl, under, null, pillarWith, yaw, 89.0f, true) == 1) {
+                    if (buildItem == null) this.scaffoldPlaced.add(under.method_10063());
+                    else { this.pillarBuilt++; this.placedTotal++; this.lastProgressMs = System.currentTimeMillis(); }
+                }
             }
             this.progress(Math.abs(dy) + horiz, w, pl, s);
             return;
@@ -2850,7 +2963,7 @@ public final class SchematicBuilderModule extends Module {
         if (!this.rotateTo(pl, rot[0], rot[1], 0.8f) || !settled(pl) || !this.readyForInventory(pl)) return;
         class_3965 hit = this.crosshair(pl);
         if (hit == null || !hit.method_17777().equals(this.chestPos)) { this.rotateTo(pl, rot[0], rot[1], 0.2f); return; }
-        if (this.modeTicks % 20 == 5 || this.modeTicks < 5) {
+        if ((this.modeTicks % 20 == 5 || this.modeTicks < 5) && !this.dupRotRisk(pl)) {
             this.modeTicks = 6;
             this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
             this.clickedBlock(); // Grim counts every block click as a place
@@ -3120,6 +3233,20 @@ public final class SchematicBuilderModule extends Module {
     private void clickedBlock() {
         this.lastBeforePlace = this.lastTurnAbs;
         this.afterPlace = true;
+    }
+
+    private boolean gRotated;
+    private float gDeltaX, gLastPlaced = Float.NaN;
+
+    /**
+     * Grim DuplicateRotPlace: the last turn the server got before a block click must not be exactly the one before
+     * the previous click. If it would be, turn one mouse step more first and click a tick later.
+     */
+    private boolean dupRotRisk(class_746 pl) {
+        if (!this.gRotated || this.gDeltaX <= 2.0f || Math.abs(this.gDeltaX - this.gLastPlaced) >= 1.0E-3f) return false;
+        float g = this.mouseStep();
+        pl.method_36456(pl.method_36454() + (this.rnd.nextBoolean() ? g : -g));
+        return true;
     }
     private float lastTurnAbs, lastAfterPlace = Float.NaN, lastBeforePlace = Float.NaN, aimAccel = 0.6f, aimVel;
     private int aimHesitate, reactWait = -1;

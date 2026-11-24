@@ -499,6 +499,7 @@ final class CartTest {
         if (clock == 200 + 25 * ESP_TABS.length + 10) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
+    private static final boolean HOUSE = "house".equals(System.getProperty("hook.sb.scene"));
     private static net.minecraft.class_2338 sbOrigin, sbChest;
     private static Object sbSchematic;
     private static int sbLastPct = -1;
@@ -528,6 +529,31 @@ final class CartTest {
             // a small test build: floor, log pillars + a log beam, stairs in 4 directions, top / bottom slabs,
             // an observer facing up, a piston facing west and a 9 high tower (needs climbing)
             int ox = bx + 4, oy = -60, oz = bz + 4;
+            if (HOUSE) {
+                // a plain house like players really build: floor, plank walls with log corners, windows, a door, a stair roof
+                cmd("fill " + ox + " " + oy + " " + oz + " " + (ox + 10) + " " + oy + " " + (oz + 10) + " stone_bricks");
+                cmd("fill " + ox + " " + (oy + 1) + " " + oz + " " + (ox + 10) + " " + (oy + 4) + " " + (oz + 10) + " oak_planks hollow");
+                for (int[] c : new int[][]{{0, 0}, {10, 0}, {0, 10}, {10, 10}}) cmd("fill " + (ox + c[0]) + " " + (oy + 1) + " " + (oz + c[1]) + " " + (ox + c[0]) + " " + (oy + 4) + " " + (oz + c[1]) + " oak_log[axis=y]");
+                cmd("fill " + (ox + 1) + " " + (oy + 1) + " " + (oz + 1) + " " + (ox + 9) + " " + (oy + 4) + " " + (oz + 9) + " air");
+                for (int k : new int[]{2, 3, 7, 8}) {
+                    cmd("setblock " + (ox + k) + " " + (oy + 2) + " " + oz + " glass");
+                    cmd("setblock " + (ox + k) + " " + (oy + 2) + " " + (oz + 10) + " glass");
+                    cmd("setblock " + ox + " " + (oy + 2) + " " + (oz + k) + " glass");
+                    cmd("setblock " + (ox + 10) + " " + (oy + 2) + " " + (oz + k) + " glass");
+                }
+                cmd("setblock " + (ox + 5) + " " + (oy + 1) + " " + oz + " oak_door[facing=south,half=lower]");
+                cmd("setblock " + (ox + 5) + " " + (oy + 2) + " " + oz + " oak_door[facing=south,half=upper]");
+                for (int r = 0; r <= 5; r++) {
+                    int y = oy + 5 + r;
+                    if (r == 5) { cmd("fill " + (ox + 5) + " " + y + " " + oz + " " + (ox + 5) + " " + y + " " + (oz + 10) + " oak_slab[type=bottom]"); break; }
+                    cmd("fill " + (ox + r) + " " + y + " " + oz + " " + (ox + r) + " " + y + " " + (oz + 10) + " spruce_stairs[facing=east]");
+                    cmd("fill " + (ox + 10 - r) + " " + y + " " + oz + " " + (ox + 10 - r) + " " + y + " " + (oz + 10) + " spruce_stairs[facing=west]");
+                    if (r > 0) {
+                        cmd("fill " + (ox + r) + " " + (y - 1) + " " + oz + " " + (ox + 10 - r) + " " + (y - 1) + " " + oz + " oak_planks");
+                        cmd("fill " + (ox + r) + " " + (y - 1) + " " + (oz + 10) + " " + (ox + 10 - r) + " " + (y - 1) + " " + (oz + 10) + " oak_planks");
+                    }
+                }
+            } else {
             cmd("fill " + ox + " " + oy + " " + oz + " " + (ox + 6) + " " + oy + " " + (oz + 6) + " stone_bricks");
             for (int[] c : new int[][]{{0, 0}, {6, 0}, {0, 6}, {6, 6}}) cmd("fill " + (ox + c[0]) + " " + (oy + 1) + " " + (oz + c[1]) + " " + (ox + c[0]) + " " + (oy + 4) + " " + (oz + c[1]) + " oak_log[axis=y]");
             cmd("fill " + (ox + 1) + " " + (oy + 4) + " " + oz + " " + (ox + 5) + " " + (oy + 4) + " " + oz + " oak_log[axis=x]");
@@ -579,6 +605,7 @@ final class CartTest {
                     {"2", "1", "6", "oak_trapdoor[facing=south,half=bottom,open=true]"},
             };
             for (String[] b : more) cmd("setblock " + (ox + Integer.parseInt(b[0])) + " " + (oy + Integer.parseInt(b[1])) + " " + (oz + Integer.parseInt(b[2])) + " " + b[3]);
+            }
         }
         if (clock == 170) {
             try {
@@ -586,7 +613,7 @@ final class CartTest {
                 Class<?> as = Class.forName("fi.dy.masa.litematica.selection.AreaSelection");
                 Object area = as.getConstructor().newInstance();
                 Class<?> boxC = Class.forName("fi.dy.masa.litematica.selection.Box");
-                Object box = boxC.getConstructor(net.minecraft.class_2338.class, net.minecraft.class_2338.class, String.class).newInstance(sbOrigin, sbOrigin.method_10069(6, 9, 6), "main");
+                Object box = boxC.getConstructor(net.minecraft.class_2338.class, net.minecraft.class_2338.class, String.class).newInstance(sbOrigin, HOUSE ? sbOrigin.method_10069(10, 10, 10) : sbOrigin.method_10069(6, 9, 6), "main");
                 as.getMethod("addSubRegionBox", boxC, boolean.class).invoke(area, box, false);
                 as.getMethod("setName", String.class).invoke(area, "sbtest");
                 as.getMethod("setExplicitOrigin", net.minecraft.class_2338.class).invoke(area, sbOrigin);
@@ -602,7 +629,7 @@ final class CartTest {
             }
         }
         if (clock == 180) {
-            cmd("fill " + (bx + 4) + " -60 " + (bz + 4) + " " + (bx + 10) + " -50 " + (bz + 10) + " air");
+            cmd("fill " + (bx + 4) + " -60 " + (bz + 4) + " " + (bx + 14) + " -49 " + (bz + 14) + " air");
             cmd("kill @e[type=item]");
         }
         if (clock == 200 && sbSchematic != null) {
@@ -709,7 +736,7 @@ final class CartTest {
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
             sbLastPct = pct;
-            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * 480) {
+            if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * (HOUSE ? 1020 : 540)) {
                 shot(mc, "sb_end");
                 // every block of the schematic: is it really what was wanted (states included)?
                 Object plc = SbLitematica.placement(p.method_23317(), p.method_23318(), p.method_23321());
