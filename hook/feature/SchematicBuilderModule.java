@@ -1895,7 +1895,7 @@ public final class SchematicBuilderModule extends Module {
 
     /** Where our shulker box stands; stage 1 = place it, 2 = open it, 3 = break it, 4 = pick it up. */
     private class_2338 shulkerPos;
-    private int shulkerStage, shulkerSlot, shulkerOpens;
+    private int shulkerStage, shulkerSlot, shulkerOpens, shulkerRoomTries;
     private long shulkerCheckAt, shulkerStageAt;
 
     private static boolean isShulker(class_1799 st) {
@@ -2049,6 +2049,13 @@ public final class SchematicBuilderModule extends Module {
                 }
                 class_2338 at = drops.get(0).method_24515();
                 this.keys(false, false, false, false);
+                // standing on it and it still isn't picked up: the inventory is full
+                if (this.freeSlots(pl) == 0 && drops.get(0).method_5739(pl) < 1.5f && this.modeTicks > 40) {
+                    this.say("§eInventory full - the shulker box lies at " + at.method_10263() + " " + at.method_10264() + " " + at.method_10260() + ", make room and pick it up.");
+                    this.shulkerCheckAt = now + 60_000L;
+                    this.shulkerDone("inventory full, box left on the ground");
+                    return;
+                }
                 if (this.modeTicks % 30 == 1) {
                     if (!this.walk(w, pl, q -> q.equals(at), at, () -> { this.mode = Mode.SHULKER; this.modeTicks = 2; }, 4000)) dbg("shulker: no way to the box at " + at.method_23854());
                 }
@@ -3018,12 +3025,15 @@ public final class SchematicBuilderModule extends Module {
         }
         this.storageSeen.put(this.chestPos.method_10063(), seen);
         int free = this.freeSlots(pl);
+        // unpacking a shulker box: one slot has to stay free, or the box can't be picked up again afterwards
+        boolean unpacking = this.shulkerPos != null && this.shulkerPos.equals(this.chestPos);
+        int keepFree = unpacking ? 1 : 0;
         // take what we need
         for (int i = 0; i < size; i++) {
             class_1799 st = h.method_7611(i).method_7677();
             if (st.method_7960()) continue;
             Integer n = this.wanted.get(st.method_7909());
-            if (n == null || n <= 0 || free <= 0) continue;
+            if (n == null || n <= 0 || free <= keepFree) continue;
             this.mc.field_1761.method_2906(h.field_7763, i, 0, class_1713.field_7794, (class_1657) pl);
             this.wanted.put(st.method_7909(), n - st.method_7947());
             this.waitTicks = this.human.getValue() ? 2 + this.rnd.nextInt(3) : 1;
@@ -3045,6 +3055,31 @@ public final class SchematicBuilderModule extends Module {
                 return;
             }
         }
+        // still no free slot for the box: put the smallest stack of what we carry most of into it
+        if (unpacking && this.freeSlots(pl) == 0) {
+            Map<class_1792, Integer> have = new HashMap<>();
+            for (int i = 0; i < 36; i++) {
+                class_1799 st = pl.method_31548().method_5438(i);
+                if (!st.method_7960() && !isTool(st) && !isShulker(st)) have.merge(st.method_7909(), st.method_7947(), Integer::sum);
+            }
+            class_1792 most = null;
+            for (Map.Entry<class_1792, Integer> e : have.entrySet()) if (most == null || e.getValue() > have.get(most)) most = e.getKey();
+            int pick = -1, pickN = Integer.MAX_VALUE;
+            class_1792 held = pl.method_6047().method_7909();
+            for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
+                class_1799 st = h.method_7611(i).method_7677();
+                if (st.method_7960() || st.method_7909() != most) continue;
+                int n = st.method_7947() + (st.method_7909() == held ? 1000 : 0);
+                if (n < pickN) { pickN = n; pick = i; }
+            }
+            if (pick >= 0 && this.shulkerRoomTries++ < 3) {
+                dbg("shulker: inventory full, putting " + most + " back so the box fits");
+                this.mc.field_1761.method_2906(h.field_7763, pick, 0, class_1713.field_7794, (class_1657) pl);
+                this.waitTicks = this.human.getValue() ? 2 + this.rnd.nextInt(3) : 1;
+                return;
+            }
+        }
+        this.shulkerRoomTries = 0;
         // done here
         pl.method_7346();
         this.restoreScreen();

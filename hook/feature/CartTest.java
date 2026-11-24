@@ -632,6 +632,11 @@ final class CartTest {
                     {"0", "2", "4", "wheat"},
                     {"6", "1", "2", "stripped_oak_log[axis=x]"},
                     {"2", "1", "6", "oak_trapdoor[facing=south,half=bottom,open=true]"},
+                    // a short rail track (each rail first lies north-south on its own and must turn east-west);
+                    // its one extra item type also leaves the inventory full, so the shulker box needs room made
+                    // (x 1-2 stay free: the skull's rotation can only be clicked from there)
+                    {"3", "1", "0", "rail[shape=east_west]"},
+                    {"4", "1", "0", "rail[shape=east_west]"},
             };
             for (String[] b : more) cmd("setblock " + (ox + Integer.parseInt(b[0])) + " " + (oy + Integer.parseInt(b[1])) + " " + (oz + Integer.parseInt(b[2])) + " " + b[3]);
             }
@@ -777,7 +782,13 @@ final class CartTest {
                     net.minecraft.class_2680 want = sw.method_8320(q), have = mc.field_1687.method_8320(q);
                     if (want.method_26215()) continue;
                     all++;
-                    if (SbWorld.matches(want, have) || want.method_26204() == net.minecraft.class_2246.field_10382 && have.method_26204() == want.method_26204()) continue;
+                    // rails: the track must also run the right way (the builder doesn't set it, the neighbours do)
+                    boolean railOk = true;
+                    for (var prop : want.method_28501()) {
+                        if (!prop.method_11899().equals("shape") || !have.method_28498(prop)) continue;
+                        if (!want.method_11654(prop).equals(have.method_11654(prop))) railOk = false;
+                    }
+                    if (railOk && SbWorld.matches(want, have) || want.method_26204() == net.minecraft.class_2246.field_10382 && have.method_26204() == want.method_26204()) continue;
                     bad++;
                     System.out.println("CARTTEST SB check BAD " + q.method_23854() + " want " + want + " have " + have);
                 }
