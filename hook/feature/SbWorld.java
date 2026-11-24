@@ -106,7 +106,11 @@ final class SbWorld {
     /** Same block, same facing / half / axis... (what placing decides). */
     @SuppressWarnings({"rawtypes"})
     static boolean matchesShape(class_2680 want, class_2680 have) {
-        if (want.method_26204() != have.method_26204()) return false;
+        if (want.method_26204() != have.method_26204()) {
+            // kelp / kelp_plant, vines / vines_plant: the same thing, it turns into the other when something grows on it
+            class_2248 a = SbFix.stem(want.method_26204());
+            return a != want.method_26204() || a != have.method_26204() ? a == SbFix.stem(have.method_26204()) : false;
+        }
         for (Map.Entry<class_2769<?>, Comparable<?>> e : want.method_11656().entrySet()) {
             class_2769 prop = e.getKey();
             if (!IMPORTANT.contains(prop.method_11899())) continue;

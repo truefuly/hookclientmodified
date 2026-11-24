@@ -178,6 +178,32 @@ final class SbFix {
         return s.method_26204() instanceof net.minecraft.class_2346;
     }
 
+    /** The growing end of a plant ("kelp" for "kelp_plant"): placed with the same item, turns into the other by itself. */
+    static class_2248 stem(class_2248 b) {
+        String id = id(b);
+        if (id.endsWith("_plant") && (id.equals("kelp_plant") || id.endsWith("vines_plant"))) {
+            class_2248 s = block(id.substring(0, id.length() - 6));
+            if (s != null) return s;
+        }
+        return b;
+    }
+
+    /** Lives inside a water source without a waterlogged property (kelp, seagrass): the water has to be there first. */
+    static boolean waterPlant(class_2680 s) {
+        String id = id(s.method_26204());
+        return id.equals("kelp") || id.equals("kelp_plant") || id.equals("seagrass");
+    }
+
+    /** Only stays / can only be placed with water next to it or under it (sugar cane, lily pads) or in it. */
+    static boolean needsWater(class_2680 s) {
+        String id = id(s.method_26204());
+        return waterPlant(s) || id.equals("sugar_cane") || id.equals("lily_pad");
+    }
+
+    static boolean cactus(class_2680 s) {
+        return s.method_26204() == class_2246.field_10029;
+    }
+
     /**
      * Redstone parts come after the other blocks of their layer so half-built circuits don't fire (observers last).
      * Less than one layer (2.5): putting them off longer walls them in.

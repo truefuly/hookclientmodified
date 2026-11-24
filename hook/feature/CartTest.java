@@ -506,8 +506,13 @@ final class CartTest {
                     {"4", "1", "1", "stone_bricks"},
                     {"6", "1", "1", "stone_bricks"},
                     {"5", "1", "0", "stone_bricks"},
-                    {"5", "1", "2", "stone_bricks"},
-                    {"5", "1", "1", "water"},
+                    {"5", "1", "2", "sand"},
+                    // farm plants: kelp in the basin (water first, then the kelp), sugar cane beside it, a cactus
+                    {"5", "1", "1", "kelp"},
+                    {"5", "2", "2", "sugar_cane"},
+                    {"5", "3", "2", "sugar_cane"},
+                    {"4", "1", "6", "sand"},
+                    {"4", "2", "6", "cactus"},
                     // states that need a click, a second item or a tool
                     {"1", "1", "4", "smooth_stone_slab[type=double]"},
                     {"2", "1", "5", "repeater[facing=north,delay=3]"},

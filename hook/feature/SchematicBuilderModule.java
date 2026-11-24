@@ -578,7 +578,15 @@ public final class SchematicBuilderModule extends Module {
                     continue;
                 }
             }
-            class_1792 item = want.method_26204().method_8389();
+            if (SbFix.waterPlant(want) && !(isWater(have) && have.toString().contains("level=0")) && (have.method_26215() || have.method_45474())
+                    && this.placeWater.getValue() && !this.skipped.contains(m.method_10063())) {
+                // kelp / seagrass: a water source first (bucket), then the plant into it
+                class_2338 p = m.method_10062();
+                this.tasks.put(p.method_10063(), new Task(p, class_2246.field_10382.method_9564(), true));
+                list.add(p.method_10063());
+                continue;
+            }
+            class_1792 item = itemFor(want);
             boolean noItem = !(item instanceof class_1747) || !want.method_26227().method_15769() && want.method_26204() instanceof net.minecraft.class_2404;
             if (SbWorld.secondaryPart(want)) {
                 if (have.method_26204() == want.method_26204()) done++;
@@ -949,7 +957,8 @@ public final class SchematicBuilderModule extends Module {
 
     private boolean waterTooEarly(Task w) {
         for (Task o : this.tasks.values()) {
-            if (!o.place || isWater(o.want)) continue;
+            // sugar cane, kelp, lily pads wait for this water themselves
+            if (!o.place || isWater(o.want) || SbFix.needsWater(o.want)) continue;
             if (Math.abs(o.pos.method_10263() - w.pos.method_10263()) <= 4 && Math.abs(o.pos.method_10260() - w.pos.method_10260()) <= 4
                     && o.pos.method_10264() <= w.pos.method_10264() + 1 && o.pos.method_10264() >= w.pos.method_10264() - 3) return true;
         }
@@ -962,7 +971,7 @@ public final class SchematicBuilderModule extends Module {
 
     /** The item that builds this state (a water bucket for water). */
     static class_1792 itemFor(class_2680 s) {
-        return isWater(s) ? class_1802.field_8705 : s.method_26204().method_8389();
+        return isWater(s) ? class_1802.field_8705 : SbFix.stem(s.method_26204()).method_8389();
     }
 
     /**
@@ -2151,9 +2160,18 @@ public final class SchematicBuilderModule extends Module {
             }
             return true;
         };
-        r.mayScaffold = p -> sw == null || !this.inBox(p) || SbLitematica.target(sw, p).method_26215()
-                || SbLitematica.target(sw, p).method_26204() == this.scaffoldItem().method_7711();
+        r.mayScaffold = p -> (sw == null || !this.inBox(p) || SbLitematica.target(sw, p).method_26215()
+                || SbLitematica.target(sw, p).method_26204() == this.scaffoldItem().method_7711()) && !this.besideCactus(sw, p);
         return r;
+    }
+
+    /** A block here would break a cactus beside it (one that stands or one the schematic wants). */
+    private boolean besideCactus(class_1937 sw, class_2338 p) {
+        for (class_2350 d : new class_2350[]{class_2350.field_11043, class_2350.field_11035, class_2350.field_11034, class_2350.field_11039}) {
+            class_2338 n = p.method_10093(d);
+            if (SbFix.cactus(this.mc.field_1687.method_8320(n)) || sw != null && this.inBox(n) && SbFix.cactus(SbLitematica.target(sw, n))) return true;
+        }
+        return false;
     }
 
     /** Walk to a spot from which the task's block is within reach. */
