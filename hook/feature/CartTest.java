@@ -464,7 +464,9 @@ final class CartTest {
                 if (b == null) continue;
                 // the edge it is anchored to may hold while it grows: compare the corner nearest to its anchor
                 boolean right = a[0] + a[2] / 2 > mc.method_22683().method_4489() / 2.0f, bottom = a[1] + a[3] / 2 > mc.method_22683().method_4506() / 2.0f;
-                float ax = right ? a[0] + a[2] : a[0], bx = right ? b[0] + b[2] : b[0];
+                float sw2 = mc.method_22683().method_4489() / 2.0f;
+                boolean centered = Math.abs(a[0] + a[2] / 2 - sw2) < 3 && Math.abs(b[0] + b[2] / 2 - sw2) < 3;
+                float ax = centered ? a[0] + a[2] / 2 : right ? a[0] + a[2] : a[0], bx = centered ? b[0] + b[2] / 2 : right ? b[0] + b[2] : b[0];
                 float ay = bottom ? a[1] + a[3] : a[1], by = bottom ? b[1] + b[3] : b[1];
                 boolean ok = Math.abs(ax - bx) < 1.5f && Math.abs(ay - by) < 1.5f;
                 if (!ok) moved++;
