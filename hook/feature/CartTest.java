@@ -588,7 +588,9 @@ final class CartTest {
             for (var e : need.entrySet()) {
                 String id = net.minecraft.class_7923.field_41178.method_10221(e.getKey()).toString();
                 sb2.append(id).append('=').append(e.getValue()).append(' ');
-                if (e.getKey() != most) cmd("give @s " + id + " " + (e.getValue() + 2));
+                // the logs only come packed in a shulker box: it has to set it down, take them out and pick it up again
+                if (id.equals("minecraft:oak_log")) cmd("give @s shulker_box[container=[{slot:0,item:{id:\"minecraft:oak_log\",count:" + (e.getValue() + 2) + "}}]]");
+                else if (e.getKey() != most) cmd("give @s " + id + " " + (e.getValue() + 2));
             }
             cmd("give @s cobblestone 10");
             // only an empty bucket: it has to fill it at the little pool next to the build
@@ -673,6 +675,9 @@ final class CartTest {
                     System.out.println("CARTTEST SB check BAD " + q.method_23854() + " want " + want + " have " + have);
                 }
                 System.out.println("CARTTEST SB check " + (all - bad) + "/" + all + " exact");
+                int boxes = 0;
+                for (int i = 0; i < 36; i++) if (p.method_31548().method_5438(i).method_7909() == net.minecraft.class_1802.field_8545) boxes++;
+                System.out.println("CARTTEST SB shulker boxes in inventory at the end: " + boxes);
                 SbAcTest.report();
                 System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
                 sb.setEnabled(false);

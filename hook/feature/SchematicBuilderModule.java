@@ -144,7 +144,7 @@ public final class SchematicBuilderModule extends Module {
     }
 
     // ------------------------------------------------------------------ state machine
-    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE, INTERACT, REFILL }
+    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE, INTERACT, REFILL, SHULKER }
 
     private Mode mode = Mode.IDLE;
     private String status = "Starting";
@@ -312,6 +312,9 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private void resetAll() {
+        this.shulkerPos = null;
+        this.shulkerStage = 0;
+        this.shulkerCheckAt = 0;
         this.buildItems.clear();
         this.placement = null;
         this.badSpots.clear();
@@ -432,6 +435,7 @@ public final class SchematicBuilderModule extends Module {
             case ESCAPE -> this.tickEscape(w, pl);
             case INTERACT -> this.tickInteract(w, pl);
             case REFILL -> this.tickRefill(w, pl);
+            case SHULKER -> this.tickShulker(w, pl);
         }
     }
 
@@ -661,6 +665,8 @@ public final class SchematicBuilderModule extends Module {
         if (this.tryUnseal(w, pl)) return;
         // water to place but only empty buckets: fill them at a water source first
         if (this.tryRefill(w, pl)) return;
+        // material we need is in a shulker box we carry: set it down, take it out, pick the box up again
+        if (this.tryShulker(w, pl)) return;
         // restock when the scaffold block runs low or the nearby work needs something we don't carry
         if (this.useStorage.getValue() && !this.storage.isEmpty() && this.wantsRestock(pl)) {
             if (this.startRestock(w, pl)) return;
@@ -1848,6 +1854,163 @@ public final class SchematicBuilderModule extends Module {
         this.modeTicks = 0;
     }
 
+    // ================================================================== shulker box restock
+
+    /** Where our shulker box stands; stage 1 = place it, 2 = open it, 3 = break it, 4 = pick it up. */
+    private class_2338 shulkerPos;
+    private int shulkerStage, shulkerSlot, shulkerOpens;
+    private long shulkerCheckAt, shulkerStageAt;
+
+    private static boolean isShulker(class_1799 st) {
+        return st.method_7909() instanceof class_1747 bi && bi.method_7711() instanceof net.minecraft.class_2480;
+    }
+
+    /** What a shulker box item holds. */
+    private static Map<class_1792, Integer> shulkerContents(class_1799 st) {
+        Map<class_1792, Integer> m = new HashMap<>();
+        try {
+            net.minecraft.class_9288 c = st.method_58694(net.minecraft.class_9334.field_49622);
+            if (c != null) for (class_1799 s : c.method_59714()) m.merge(s.method_7909(), s.method_7947(), Integer::sum);
+        } catch (Throwable ignored) {
+        }
+        return m;
+    }
+
+    private boolean tryShulker(class_638 w, class_746 pl) {
+        if (this.shulkerPos != null) {
+            this.mode = Mode.SHULKER;
+            this.modeTicks = 0;
+            return true;
+        }
+        long now = System.currentTimeMillis();
+        if (now < this.shulkerCheckAt) return false;
+        this.shulkerCheckAt = now + 3000L;
+        Map<class_1792, Integer> need = this.needs(pl);
+        if (need.isEmpty()) return false;
+        class_1661 inv = pl.method_31548();
+        int slot = -1;
+        for (int i = 0; i < 36 && slot < 0; i++) {
+            class_1799 st = inv.method_5438(i);
+            if (!isShulker(st)) continue;
+            Map<class_1792, Integer> in = shulkerContents(st);
+            for (class_1792 it : need.keySet()) if (in.getOrDefault(it, 0) > 0) { slot = i; break; }
+        }
+        if (slot < 0) return false;
+        // a free spot right beside us: air with room above (the lid opens upwards) and a floor below,
+        // outside the build if possible (never where the schematic wants a block)
+        class_1937 sw = SbLitematica.world();
+        class_2338 f = feet(pl);
+        class_2338 best = null;
+        double bd = Double.MAX_VALUE;
+        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) for (int dy = -1; dy <= 1; dy++) {
+            if (dx == 0 && dz == 0) continue;
+            class_2338 q = f.method_10069(dx, dy, dz);
+            if (!w.method_8320(q).method_26215() || !w.method_8320(q.method_10084()).method_26215() || !SbWorld.floor(w, q.method_10074())) continue;
+            if (pl.method_5829().method_994(new class_238(q)) || this.storage.contains(q.method_10063())) continue;
+            boolean inside = this.inBox(q);
+            if (inside && (sw == null || !SbLitematica.target(sw, q).method_26215() || !SbLitematica.target(sw, q.method_10084()).method_26215())) continue;
+            double d = dx * dx + dz * dz + dy * dy * 2 + (inside ? 20 : 0);
+            if (d < bd) { bd = d; best = q; }
+        }
+        if (best == null) return false;
+        dbg("shulker: placing the box from slot " + slot + " at " + best.method_23854() + " for " + need.keySet());
+        this.shulkerPos = best;
+        this.shulkerSlot = slot;
+        this.shulkerOpens = 0;
+        this.shulkerStage = 1;
+        this.shulkerStageAt = now;
+        this.status = "Unpacking a shulker box";
+        this.mode = Mode.SHULKER;
+        this.modeTicks = 0;
+        return true;
+    }
+
+    private void shulkerDone(String why) {
+        dbg("shulker: " + why);
+        this.shulkerPos = null;
+        this.shulkerStage = 0;
+        this.toIdle();
+    }
+
+    private void tickShulker(class_638 w, class_746 pl) {
+        class_2338 p = this.shulkerPos;
+        if (p == null) { this.toIdle(); return; }
+        long now = System.currentTimeMillis();
+        boolean standing = w.method_8320(p).method_26204() instanceof net.minecraft.class_2480;
+        if (now - this.shulkerStageAt > 60_000L) {
+            if (standing) this.say("§eLeft a shulker box at " + p.method_10263() + " " + p.method_10264() + " " + p.method_10260() + " - could not pick it up again.");
+            this.shulkerCheckAt = now + 60_000L;
+            this.shulkerDone("gave up in stage " + this.shulkerStage);
+            return;
+        }
+        this.status = "Unpacking a shulker box";
+        switch (this.shulkerStage) {
+            case 1 -> {
+                if (standing) { this.shulkerStage = 2; this.shulkerStageAt = now; return; }
+                class_1661 inv = pl.method_31548();
+                class_1799 st = inv.method_5438(this.shulkerSlot);
+                if (!isShulker(st)) { this.shulkerCheckAt = 0; this.shulkerDone("box moved"); return; }
+                if (!w.method_8320(p).method_26215()) { this.shulkerDone("spot taken"); return; }
+                // the very box that has the items in the hand (not just any box of that colour)
+                if (inv.method_67532() != this.shulkerSlot) {
+                    if (this.shulkerSlot < 9) { inv.method_61496(this.shulkerSlot); return; }
+                    if (this.swapCooldown > 0) { this.swapCooldown--; return; }
+                    if (pl.field_7512 != pl.field_7498 || !this.readyForInventory(pl)) return;
+                    int hb = this.freeHotbar(inv);
+                    this.inventorySwap(pl, this.shulkerSlot, hb);
+                    inv.method_61496(hb);
+                    this.shulkerSlot = hb;
+                    this.swapCooldown = 3;
+                    return;
+                }
+                class_1747 item = (class_1747) st.method_7909();
+                class_2680 want = item.method_7711().method_9564();
+                this.keys(false, false, false, true);
+                SbPlacer.Solution sol = SbPlacer.find(this.mc, p, want, item, pl.method_33571(), this.reach());
+                if (sol == null) {
+                    if (this.modeTicks > 40) { this.shulkerCheckAt = now + 20_000L; this.shulkerDone("no way to place it"); }
+                    return;
+                }
+                int r = this.aimAndPlace(w, pl, p, want, item, sol.yaw(), sol.pitch(), this.modeTicks >= this.placeDelay());
+                if (r == 1) { this.waitTicks = 4; this.modeTicks = 0; }
+                else if (r < 0 && this.modeTicks > 60) { this.shulkerCheckAt = now + 20_000L; this.shulkerDone("aim failed"); }
+            }
+            case 2 -> {
+                if (!standing) { this.shulkerStage = 4; this.shulkerStageAt = now; return; }
+                // open it and take what we need (the normal chest code)
+                this.storageSeen.remove(p.method_10063());
+                this.wanted = this.needs(pl);
+                this.chestPos = p;
+                this.shulkerStage = 3;
+                this.mode = Mode.OPEN_CHEST;
+                this.modeTicks = 0;
+            }
+            case 3 -> {
+                if (!standing) { this.shulkerStage = 4; this.shulkerStageAt = now; this.modeTicks = 0; return; }
+                if (pl.field_7512 != pl.field_7498) { pl.method_7346(); this.restoreScreen(); return; }
+                // the menu got closed before we could look inside: open it again
+                if (!this.storageSeen.containsKey(p.method_10063()) && this.shulkerOpens++ < 4) { this.shulkerStage = 2; return; }
+                this.storageSeen.remove(p.method_10063());
+                this.startBreak(p, null);
+                this.status = "Packing the shulker box";
+            }
+            case 4 -> {
+                // walk to the dropped box: it gets picked up on the way
+                var drops = w.method_8390(net.minecraft.class_1542.class, new class_238(p).method_1014(4.0), e -> isShulker(e.method_6983()));
+                if (drops.isEmpty()) {
+                    if (this.modeTicks > 10) { this.shulkerCheckAt = now + 1000L; this.shulkerDone("box packed up again"); }
+                    return;
+                }
+                class_2338 at = drops.get(0).method_24515();
+                this.keys(false, false, false, false);
+                if (this.modeTicks % 30 == 1) {
+                    if (!this.walk(w, pl, q -> q.equals(at), at, () -> { this.mode = Mode.SHULKER; this.modeTicks = 2; }, 4000)) dbg("shulker: no way to the box at " + at.method_23854());
+                }
+            }
+            default -> this.shulkerDone("?");
+        }
+    }
+
     // ================================================================== legit actions (what a player could do)
 
     /**
@@ -1979,7 +2142,9 @@ public final class SchematicBuilderModule extends Module {
      */
     private boolean readyForInventory(class_746 pl) {
         var v = pl.method_18798();
-        if (v.field_1352 * v.field_1352 + v.field_1350 * v.field_1350 > 1.0E-4 || pl.method_5624() || pl.method_5715() || !pl.method_24828()) {
+        // also the last step: the server judges the movement it was sent, not the speed left after friction
+        double mx = pl.method_23317() - pl.field_6014, mz = pl.method_23321() - pl.field_5969;
+        if (v.field_1352 * v.field_1352 + v.field_1350 * v.field_1350 > 1.0E-4 || mx * mx + mz * mz > 1.0E-4 || pl.method_5624() || pl.method_5715() || !pl.method_24828()) {
             this.freezeTicks = Math.max(this.freezeTicks, 3);
             this.keys(false, false, false, false);
             return false;
@@ -2638,7 +2803,7 @@ public final class SchematicBuilderModule extends Module {
             useful.add(this.scaffoldItem());
             for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
                 class_1799 st = h.method_7611(i).method_7677();
-                if (st.method_7960() || useful.contains(st.method_7909()) || isTool(st) || st.method_7909() == class_1802.field_8288) continue;
+                if (st.method_7960() || useful.contains(st.method_7909()) || isTool(st) || isShulker(st) || st.method_7909() == class_1802.field_8288) continue;
                 this.mc.field_1761.method_2906(h.field_7763, i, 0, class_1713.field_7794, (class_1657) pl);
                 this.waitTicks = this.human.getValue() ? 2 + this.rnd.nextInt(3) : 1;
                 return;
