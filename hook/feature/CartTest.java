@@ -582,7 +582,10 @@ final class CartTest {
                 if (e.getKey() != most) cmd("give @s " + id + " " + (e.getValue() + 2));
             }
             cmd("give @s cobblestone 10");
-            cmd("give @s water_bucket 1");
+            // only an empty bucket: it has to fill it at the little pool next to the build
+            cmd("give @s bucket 1");
+            cmd("setblock " + (bx - 2) + " -61 " + (bz + 6) + " water");
+            cmd("setblock " + (bx - 2) + " -61 " + (bz + 7) + " water");
             cmd("give @s bread 8");
             cmd("give @s diamond_pickaxe");
             cmd("give @s diamond_shovel");

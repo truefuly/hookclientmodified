@@ -144,7 +144,7 @@ public final class SchematicBuilderModule extends Module {
     }
 
     // ------------------------------------------------------------------ state machine
-    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE, INTERACT }
+    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE, INTERACT, REFILL }
 
     private Mode mode = Mode.IDLE;
     private String status = "Starting";
@@ -428,6 +428,7 @@ public final class SchematicBuilderModule extends Module {
             case TRANSFER -> this.tickTransfer(w, pl);
             case ESCAPE -> this.tickEscape(w, pl);
             case INTERACT -> this.tickInteract(w, pl);
+            case REFILL -> this.tickRefill(w, pl);
         }
     }
 
@@ -641,6 +642,8 @@ public final class SchematicBuilderModule extends Module {
 
         if (this.tryMend(w, pl)) return;
         if (this.tryUnseal(w, pl)) return;
+        // water to place but only empty buckets: fill them at a water source first
+        if (this.tryRefill(w, pl)) return;
         // restock when the scaffold block runs low or the nearby work needs something we don't carry
         if (this.useStorage.getValue() && !this.storage.isEmpty() && this.wantsRestock(pl)) {
             if (this.startRestock(w, pl)) return;
@@ -1679,6 +1682,119 @@ public final class SchematicBuilderModule extends Module {
         if (tool) this.say("§eThe build needs a tool you don't carry (hoe for farmland, shovel for paths or axe for stripped logs).");
     }
 
+
+    // ================================================================== water bucket refill
+
+    private class_2338 refillAt;
+    private final Map<Long, Long> badSources = new HashMap<>();
+    private long refillCheckAt;
+
+    private static boolean waterSource(class_2680 s) {
+        return isWater(s) && s.toString().contains("level=0");
+    }
+
+    /**
+     * A source we may take: outside the build (a river, a lake, your own pool), or inside it only where it comes back
+     * by itself (an infinite source: two sources beside it and something holding it below).
+     */
+    private boolean takeableSource(class_638 w, class_2338 p) {
+        if (!waterSource(w.method_8320(p))) return false;
+        boolean inside = this.inBox(p);
+        if (!inside) return true;
+        int n = 0;
+        for (class_2350 d : new class_2350[]{class_2350.field_11043, class_2350.field_11035, class_2350.field_11034, class_2350.field_11039})
+            if (waterSource(w.method_8320(p.method_10093(d)))) n++;
+        class_2680 below = w.method_8320(p.method_10074());
+        return n >= 2 && (waterSource(below) || !below.method_26215() && !below.method_45474());
+    }
+
+    private boolean needsWaterBucket() {
+        for (Task t : this.tasks.values()) {
+            if (!t.place || this.skipped.contains(t.pos.method_10063())) continue;
+            if (isWater(t.want) || t.kind == SbFix.WATERLOG) return true;
+        }
+        return false;
+    }
+
+    /** Only empty buckets but water to place: walk to the nearest water we may take and fill one. */
+    private boolean tryRefill(class_638 w, class_746 pl) {
+        if (!this.placeWater.getValue()) return false;
+        class_1792 empty = itemById("bucket");
+        if (this.count(class_1802.field_8705) > 0 || this.count(empty) == 0) return false;
+        long now = System.currentTimeMillis();
+        if (now < this.refillCheckAt || !this.needsWaterBucket()) return false;
+        this.badSources.values().removeIf(t -> t < now);
+        class_2338 f = feet(pl);
+        class_2338 best = null;
+        double bd = Double.MAX_VALUE;
+        for (int dx = -24; dx <= 24; dx++) for (int dz = -24; dz <= 24; dz++) for (int dy = -6; dy <= 4; dy++) {
+            class_2338 p = f.method_10069(dx, dy, dz);
+            if (this.badSources.containsKey(p.method_10063()) || !this.takeableSource(w, p)) continue;
+            // only the top of the water can be scooped
+            if (!w.method_8320(p.method_10084()).method_26215()) continue;
+            double d = dx * dx + dz * dz + dy * dy * 2.0;
+            if (d < bd) { bd = d; best = p; }
+        }
+        if (best == null) {
+            this.refillCheckAt = now + 15_000L;
+            if (this.count(class_1802.field_8705) == 0) this.missing(class_1802.field_8705);
+            return false;
+        }
+        this.refillAt = best;
+        this.status = "Filling a bucket";
+        class_243 surf = new class_243(best.method_10263() + 0.5, best.method_10264() + 0.85, best.method_10260() + 0.5);
+        if (pl.method_33571().method_1025(surf) <= this.reach() * this.reach()) {
+            this.mode = Mode.REFILL;
+            this.modeTicks = 0;
+            return true;
+        }
+        double reach = this.reach() - 0.5;
+        final class_2338 src = best;
+        boolean ok = this.walk(w, pl, q -> {
+            if (q.equals(src) || q.method_10084().equals(src)) return false;
+            double ex = q.method_10263() + 0.5 - surf.field_1352, ey = q.method_10264() + 1.5 - surf.field_1351, ez = q.method_10260() + 0.5 - surf.field_1350;
+            return ex * ex + ey * ey + ez * ez <= reach * reach && ey > 0.3;
+        }, best, () -> { this.mode = Mode.REFILL; this.modeTicks = 0; }, 9000);
+        if (!ok) { this.badSources.put(best.method_10063(), now + 60_000L); this.refillAt = null; }
+        else this.status = "Walking to water";
+        return ok;
+    }
+
+    /** Looks at the water surface and right-clicks with the empty bucket (like vanilla: block click, then the item). */
+    private void tickRefill(class_638 w, class_746 pl) {
+        class_2338 p = this.refillAt;
+        if (p == null || this.count(class_1802.field_8705) > 0) { this.refillAt = null; this.toIdle(); return; }
+        if (!waterSource(w.method_8320(p)) || this.modeTicks > 120) {
+            this.badSources.put(p.method_10063(), System.currentTimeMillis() + 60_000L);
+            this.refillAt = null;
+            this.toIdle();
+            return;
+        }
+        class_1792 empty = itemById("bucket");
+        if (!this.hold(pl, empty)) { if (this.count(empty) == 0) this.toIdle(); return; }
+        this.keys(false, false, false, true);
+        if (!pl.method_5715() && this.modeTicks < 6) return;
+        class_243 surf = new class_243(p.method_10263() + 0.5, p.method_10264() + 0.85, p.method_10260() + 0.5);
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), surf);
+        if (!this.rotateTo(pl, rot[0], rot[1], 0.8f) || !settled(pl) || this.modeTicks < this.placeDelay()) return;
+        // what the bucket really scoops: the first source along the look
+        var fr = pl.method_5745(pl.method_55754(), 1.0f, true);
+        if (!(fr instanceof class_3965 fh) || fr.method_17783() != net.minecraft.class_239.class_240.field_1332 || !fh.method_17777().equals(p)) {
+            this.rotateTo(pl, rot[0], rot[1], 0.2f);
+            if (++this.aimMiss > 25) { this.aimMiss = 0; this.badSources.put(p.method_10063(), System.currentTimeMillis() + 60_000L); this.refillAt = null; this.toIdle(); }
+            return;
+        }
+        class_3965 hit = this.crosshair(pl);
+        if (hit != null) this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+        var res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        pl.method_6104(class_1268.field_5808);
+        this.lastClickTick = this.tickNo;
+        this.aimMiss = 0;
+        this.lastProgressMs = System.currentTimeMillis();
+        dbg("refill bucket at " + p.method_23854() + " " + res);
+        this.waitTicks = 5;
+        this.modeTicks = 0;
+    }
 
     // ================================================================== legit actions (what a player could do)
 
