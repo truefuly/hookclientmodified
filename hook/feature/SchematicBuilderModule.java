@@ -371,6 +371,10 @@ public final class SchematicBuilderModule extends Module {
         if (pl.field_6012 == this.lastAge) return;
         this.lastAge = pl.field_6012;
         this.tickNo++;
+        // the game drops to 30 fps after a minute without mouse / keyboard input and to 10 fps after ten ("AFK"
+        // inactivity limit) - and you don't touch anything while the bot builds, so it looked like 5 fps. The bot's
+        // own moving counts as input.
+        try { this.mc.method_61964().method_61939(); } catch (Throwable ignored) { }
         this.renderYaw = pl.method_36454();
         this.renderPitch = pl.method_36455();
         this.renderTick = this.tickNo;
@@ -2023,6 +2027,15 @@ public final class SchematicBuilderModule extends Module {
                 if (pl.field_7512 != pl.field_7498) { pl.method_7346(); this.restoreScreen(); return; }
                 // the menu got closed before we could look inside: open it again
                 if (!this.storageSeen.containsKey(p.method_10063()) && this.shulkerOpens++ < 4) { this.shulkerStage = 2; return; }
+                // pushed away while the menu was open (or opened it from the edge of reach): walk back to it first,
+                // breaking from here would only fail over and over
+                class_3965 bf = this.visibleFace(w, pl, p);
+                double rr = this.reach() - 0.2;
+                if ((bf == null || pl.method_33571().method_1025(bf.method_17784()) > rr * rr) && this.walkNear(w, pl, p, null)) {
+                    this.status = "Walking back to the shulker box";
+                    dbg("shulker: walking back to the box at " + p.method_23854());
+                    return;
+                }
                 this.storageSeen.remove(p.method_10063());
                 this.startBreak(p, null);
                 this.status = "Packing the shulker box";

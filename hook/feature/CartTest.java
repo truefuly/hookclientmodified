@@ -758,7 +758,7 @@ final class CartTest {
         }
         if (clock > 300 && sb != null && clock % 100 == 0) {
             SchematicBuilderModule.Progress pr = SchematicBuilderModule.progress();
-            System.out.println("CARTTEST SB t=" + (clock - 300) / 20 + "s " + (pr == null ? "-" : String.format(java.util.Locale.ROOT, "%d/%d %.1f%% eta=[%s] state=[%s]", pr.done(), pr.total(), pr.percent(), pr.eta(), pr.state()))
+            System.out.println("CARTTEST SB t=" + (clock - 300) / 20 + "s fps=" + mc.method_47599() + " " + (pr == null ? "-" : String.format(java.util.Locale.ROOT, "%d/%d %.1f%% eta=[%s] state=[%s]", pr.done(), pr.total(), pr.percent(), pr.eta(), pr.state()))
                     + " | " + sb.testStatus() + " pos=" + p.method_24515().method_23854() + " hp=" + p.method_6032() + " food=" + p.method_7344().method_7586());
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
