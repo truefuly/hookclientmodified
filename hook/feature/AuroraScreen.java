@@ -684,6 +684,8 @@ public final class AuroraScreen extends class_437 {
             case "movement" -> {
                 t.add(new Tile(UiIcon.ACTIVITY, "Force Sneak", "Holds sneak all the time, also after reconnecting.", bool(r, "forceSneakEnabled") ? "Sneaking" : "Off",
                     new String[0][], "toggleForceSneak", bool(r, "forceSneakEnabled"), ctl));
+                t.add(new Tile(UiIcon.ACTIVITY, "Pull Pearl", "Logs off when one of your accounts on this VPS sends /msg " + (a != null ? a.name() : "<bot>") + " pull.", bool(r, "pullPearlEnabled") ? "Waiting for pull" : "Off",
+                    new String[0][], "togglePullPearl", bool(r, "pullPearlEnabled"), ctl));
                 boolean afk = s != null && s.afk();
                 t.add(new Tile(UiIcon.ACTIVITY, "AFK moves", "Small jumps, looks and swings so the server doesn't kick the account for being AFK.", afk ? "On" : "Off",
                     new String[0][], "afk", afk, ctl && online));
