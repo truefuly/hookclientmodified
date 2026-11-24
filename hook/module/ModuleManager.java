@@ -56,7 +56,8 @@ import hook.feature.MaceSwapModule;
 import hook.feature.NameProtectModule;
 import hook.feature.PearlCatchModule;
 import hook.feature.PanicButtonModule;
-import hook.feature.EntityEspModule;
+import hook.feature.PlayerEspModule;
+import hook.feature.MobEspModule;
 import hook.feature.ItemEspModule;
 import hook.feature.SkinProtectModule;
 import hook.feature.SpawnerNotifyModule;
@@ -149,7 +150,8 @@ public final class ModuleManager {
         // Render: seeing things in the world
         this.in(Category.RENDER, new FreecamModule());
         this.a(new FreelookModule());
-        this.in(Category.RENDER, new EntityEspModule());
+        this.in(Category.RENDER, new PlayerEspModule());
+        this.in(Category.RENDER, new MobEspModule());
         this.in(Category.RENDER, new ItemEspModule());
         this.in(Category.RENDER, new BlockEspModule());
         this.in(Category.RENDER, new TunnelEspModule());
@@ -192,10 +194,12 @@ public final class ModuleManager {
         this.a(module);
     }
 
-    /** Category order, then A-Z inside each category; the HookVisuals settings stay first in Client. */
+    /** Category order, then section (Sword, Crystal...), then A-Z; the HookVisuals settings stay first in Client. */
     private void sortModules() {
+        for (Module module : this.modules) ModuleLayout.apply(module);
         java.util.Comparator<Module> order = java.util.Comparator
                 .comparing((Module m) -> m.getCategory().ordinal())
+                .thenComparing(ModuleLayout::subOrder)
                 .thenComparing(m -> !(m instanceof Hook))
                 .thenComparing(m -> m.getName().toString().toLowerCase(java.util.Locale.ROOT));
         this.modules.sort(order);

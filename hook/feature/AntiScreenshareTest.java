@@ -47,7 +47,7 @@ public final class AntiScreenshareTest {
         AntiScreenshareModule m = AntiScreenshareModule.instance;
         if (m == null) return;
         hook.module.ModuleManager mm = hook.Hook.INSTANCE.getModuleManager();
-        hook.module.Module hud = mm.getModuleByClass(HudModule.class), esp = mm.getModuleByClass(EntityEspModule.class);
+        hook.module.Module hud = mm.getModuleByClass(HudModule.class), esp = mm.getModuleByClass(PlayerEspModule.class);
         if (BENCH) {
             hook.module.Module hb = mm.getModuleByClass(CleanHitboxesModule.class), cb = mm.getModuleByClass(ChunkBordersModule.class);
             if (mc.field_1755 instanceof net.minecraft.class_433) mc.method_1507(null);

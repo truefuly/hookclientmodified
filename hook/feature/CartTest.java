@@ -56,6 +56,7 @@ final class CartTest {
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
+        if ("esp".equals(ONLY)) { esp(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
         if ("builder".equals(ONLY)) { builder(mc, p); return; }
         if ("seedcracker".equals(ONLY)) { seedcracker(mc, p); return; }
@@ -447,6 +448,55 @@ final class CartTest {
         if (clock == 380) mc.method_1507(null);
         if (clock == 395) { shot(mc, "hud_play_small"); System.out.println("CARTTEST EDITING after close " + HudLayoutEditor.editing); }
         if (clock == 410) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    private static final hook.module.Category[] ESP_TABS = hook.module.Category.values();
+
+    /** -Dhook.carttest.only=esp: Player ESP / Mob ESP on a mob zoo, then every click GUI tab with its sections. */
+    private static void esp(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("difficulty easy");
+            cmd("time set midnight");
+            cmd("weather clear");
+            cmd("tp @s 0 151 0 0 25");
+            cmd("fill -12 150 -2 12 150 30 stone");
+            cmd("fill -12 151 -2 12 160 30 air");
+            cmd("effect give @s night_vision infinite 0");
+            String[] mobs = {"zombie", "skeleton", "creeper", "cow", "sheep", "villager", "enderman", "squid", "armor_stand", "iron_golem"};
+            for (int i = 0; i < mobs.length; i++)
+                cmd("summon " + mobs[i] + " " + (-9 + i * 2) + " 151 " + (9 + (i % 2) * 4) + " {NoAI:1b,PersistenceRequired:1b}");
+            cmd("summon wolf 0 151 18 {NoAI:1b,Owner:[I;0,0,0,1]}");
+            for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) {
+                if (m instanceof PlayerEspModule || m instanceof MobEspModule) { if (!m.isEnabled()) m.setEnabled(true); }
+            }
+        }
+        if (clock == 150) mc.field_1705.method_1743().method_1808(false);
+        if (clock == 160) {
+            StringBuilder sb = new StringBuilder("CARTTEST MOBS");
+            for (net.minecraft.class_1297 e : mc.field_1687.method_18112()) {
+                Object g = MobEspModule.groupOf(e);
+                if (g != null && !(e instanceof net.minecraft.class_1657)) sb.append(' ').append(e.method_5864().method_5897().getString()).append('=').append(g);
+            }
+            System.out.println(sb);
+            shot(mc, "sb_esp_world");
+        }
+        if (clock == 170) {
+            StringBuilder sb = new StringBuilder("CARTTEST LAYOUT");
+            hook.module.Category last = null;
+            String sub = null;
+            for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) {
+                if (m.getCategory() != last) { sb.append(" | TAB ").append(m.getCategory().name); last = m.getCategory(); sub = null; }
+                if (!m.getSub().equals(sub)) { sb.append(" / ").append(m.getSub()).append(':'); sub = m.getSub(); }
+                sb.append(' ').append(m.getName()).append(',');
+            }
+            System.out.println(sb);
+            mc.method_1507(new HookClickGuiScreen());
+        }
+        int t = (clock - 200) / 25;
+        if (clock >= 200 && (clock - 200) % 25 == 0 && t < ESP_TABS.length && mc.field_1755 instanceof HookClickGuiScreen gui) gui.testTab(ESP_TABS[t]);
+        if (clock >= 200 && (clock - 200) % 25 == 20 && t < ESP_TABS.length) shot(mc, "sb_tab_" + ESP_TABS[t].name());
+        if (clock == 200 + 25 * ESP_TABS.length + 10) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static net.minecraft.class_2338 sbOrigin, sbChest;

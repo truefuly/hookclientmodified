@@ -55,6 +55,11 @@ public final class HookClickGuiScreen
 extends class_437
 implements HookUiController.UiDataSource {
     private final HookUiController ui = new HookUiController(this);
+
+    /** Self-test: shows the given tab. */
+    public void testTab(hook.module.Category category) {
+        this.ui.testTab(category);
+    }
     private boolean freshOpen = true;
     private boolean inEditor;
     private boolean finishPending;

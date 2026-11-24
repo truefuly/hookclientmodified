@@ -26,6 +26,10 @@ implements Serializable {
     private boolean enabled;
     private int keybind;
     private Category category;
+    /** Drawn by the client (registered as Render / Visuals): hidden in Anti Screenshare's clean frame wherever the layout files it. */
+    private final boolean visual;
+    /** Section inside the category tab (Sword, Crystal, Entities...), set by ModuleLayout. */
+    private String sub = "Other";
     private final boolean i = false;
 
     public Module(CharSequence name, CharSequence description, int keybind, Category category) {
@@ -34,6 +38,15 @@ implements Serializable {
         this.enabled = false;
         this.keybind = keybind;
         this.category = category;
+        this.visual = category == Category.RENDER || category == Category.VISUALS;
+    }
+
+    public String getSub() {
+        return this.sub;
+    }
+
+    public void setSub(String sub) {
+        this.sub = sub == null ? "Other" : sub;
     }
 
     public void toggle() {
@@ -54,7 +67,7 @@ implements Serializable {
 
     public boolean isEnabled() {
         // Anti Screenshare clean frame: render / visual modules count as off, so their drawing (ESP, nametags...) is skipped
-        if (this.enabled && (this.category == Category.RENDER || this.category == Category.VISUALS)) {
+        if (this.enabled && this.visual) {
             if (hook.feature.AntiScreenshareModule.CLEAN_PASS) return false;
             if (hook.feature.AntiScreenshareModule.FULL_PASS) {
                 hook.feature.AntiScreenshareModule.CLIENT_DREW = true;

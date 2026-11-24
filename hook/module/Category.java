@@ -7,13 +7,13 @@ import hook.utils.EncryptedString;
 
 public enum Category {
     COMBAT(EncryptedString.of("Combat")),
-    MACROS(EncryptedString.of("Macros")),
-    MISC(EncryptedString.of("Utility")),
-    DONUT(EncryptedString.of("Base Finder")),
-    GLAZED(EncryptedString.of("Glazed")),
-    RENDER(EncryptedString.of("Render")),
-    VISUALS(EncryptedString.of("Visuals")),
+    RENDER(EncryptedString.of("Vision")),
+    DONUT(EncryptedString.of("Base Hunt")),
+    MISC(EncryptedString.of("Player")),
     AUTOMATION(EncryptedString.of("Automation")),
+    MACROS(EncryptedString.of("Macros")),
+    GLAZED(EncryptedString.of("Glazed")),
+    VISUALS(EncryptedString.of("Cosmetics")),
     CLIENT(EncryptedString.of("Client"));
 
     public final CharSequence name;

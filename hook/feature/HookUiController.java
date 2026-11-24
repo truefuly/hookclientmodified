@@ -409,6 +409,12 @@ public final class HookUiController {
         }
     }
 
+    /** Self-test: jump to a tab with the cards already faded in. */
+    public void testTab(Category var1) {
+        this.selectTab(var1);
+        this.tabT = 10.0f;
+    }
+
     private void selectTab(Category var1) {
         boolean var2 = var1 != this.tab || !this.query.isEmpty() || this.page != null;
         this.tab = var1;
@@ -427,13 +433,13 @@ public final class HookUiController {
         return switch (var0) {
             default -> throw new MatchException(null, null);
             case Category.COMBAT -> UiIcon.SWORD;
-            case Category.MISC -> UiIcon.BOX;
+            case Category.MISC -> UiIcon.USER;
             case Category.MACROS -> UiIcon.BOLT;
-            case Category.DONUT -> UiIcon.DONUT;
+            case Category.DONUT -> UiIcon.GLOBE;
             case Category.GLAZED -> UiIcon.ACTIVITY;
             case Category.RENDER -> UiIcon.EYE;
             case Category.VISUALS -> UiIcon.LAYOUT;
-            case Category.AUTOMATION -> UiIcon.ACTIVITY;
+            case Category.AUTOMATION -> UiIcon.BOLT;
             case Category.CLIENT -> UiIcon.MONITOR;
         };
     }
@@ -542,8 +548,38 @@ public final class HookUiController {
         int var16 = var14 >= this.d(600.0f) ? 2 : 1;
         float var17 = (var14 - this.d(12.0f) * (float)(var16 - 1)) / (float)var16;
         float var18 = this.d(90.0f);
-        int var19 = (var8.size() + var16 - 1) / var16;
-        float var20 = (float)var19 * var18 + (float)Math.max(0, var19 - 1) * this.d(12.0f);
+        // sections inside the tab (Sword, Crystal, Cart...): a header row, then that section's cards
+        if (!var7) {
+            var8 = new java.util.ArrayList<Module>(var8);
+            var8.sort(java.util.Comparator.comparingInt(hook.module.ModuleLayout::subOrder));
+        }
+        float secH = this.d(34.0f);
+        float[] cardX = new float[var8.size()];
+        float[] cardY = new float[var8.size()];
+        java.util.List<Object[]> sections = new java.util.ArrayList<>();
+        float cursor = 0.0f;
+        int col = 0;
+        String lastSub = null;
+        for (int i = 0; i < var8.size(); ++i) {
+            String sub = var8.get(i).getSub();
+            if (!var7 && !sub.equals(lastSub)) {
+                if (col != 0) cursor += var18 + this.d(12.0f);
+                col = 0;
+                if (lastSub != null) cursor += this.d(6.0f);
+                int n = 0;
+                for (int k = i; k < var8.size() && var8.get(k).getSub().equals(sub); ++k) ++n;
+                sections.add(new Object[]{sub, cursor, n});
+                cursor += secH;
+                lastSub = sub;
+            }
+            cardX[i] = var12 + (float)col * (var17 + this.d(12.0f));
+            cardY[i] = cursor;
+            if (++col >= var16) {
+                col = 0;
+                cursor += var18 + this.d(12.0f);
+            }
+        }
+        float var20 = var8.isEmpty() ? 0.0f : (col != 0 ? cursor + var18 : cursor - this.d(12.0f));
         this.gridMax = Math.max(0.0f, var20 - var15);
         float var21 = this.scroll(this.gridScroll, this.gridMax);
         if (var8.isEmpty()) {
@@ -553,12 +589,28 @@ public final class HookUiController {
             // Keep cards, shadows and hover hit areas inside the module viewport.
             var1.pushClip(var12, var13, var14, var15);
             this.hitClip = new float[]{var12, var13, var14, var15};
+            for (int si = 0; si < sections.size(); ++si) {
+                Object[] sec = sections.get(si);
+                float sy = var13 + (Float)sec[1] - var21;
+                if (sy + secH < var13 - this.d(20.0f) || sy > var13 + var15 + this.d(20.0f)) continue;
+                float sa = UiEasing.out((this.tabT - (float)si * 0.05f) / 0.34f);
+                var1.pushAlpha(sa);
+                float ty = sy + this.d(8.0f);
+                var1.round(var12 + this.d(2.0f), ty + this.d(1.0f), this.d(3.0f), this.d(14.0f), this.d(1.5f), UiPalette.accent(0.95f));
+                float tw = var1.text(((String)sec[0]).toUpperCase(java.util.Locale.ROOT), var12 + this.d(13.0f), ty, this.d(13.0f), 1, TEXT);
+                String cnt = String.valueOf(sec[2]);
+                float cx = var12 + this.d(21.0f) + tw;
+                float cw = Math.max(this.d(20.0f), var1.textWidth(cnt, this.d(10.0f), 1) + this.d(12.0f));
+                var1.round(cx, ty - this.d(1.0f), cw, this.d(18.0f), this.d(9.0f), UiRenderer.white(0.06f));
+                var1.textCentered(cnt, cx + cw / 2.0f, ty + this.d(2.5f), this.d(10.0f), 1, UiRenderer.white(0.5f));
+                float lx = cx + cw + this.d(10.0f);
+                if (lx < var12 + var14) var1.rect(lx, ty + this.d(8.0f), var12 + var14 - lx, Math.max(1.0f, this.u), UiRenderer.white(0.06f));
+                var1.popAlpha();
+            }
             for (int var22 = 0; var22 < var8.size(); ++var22) {
                 Module var23 = var8.get(var22);
-                int var24 = var22 % var16;
-                int var25 = var22 / var16;
-                float var26 = var12 + (float)var24 * (var17 + this.d(12.0f));
-                float var27 = var13 + (float)var25 * (var18 + this.d(12.0f)) - var21;
+                float var26 = cardX[var22];
+                float var27 = var13 + cardY[var22] - var21;
                 if (var27 + var18 < var13 - this.d(20.0f) || var27 > var13 + var15 + this.d(20.0f)) continue;
                 float var28 = UiEasing.out((this.tabT - (float)var22 * 0.028f) / 0.34f);
                 var1.pushAlpha(var28);
