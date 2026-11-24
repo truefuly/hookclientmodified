@@ -127,8 +127,9 @@ public final class VerseFallHudAnchors {
 
     private static float[] anchorOf(float x, float y, float w, float h, float sw, float sh) {
         float cx = x + w / 2.0f - sw / 2.0f, cy = y + h / 2.0f - sh / 2.0f;
-        float ax = Math.abs(cx) < sw / 6.0f ? 1 : cx > 0.0f ? 2 : 0;
-        float ay = Math.abs(cy) < sh / 6.0f ? 1 : cy > 0.0f ? 2 : 0;
+        // nearest edge stays put; the middle only when it really sits on the center line (snapped there)
+        float ax = Math.abs(cx) < Math.max(8.0f, sw / 20.0f) ? 1 : cx > 0.0f ? 2 : 0;
+        float ay = Math.abs(cy) < 3.0f ? 1 : cy > 0.0f ? 2 : 0;
         float ox = ax == 1 ? cx : ax == 2 ? sw - x - w : x;
         float oy = ay == 1 ? cy : ay == 2 ? sh - y - h : y;
         return new float[]{ax, ay, ox, oy};

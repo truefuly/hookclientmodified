@@ -446,8 +446,35 @@ final class CartTest {
         if (clock == 335) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.method_22683().method_4490(), 1000, 620);
         if (clock == 370) { report(mc, "small"); shot(mc, "hud_editor_small"); }
         if (clock == 380) mc.method_1507(null);
-        if (clock == 395) { shot(mc, "hud_play_small"); System.out.println("CARTTEST EDITING after close " + HudLayoutEditor.editing); }
-        if (clock == 410) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+        if (clock == 395) { shot(mc, "hud_play_small"); System.out.println("CARTTEST EDITING after close " + HudLayoutEditor.editing); hudSnap = hudBounds(); }
+        // content changes (more effects, a far teleport for longer coordinates) must not move any other element
+        if (clock == 396) {
+            cmd("effect give @s haste 60 1");
+            cmd("effect give @s jump_boost 60 1");
+            cmd("effect give @s fire_resistance 60 0");
+            cmd("effect give @s water_breathing 60 0");
+            cmd("tp @s 1234567 200 -7654321");
+        }
+        if (clock == 425) {
+            java.util.Map<String, float[]> now = hudBounds();
+            int moved = 0;
+            StringBuilder sb = new StringBuilder("CARTTEST HUD stable");
+            for (var e : hudSnap.entrySet()) {
+                float[] a = e.getValue(), b = now.get(e.getKey());
+                if (b == null) continue;
+                // the edge it is anchored to may hold while it grows: compare the corner nearest to its anchor
+                boolean right = a[0] + a[2] / 2 > mc.method_22683().method_4489() / 2.0f, bottom = a[1] + a[3] / 2 > mc.method_22683().method_4506() / 2.0f;
+                float ax = right ? a[0] + a[2] : a[0], bx = right ? b[0] + b[2] : b[0];
+                float ay = bottom ? a[1] + a[3] : a[1], by = bottom ? b[1] + b[3] : b[1];
+                boolean ok = Math.abs(ax - bx) < 1.5f && Math.abs(ay - by) < 1.5f;
+                if (!ok) moved++;
+                sb.append(String.format(java.util.Locale.ROOT, " | %s %.0f,%.0f->%.0f,%.0f %s", e.getKey(), ax, ay, bx, by, ok ? "ok" : "MOVED"));
+            }
+            System.out.println(sb);
+            System.out.println("CARTTEST DONE ok=" + (moved == 0 ? 1 : 0) + "/1");
+            mc.method_1592();
+            phase = 99;
+        }
     }
 
     private static final hook.module.Category[] ESP_TABS = hook.module.Category.values();
@@ -804,6 +831,17 @@ final class CartTest {
             if (b == null) u++; else if (b) n++; else o++;
         }
         System.out.println("CARTTEST NC " + tag + " near(17x17): new=" + n + " old=" + o + " unknown=" + u + " | total new=" + nc.count(true) + " old=" + nc.count(false));
+    }
+
+    private static java.util.Map<String, float[]> hudSnap = new java.util.HashMap<>();
+
+    private static java.util.Map<String, float[]> hudBounds() {
+        java.util.Map<String, float[]> m = new java.util.LinkedHashMap<>();
+        for (HudLayoutEditor.HudSection s : HudLayoutEditor.HudSection.values()) {
+            float[] b = HudModule.instance.editor().boundsOf(s);
+            if (b != null) m.put(s.name(), b.clone());
+        }
+        return m;
     }
 
     private static void report(class_310 mc, String tag) {

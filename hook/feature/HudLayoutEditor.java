@@ -177,6 +177,8 @@ public final class HudLayoutEditor {
         }
     }
 
+    private final java.util.EnumMap<HudSection, float[]> stackSlots = new java.util.EnumMap<>(HudSection.class);
+
     private boolean onHandle(double mx, double my, float fx, float fy, float fw, float fh) {
         float r = this.handleSize() * 0.9f + 2.0f;
         return Math.abs(mx - this.hx(fx + fw)) <= r && Math.abs(my - this.hy(fy + fh)) <= r;
@@ -425,7 +427,15 @@ public final class HudLayoutEditor {
             this.editFrame(var1, var2, var19, var20, var16, var17, var8, var10);
         }
         boolean var23 = ((var22 = this.places.get((Object)var2)) == null || !var22.moved) && var2 != HudSection.COORDS;
-        return var23 ? var6 + (var17 + this.d(7.0f)) * var21 : var6;
+        if (!var23) return var6;
+        // the column of not-yet-moved elements: each one keeps the tallest height it had, so the elements below
+        // never jump up and down when its content gets shorter or longer for a moment
+        float sc = this.scaleOf(var2);
+        float[] slot = this.stackSlots.get(var2);
+        float norm = var17 / Math.max(0.01f, baseU);
+        if (slot == null || slot[1] != sc) this.stackSlots.put(var2, slot = new float[]{norm, sc});
+        else if (norm > slot[0]) slot[0] = norm;
+        return var6 + (slot[0] * baseU + this.d(7.0f)) * var21;
     }
 
     private void glass(UiRenderer var1, float var2, float var3, float var4, float var5, float var6, adhvjlahyjurfh var7) {
@@ -940,8 +950,10 @@ public final class HudLayoutEditor {
         // centered (and edge elements stay at their edge) when the window is resized
         float cx = var2 + var4 / 2.0f - (float)var6 / 2.0f;
         float cy = var3 + var5 / 2.0f - (float)var7 / 2.0f;
-        var1.centerX = Math.abs(cx) < (float)var6 / 6.0f;
-        var1.centerY = Math.abs(cy) < (float)var7 / 6.0f;
+        // the edge nearest to it is what stays put (content that grows grows away from that edge); the middle only
+        // when it really sits on the center line, otherwise it would grow both ways and seem to wander
+        var1.centerX = Math.abs(cx) < Math.max(8.0f, (float)var6 / 20.0f);
+        var1.centerY = Math.abs(cy) < 3.0f;
         var1.right = !var1.centerX && cx > 0.0f;
         var1.bottom = !var1.centerY && cy > 0.0f;
         var1.ox = (var1.centerX ? cx : var1.right ? (float)var6 - var2 - var4 : var2) / this.u;
