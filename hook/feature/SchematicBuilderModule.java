@@ -336,6 +336,8 @@ public final class SchematicBuilderModule extends Module {
         this.doneLog.clear();
         this.lastDone = -1;
         this.announcedDone = false;
+        this.scaffoldWarned = false;
+        this.scaffoldWaits = 0;
         this.missingUntil.clear();
         this.toIdle();
     }
@@ -1191,6 +1193,35 @@ public final class SchematicBuilderModule extends Module {
                 double d = pl.method_33571().method_1025(class_243.method_24953(p));
                 if (d < d2) { d2 = d; best = p; }
             }
+            if (best == null) {
+                // some scaffolding is left that failed a moment ago: not finished yet, try again from elsewhere
+                int left = 0;
+                class_2338 any = null;
+                for (Long l : this.scaffoldPlaced) {
+                    class_2338 p = class_2338.method_10092(l);
+                    if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue;
+                    if (this.failCount.getOrDefault(l, 0) >= 6) continue; // given up on it
+                    left++;
+                    any = p;
+                }
+                if (left > 0) {
+                    this.status = "Removing scaffolding";
+                    this.waitTicks = 20;
+                    if (++this.scaffoldWaits % 5 == 0 && this.newViewpoint(w, pl)) return;
+                    return;
+                }
+                if (!this.scaffoldPlaced.isEmpty() && !this.scaffoldWarned) {
+                    this.scaffoldWarned = true;
+                    StringBuilder at = new StringBuilder();
+                    int n = 0;
+                    for (Long l : this.scaffoldPlaced) {
+                        class_2338 p = class_2338.method_10092(l);
+                        if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue;
+                        if (n++ < 3) at.append(at.length() == 0 ? "" : ", ").append(p.method_10263()).append(' ').append(p.method_10264()).append(' ').append(p.method_10260());
+                    }
+                    if (n > 0) this.say("§e" + n + " scaffold block(s) could not be removed: " + at + (n > 3 ? "..." : ""));
+                }
+            }
             if (best != null) {
                 this.status = "Removing scaffolding";
                 Task t = new Task(best, net.minecraft.class_2246.field_10124.method_9564(), false);
@@ -2029,8 +2060,12 @@ public final class SchematicBuilderModule extends Module {
         this.breakPos = p;
         this.mode = Mode.BREAK;
         this.modeTicks = 0;
+        this.breakAimMiss = 0;
         this.status = t != null && t.place ? "Fixing wrong block" : "Breaking";
     }
+
+    private int breakAimMiss, scaffoldWaits;
+    private boolean scaffoldWarned;
 
     /** A face of the block the player can really see from here (null = hidden). */
     private class_3965 visibleFace(class_638 w, class_746 pl, class_2338 p) {
@@ -2087,7 +2122,14 @@ public final class SchematicBuilderModule extends Module {
         if (face == null) { this.mc.field_1761.method_2925(); this.fail(p, 10_000L, "breakface"); this.toIdle(); return; }
         this.keys(false, false, false, false);
         this.holdTool(pl, st, p);
-        this.aimAndMine(w, pl, p, face);
+        if (this.aimAndMine(w, pl, p, face)) this.breakAimMiss = 0;
+        else if (++this.breakAimMiss > 50) {
+            // the crosshair never gets onto it from here (only a corner shows): try it from another spot
+            this.mc.field_1761.method_2925();
+            this.badSpots.put(feet(pl).method_10063(), System.currentTimeMillis() + 60_000L);
+            this.fail(p, 4_000L, "breakaim");
+            this.toIdle();
+        }
     }
 
     // ================================================================== walking
@@ -2122,6 +2164,7 @@ public final class SchematicBuilderModule extends Module {
         class_1792 item = t != null && t.place ? itemFor(t.want) : null;
         return this.walk(w, pl, p -> {
             if (p.method_10063() == tk || p.method_10084().method_10063() == tk) return false;
+            if (this.badSpots.containsKey(p.method_10063())) return false; // gave nothing from there just now
             double ex = p.method_10263() + 0.5 - c.field_1352, ey = p.method_10264() + 1.27 - c.field_1351, ez = p.method_10260() + 0.5 - c.field_1350;
             double d2 = ex * ex + ey * ey + ez * ez;
             if (d2 > reach * reach || d2 < 0.3) return false;
