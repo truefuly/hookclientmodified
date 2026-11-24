@@ -603,6 +603,7 @@ final class CartTest {
             cmd("give @s diamond_axe");
             cmd("give @s diamond_hoe");
             cmd("give @s diamond_sword");
+            cmd("give @s torch 16");
             sbChest = new net.minecraft.class_2338(bx - 3, -60, bz);
             cmd("setblock " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " chest");
             if (most != null) {
@@ -615,7 +616,7 @@ final class CartTest {
             System.out.println("CARTTEST SB materials " + sb2 + "| in chest: " + (most == null ? "-" : net.minecraft.class_7923.field_41178.method_10221(most)));
         }
         if (clock == 300 && sb != null && !sb.isEnabled()) sb.setEnabled(true);
-        if (clock == 302 && sb != null) sb.testMarkStorage(sbChest);
+        if (clock == 302 && sb != null) { sb.testMarkStorage(sbChest); sb.testLightUp(); }
         // the pause menu (made non-pausing like on a server) open for the first minute (chest trip included): it must keep building
         if (clock == 340) {
             sbMenuDone = SchematicBuilderModule.progress() == null ? 0 : SchematicBuilderModule.progress().done();
@@ -678,6 +679,12 @@ final class CartTest {
                 int boxes = 0;
                 for (int i = 0; i < 36; i++) if (p.method_31548().method_5438(i).method_7909() == net.minecraft.class_1802.field_8545) boxes++;
                 System.out.println("CARTTEST SB shulker boxes in inventory at the end: " + boxes);
+                int torches = 0;
+                if (bb != null) for (int x = bb[0] - 8; x <= bb[3] + 8; x++) for (int z = bb[2] - 8; z <= bb[5] + 8; z++) for (int y = bb[1] - 3; y <= bb[1] + 2; y++) {
+                    if (x >= bb[0] && x <= bb[3] && z >= bb[2] && z <= bb[5]) continue;
+                    if (mc.field_1687.method_8320(new net.minecraft.class_2338(x, y, z)).method_26204() == net.minecraft.class_2246.field_10336) torches++;
+                }
+                System.out.println("CARTTEST SB torches around the build: " + torches);
                 SbAcTest.report();
                 System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
                 sb.setEnabled(false);

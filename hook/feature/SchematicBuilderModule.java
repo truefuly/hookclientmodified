@@ -79,6 +79,7 @@ public final class SchematicBuilderModule extends Module {
     private final BooleanSetting finishStates = new BooleanSetting(EncryptedString.of("Finish States"), true);
     private final BooleanSetting layersOnly = new BooleanSetting(EncryptedString.of("Only Visible Layers"), true);
     private final BooleanSetting defend = new BooleanSetting(EncryptedString.of("Defend Yourself"), true);
+    private final BooleanSetting lightUp = new BooleanSetting(EncryptedString.of("Light Up Area"), false);
     private final BooleanSetting redstoneLast = new BooleanSetting(EncryptedString.of("Redstone Last"), true);
 
     static SchematicBuilderModule instance;
@@ -206,12 +207,13 @@ public final class SchematicBuilderModule extends Module {
         this.placeWater.setDescription(EncryptedString.of("Places the water sources of the schematic (farms...) with water buckets - always last."));
         this.finishStates.setDescription(EncryptedString.of("Clicks repeaters, comparators, note blocks and trapdoors to the right setting, makes double slabs / more candles, tills farmland, strips logs and waterlogs blocks like the schematic."));
         this.layersOnly.setDescription(EncryptedString.of("Only builds the layers Litematica shows (its layer range): build a big schematic layer by layer."));
+        this.lightUp.setDescription(EncryptedString.of("Places torches on dark ground around the build (block light 0, where mobs spawn at night) - like you light up around your base. Needs torches."));
         this.defend.setDescription(EncryptedString.of("Hits hostile mobs that come close (with your best sword or axe) instead of letting them kill you."));
         this.redstoneLast.setDescription(EncryptedString.of("Places observers, pistons, redstone and power sources after the blocks around them, so half-built machines don't fire."));
         ButtonSetting mats = new ButtonSetting(EncryptedString.of("Show Missing Materials"), this::listMaterials);
         this.addSettings(this.scaffold, this.speed, this.human, this.antiCheat, this.breakWrong, this.clearArea, this.breakObstacles, this.useScaffold,
                 this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, mats, this.pauseHealth, this.autoEat, this.eatBelow, this.saveTools,
-                this.autoMend, this.placeWater, this.finishStates, this.redstoneLast, this.layersOnly, this.defend, this.render);
+                this.autoMend, this.placeWater, this.finishStates, this.redstoneLast, this.layersOnly, this.defend, this.lightUp, this.render);
         instance = this;
     }
 
@@ -312,6 +314,8 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private void resetAll() {
+        this.lightPos.clear();
+        this.torchesPlaced = 0;
         this.shulkerPos = null;
         this.shulkerStage = 0;
         this.shulkerCheckAt = 0;
@@ -667,6 +671,8 @@ public final class SchematicBuilderModule extends Module {
         if (this.tryRefill(w, pl)) return;
         // material we need is in a shulker box we carry: set it down, take it out, pick the box up again
         if (this.tryShulker(w, pl)) return;
+        // dark ground around the build: a torch, so no mobs spawn next to us
+        if (this.tryLight(w, pl)) return;
         // restock when the scaffold block runs low or the nearby work needs something we don't carry
         if (this.useStorage.getValue() && !this.storage.isEmpty() && this.wantsRestock(pl)) {
             if (this.startRestock(w, pl)) return;
@@ -1456,7 +1462,8 @@ public final class SchematicBuilderModule extends Module {
             this.stuckRetries = 0;
             this.escape = false;
             this.placedByMe.add(t.pos.method_10063());
-            if (!this.helperPos.contains(t.pos.method_10063()) && t.kind == SbFix.PLACE) { this.verify.put(t.pos.method_10063(), this.tickNo); this.verifyWant.put(t.pos.method_10063(), stepWant); }
+            if (this.lightPos.contains(t.pos.method_10063())) this.torchesPlaced++;
+            else if (!this.helperPos.contains(t.pos.method_10063()) && t.kind == SbFix.PLACE) { this.verify.put(t.pos.method_10063(), this.tickNo); this.verifyWant.put(t.pos.method_10063(), stepWant); }
             if (this.helperPos.remove(t.pos.method_10063())) this.scaffoldPlaced.add(t.pos.method_10063());
             this.touched(t.pos);
             this.waitTicks = 1;
@@ -2009,6 +2016,61 @@ public final class SchematicBuilderModule extends Module {
             }
             default -> this.shulkerDone("?");
         }
+    }
+
+    // ================================================================== torches against mob spawns
+
+    /** Torches we place around the build (not part of the schematic). */
+    private final Set<Long> lightPos = new HashSet<>();
+    private long lightCheckAt;
+    private int torchesPlaced;
+
+    /**
+     * Light Up Area: dark ground next to the build (block light 0, where mobs spawn at night) gets a torch, like a
+     * player lights up around their base. Only within reach, outside the build, a torch lights about 12 blocks.
+     */
+    /** Self-test: light up around the build. */
+    void testLightUp() {
+        this.lightUp.setValue(true);
+    }
+
+    private boolean tryLight(class_638 w, class_746 pl) {
+        if (!this.lightUp.getValue() || this.tasks.isEmpty()) return false;
+        long now = System.currentTimeMillis();
+        if (now < this.lightCheckAt) return false;
+        this.lightCheckAt = now + 4000L;
+        class_1792 torch = class_1802.field_8810;
+        if (this.count(torch) == 0 || !(torch instanceof class_1747 ti)) return false;
+        if (this.placement == null) return false;
+        int[] b = SbLitematica.box(this.placement);
+        if (b == null) return false;
+        class_2680 want = ti.method_7711().method_9564();
+        class_2338 f = feet(pl);
+        class_243 eye = pl.method_33571();
+        class_2338 best = null;
+        double bd = Double.MAX_VALUE;
+        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) for (int dy = -2; dy <= 1; dy++) {
+            class_2338 q = f.method_10069(dx, dy, dz);
+            if (this.inBox(q) || this.lightPos.contains(q.method_10063()) || this.storage.contains(q.method_10063())) continue;
+            // only the ground around the build (8 blocks), not anywhere we walk
+            int x = q.method_10263(), y = q.method_10264(), z = q.method_10260();
+            if (x < b[0] - 8 || x > b[3] + 8 || z < b[2] - 8 || z > b[5] + 8 || y < b[1] - 3 || y > b[4]) continue;
+            if (!w.method_8320(q).method_26215() || w.method_8314(net.minecraft.class_1944.field_9282, q) > 0) continue;
+            if (!SbWorld.floor(w, q.method_10074()) || !want.method_26184(w, q)) continue;
+            double d = dx * dx + dz * dz + dy * dy;
+            if (d < 1.5 || d > bd) continue;
+            if (SbPlacer.find(this.mc, q, want, ti, eye, this.reach()) == null) continue;
+            bd = d;
+            best = q;
+        }
+        if (best == null) return false;
+        dbg("light: torch at " + best.method_23854());
+        this.lightPos.add(best.method_10063());
+        this.task = new Task(best, want, true);
+        this.mode = Mode.PLACE;
+        this.modeTicks = 0;
+        this.status = "Placing a torch";
+        return true;
     }
 
     // ================================================================== legit actions (what a player could do)
