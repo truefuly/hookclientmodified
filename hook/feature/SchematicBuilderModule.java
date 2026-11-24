@@ -233,7 +233,7 @@ public final class SchematicBuilderModule extends Module {
     String testStatus() {
         StringBuilder r = new StringBuilder();
         if (this.tasks.size() <= 10) for (Task t : this.tasks.values()) r.append(' ').append(t.place ? "" : "x").append(t.pos.method_23854().replace(" ", "")).append(this.failedUntil.containsKey(t.pos.method_10063()) ? "F" : "");
-        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + r;
+        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + " cut=" + this.walksCut + r;
     }
 
     // ================================================================== HUD
@@ -2468,6 +2468,13 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         SbPath.Step s = this.path.get(this.pathIdx);
+        // the block we walk to is already in reach from here: stop and build it (no creeping to the planned spot)
+        if (this.reachableEarly(w, pl, s)) {
+            this.walksCut++;
+            this.toIdle();
+            this.stuckLevel = 0;
+            return;
+        }
         // obstacles first
         for (class_2338 b : s.breaks()) {
             if (!SbWorld.passable(w, b)) {
@@ -2545,6 +2552,25 @@ public final class SchematicBuilderModule extends Module {
         boolean sprint = !sneak && this.path.size() - this.pathIdx > 5 && diff < 20 && !pl.method_5799();
         this.keys(diff < 60, jump, sprint, sneak);
         this.progress(horiz + Math.abs(dy), w, pl, s);
+    }
+
+    private int walksCut;
+
+    private boolean reachableEarly(class_638 w, class_746 pl, SbPath.Step s) {
+        class_2338 hint = this.walkGoalHint;
+        if (hint == null || this.arrived == null || (this.tickNo & 3) != 0 || !pl.method_24828()) return false;
+        if (s.move() == SbPath.Move.PILLAR || s.move() == SbPath.Move.BRIDGE || !s.breaks().isEmpty()) return false;
+        if (!this.status.equals("Walking")) return false; // only walks to a block of the build (not chests, water...)
+        Task t = this.tasks.get(hint.method_10063());
+        if (t == null || this.failedUntil.containsKey(hint.method_10063())) return false;
+        class_243 eye = new class_243(pl.method_23317(), pl.method_23318() + 1.27, pl.method_23321());
+        double r = this.reach();
+        if (eye.method_1025(class_243.method_24953(hint)) > r * r) return false;
+        if (!t.place) return this.visibleFace(w, pl, hint, eye) != null;
+        if (t.interact()) return this.interactFace(w, pl, t, eye) != null;
+        if (isWater(t.want)) return false;
+        class_1792 item = this.requiredItem(t);
+        return item instanceof class_1747 bi && this.count(item) > 0 && this.solution(t, bi, eye, r) != null;
     }
 
     private void nextStep() {
