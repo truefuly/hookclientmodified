@@ -312,6 +312,7 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private void resetAll() {
+        this.buildItems.clear();
         this.placement = null;
         this.badSpots.clear();
         this.lastSpot = Long.MIN_VALUE;
@@ -529,6 +530,12 @@ public final class SchematicBuilderModule extends Module {
                 continue;
             }
             total++;
+            if (!SbWorld.matches(want, have)) {
+                // remember what the build still needs, so a full inventory never drops it into a chest
+                this.buildItems.add(itemFor(want));
+                class_2680 base = SbFix.convertBase(want);
+                if (base != null) this.buildItems.add(itemFor(base));
+            }
             if (want.method_26204() == class_2246.field_10382) {
                 // water: sources get placed with a bucket (farms), flowing water comes by itself
                 boolean src = want.toString().contains("level=0");
@@ -2481,6 +2488,9 @@ public final class SchematicBuilderModule extends Module {
         this.saveStorage();
     }
 
+    /** Items still needed somewhere in the build (also for blocks whose turn has not come yet: kelp after its water...). */
+    private final Set<class_1792> buildItems = new HashSet<>();
+
     private boolean wantsRestock(class_746 pl) {
         Map<class_1792, Integer> need = this.needs(pl);
         return !need.isEmpty();
@@ -2616,7 +2626,9 @@ public final class SchematicBuilderModule extends Module {
         if (free < 4) {
             Set<class_1792> useful = new HashSet<>();
             for (Task t : this.tasks.values()) if (t.place && this.requiredItem(t) != null) useful.add(this.requiredItem(t));
+            useful.addAll(this.buildItems);
             useful.add(class_1802.field_8705);
+            useful.add(itemById("bucket"));
             useful.add(this.scaffoldItem());
             for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
                 class_1799 st = h.method_7611(i).method_7677();
@@ -2659,6 +2671,8 @@ public final class SchematicBuilderModule extends Module {
 
     static boolean isTool(class_1799 s) {
         if (s.method_7960()) return false;
+        // anything that wears out (hoes, swords, shears, flint and steel...): never junk
+        if (s.method_7963()) return true;
         return s.method_7924(class_2246.field_10340.method_9564()) > 1.5f || s.method_7924(class_2246.field_10566.method_9564()) > 1.5f
                 || s.method_7924(class_2246.field_10431.method_9564()) > 1.5f;
     }
