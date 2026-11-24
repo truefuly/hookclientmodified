@@ -233,7 +233,7 @@ public final class SchematicBuilderModule extends Module {
     String testStatus() {
         StringBuilder r = new StringBuilder();
         if (this.tasks.size() <= 10) for (Task t : this.tasks.values()) r.append(' ').append(t.place ? "" : "x").append(t.pos.method_23854().replace(" ", "")).append(this.failedUntil.containsKey(t.pos.method_10063()) ? "F" : "");
-        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + " cut=" + this.walksCut + " pillarBuilt=" + this.pillarBuilt + r;
+        return this.mode + " / " + this.status + " tasks=" + this.tasks.size() + " scaffold=" + this.scaffoldPlaced.size() + " cut=" + this.walksCut + " pillarBuilt=" + this.pillarBuilt + " saved=" + this.savedBlocks + r;
     }
 
     // ================================================================== HUD
@@ -2277,6 +2277,14 @@ public final class SchematicBuilderModule extends Module {
      * False while still turning.
      */
     private boolean aimAndMine(class_638 w, class_746 pl, class_2338 p, class_3965 face) {
+        if (this.correctInBuild(w, p) && !this.escape && !p.equals(this.unseal)) {
+            if (this.guardLogged.add(p.method_10063())) {
+                this.savedBlocks++;
+                dbg("refused to break correct " + p.method_23854() + " (" + this.mode + ", " + this.status + ")");
+            }
+            if (this.mode == Mode.BREAK) this.toIdle();
+            return false;
+        }
         float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
         boolean there = this.rotateTo(pl, rot[0], rot[1], 1.0f);
         class_3965 hit = this.crosshair(pl);
@@ -2395,7 +2403,19 @@ public final class SchematicBuilderModule extends Module {
 
     // ================================================================== breaking
 
+    private final Set<Long> guardLogged = new HashSet<>();
+    private int savedBlocks;
+
+    /** The block there is already exactly what the schematic wants: never mine it (the build would go backwards). */
+    private boolean correctInBuild(class_638 w, class_2338 p) {
+        class_1937 sw = SbLitematica.world();
+        if (sw == null || !this.inBox(p)) return false;
+        class_2680 want = SbLitematica.target(sw, p);
+        return !want.method_26215() && SbWorld.matches(want, w.method_8320(p));
+    }
+
     private void startBreak(class_2338 p, Task t) {
+        if (System.getProperty("hook.carttest") != null) dbg("break " + p.method_23854() + " " + this.mc.field_1687.method_8320(p).method_26204().method_9518().getString() + " (" + this.status + ")");
         this.task = t;
         this.breakPos = p;
         this.mode = Mode.BREAK;
@@ -2587,6 +2607,8 @@ public final class SchematicBuilderModule extends Module {
         for (class_2338 b : s.breaks()) {
             if (!SbWorld.passable(w, b)) {
                 if (!SbWorld.breakable(w, b)) { this.replan(w, pl, s.pos()); return; }
+                // planned while it was still wrong or missing, built correctly since: go around instead
+                if (this.correctInBuild(w, b) && !this.escape) { this.savedBlocks++; dbg("path would break built " + b.method_23854() + " - new path"); this.replan(w, pl, s.pos()); return; }
                 this.keys(false, false, false, false);
                 class_3965 face = this.visibleFace(w, pl, b);
                 if (face == null) { this.replan(w, pl, s.pos()); return; }
