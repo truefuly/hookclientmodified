@@ -91,9 +91,21 @@ final class SbWorld {
         return !liquidBeside(w, p);
     }
 
-    /** The placed block is what the schematic wants (same block, same facing / half / axis...). */
-    @SuppressWarnings({"rawtypes"})
+    static boolean important(String prop) {
+        return IMPORTANT.contains(prop);
+    }
+
+    /**
+     * The placed block is finished: right shape and also the states you set by clicking it (repeater delay, comparator
+     * mode, note, open trapdoors...) and the counted ones (double slab, candles, layers...).
+     */
     static boolean matches(class_2680 want, class_2680 have) {
+        return matchesShape(want, have) && SbFix.extraMatch(want, have);
+    }
+
+    /** Same block, same facing / half / axis... (what placing decides). */
+    @SuppressWarnings({"rawtypes"})
+    static boolean matchesShape(class_2680 want, class_2680 have) {
         if (want.method_26204() != have.method_26204()) return false;
         for (Map.Entry<class_2769<?>, Comparable<?>> e : want.method_11656().entrySet()) {
             class_2769 prop = e.getKey();

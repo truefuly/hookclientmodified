@@ -153,6 +153,46 @@ final class SbLitematica {
         }
     }
 
+    private static Method getLayerRange, inRangeXYZ, inRangePos;
+    private static boolean layerTried;
+
+    /** Litematica's render layer range (what layers it shows), or null. */
+    static Object layerRange() {
+        if (!available()) return null;
+        try {
+            if (!layerTried) {
+                layerTried = true;
+                getLayerRange = Class.forName("fi.dy.masa.litematica.data.DataManager").getMethod("getRenderLayerRange");
+                Class<?> c = getLayerRange.getReturnType();
+                try { inRangeXYZ = c.getMethod("isPositionWithinRange", int.class, int.class, int.class); } catch (Throwable ignored) { }
+                try { inRangePos = c.getMethod("isPositionWithinRange", class_2338.class); } catch (Throwable ignored) { }
+            }
+            return getLayerRange == null ? null : getLayerRange.invoke(null);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    static boolean inLayers(Object range, int x, int y, int z) {
+        try {
+            if (inRangeXYZ != null) return (Boolean) inRangeXYZ.invoke(range, x, y, z);
+            if (inRangePos != null) return (Boolean) inRangePos.invoke(range, new class_2338(x, y, z));
+        } catch (Throwable ignored) {
+        }
+        return true;
+    }
+
+    /** Changes whenever the shown layers change (mode, axis, range). */
+    static String layerKey() {
+        Object r = layerRange();
+        if (r == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String m : new String[]{"getLayerMode", "getAxis", "getLayerSingle", "getLayerRangeMin", "getLayerRangeMax", "getLayerAbove", "getLayerBelow"}) {
+            try { sb.append(r.getClass().getMethod(m).invoke(r)).append('|'); } catch (Throwable ignored) { }
+        }
+        return sb.toString();
+    }
+
     static class_2680 target(class_1937 w, class_2338 pos) {
         return w.method_8320(pos);
     }

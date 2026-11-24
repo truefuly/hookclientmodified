@@ -76,6 +76,10 @@ public final class SchematicBuilderModule extends Module {
     private final BooleanSetting saveTools = new BooleanSetting(EncryptedString.of("Save Tools"), true);
     private final BooleanSetting autoMend = new BooleanSetting(EncryptedString.of("Auto Mend"), true);
     private final BooleanSetting placeWater = new BooleanSetting(EncryptedString.of("Place Water"), true);
+    private final BooleanSetting finishStates = new BooleanSetting(EncryptedString.of("Finish States"), true);
+    private final BooleanSetting layersOnly = new BooleanSetting(EncryptedString.of("Only Visible Layers"), true);
+    private final BooleanSetting defend = new BooleanSetting(EncryptedString.of("Defend Yourself"), true);
+    private final BooleanSetting redstoneLast = new BooleanSetting(EncryptedString.of("Redstone Last"), true);
 
     static SchematicBuilderModule instance;
     private final Random rnd = new Random();
@@ -87,6 +91,9 @@ public final class SchematicBuilderModule extends Module {
     private int totalBlocks;
     private String schematicName = "";
     private final Map<Long, int[]> chunkStats = new HashMap<>(); // chunk -> {total, done, unbuildable}
+    /** Chunks where Litematica's layer range hides part of the schematic (progress counts only what is shown). */
+    private final Set<Long> limitedChunks = new HashSet<>();
+    private String layerKey = "";
     private final Map<Long, Long> chunkScannedAt = new HashMap<>();
     private final Map<Long, List<Long>> chunkTasks = new HashMap<>();
     private final Map<Long, Task> tasks = new HashMap<>();
@@ -125,11 +132,19 @@ public final class SchematicBuilderModule extends Module {
     private final ArrayDeque<long[]> doneLog = new ArrayDeque<>(); // {time ms, blocks}
     private int lastDone = -1;
 
-    private record Task(class_2338 pos, class_2680 want, boolean place) {
+    /** kind: SbFix.PLACE / ADJUST (click it) / GROW (click it again with the item) / CONVERT (tool) / WATERLOG. */
+    private record Task(class_2338 pos, class_2680 want, boolean place, int kind) {
+        Task(class_2338 pos, class_2680 want, boolean place) {
+            this(pos, want, place, SbFix.PLACE);
+        }
+
+        boolean interact() {
+            return this.kind == SbFix.ADJUST || this.kind == SbFix.CONVERT || this.kind == SbFix.WATERLOG;
+        }
     }
 
     // ------------------------------------------------------------------ state machine
-    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE }
+    private enum Mode { IDLE, PLACE, BREAK, WALK, OPEN_CHEST, TRANSFER, ESCAPE, INTERACT }
 
     private Mode mode = Mode.IDLE;
     private String status = "Starting";
@@ -189,9 +204,14 @@ public final class SchematicBuilderModule extends Module {
         this.saveTools.setDescription(EncryptedString.of("Never uses a tool that is about to break."));
         this.autoMend.setDescription(EncryptedString.of("When XP orbs are around, puts a damaged Mending item in the offhand so it gets repaired."));
         this.placeWater.setDescription(EncryptedString.of("Places the water sources of the schematic (farms...) with water buckets - always last."));
+        this.finishStates.setDescription(EncryptedString.of("Clicks repeaters, comparators, note blocks and trapdoors to the right setting, makes double slabs / more candles, tills farmland, strips logs and waterlogs blocks like the schematic."));
+        this.layersOnly.setDescription(EncryptedString.of("Only builds the layers Litematica shows (its layer range): build a big schematic layer by layer."));
+        this.defend.setDescription(EncryptedString.of("Hits hostile mobs that come close (with your best sword or axe) instead of letting them kill you."));
+        this.redstoneLast.setDescription(EncryptedString.of("Places observers, pistons, redstone and power sources after the blocks around them, so half-built machines don't fire."));
+        ButtonSetting mats = new ButtonSetting(EncryptedString.of("Show Missing Materials"), this::listMaterials);
         this.addSettings(this.scaffold, this.speed, this.human, this.antiCheat, this.breakWrong, this.clearArea, this.breakObstacles, this.useScaffold,
-                this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, this.pauseHealth, this.autoEat, this.eatBelow, this.saveTools,
-                this.autoMend, this.placeWater, this.render);
+                this.cleanup, this.maxFall, this.useStorage, this.markKey, clear, mats, this.pauseHealth, this.autoEat, this.eatBelow, this.saveTools,
+                this.autoMend, this.placeWater, this.finishStates, this.redstoneLast, this.layersOnly, this.defend, this.render);
         instance = this;
     }
 
@@ -230,7 +250,7 @@ public final class SchematicBuilderModule extends Module {
         if (this.placement == null) return new Progress("No schematic", 0, 0, 0, "", this.status, true);
         int done = 0, unb = 0;
         for (int[] s : this.chunkStats.values()) { done += s[1]; unb += s[2]; }
-        int total = Math.max(1, (this.totalBlocks > 0 ? this.totalBlocks : this.scannedTotal()) - unb);
+        int total = Math.max(1, (this.totalBlocks > 0 && this.limitedChunks.isEmpty() ? this.totalBlocks : this.scannedTotal()) - unb);
         done = Math.min(done, total);
         double pct = done * 100.0 / total;
         String eta = "";
@@ -305,6 +325,7 @@ public final class SchematicBuilderModule extends Module {
         SbAcTest.reset();
         this.signature = "";
         this.chunkStats.clear();
+        this.limitedChunks.clear();
         this.chunkScannedAt.clear();
         this.chunkTasks.clear();
         this.tasks.clear();
@@ -389,6 +410,7 @@ public final class SchematicBuilderModule extends Module {
             return;
         }
         if ((pl.method_5771() || pl.method_5809() || SbWorld.nearLava(w, feet(pl))) && this.mode != Mode.ESCAPE) this.startEscape(w, pl);
+        if (this.tickDefend(w, pl)) return;
 
         if (this.waitTicks > 0) {
             this.waitTicks--;
@@ -405,6 +427,7 @@ public final class SchematicBuilderModule extends Module {
             case OPEN_CHEST -> this.tickOpenChest(w, pl);
             case TRANSFER -> this.tickTransfer(w, pl);
             case ESCAPE -> this.tickEscape(w, pl);
+            case INTERACT -> this.tickInteract(w, pl);
         }
     }
 
@@ -444,6 +467,13 @@ public final class SchematicBuilderModule extends Module {
             this.say((first ? "Building " : "Schematic changed - now building ") + "§e" + this.schematicName + "§f ("
                     + (this.box[3] - this.box[0] + 1) + "x" + (this.box[4] - this.box[1] + 1) + "x" + (this.box[5] - this.box[2] + 1) + ")");
         }
+        if (this.tickNo % 20 == 0) {
+            String lk = this.layersOnly.getValue() ? SbLitematica.layerKey() : "";
+            if (!lk.equals(this.layerKey)) {
+                if (!this.layerKey.isEmpty() || !lk.isEmpty()) { this.chunkScannedAt.clear(); this.announcedDone = false; }
+                this.layerKey = lk;
+            }
+        }
         return this.box != null;
     }
 
@@ -478,10 +508,14 @@ public final class SchematicBuilderModule extends Module {
         if (old != null) for (Long p : old) this.tasks.remove(p);
         List<Long> list = new ArrayList<>();
         int total = 0, done = 0, unb = 0;
+        boolean limited = false;
+        Object layers = this.layersOnly.getValue() ? SbLitematica.layerRange() : null;
+        boolean fix = this.finishStates.getValue();
         class_2338.class_2339 m = new class_2338.class_2339();
         for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) for (int y = y0; y <= y1; y++) {
             m.method_10103(x, y, z);
             class_2680 want = sw.method_8320(m);
+            if (layers != null && !want.method_26215() && !SbLitematica.inLayers(layers, x, y, z)) { limited = true; continue; }
             class_2680 have = w.method_8320(m);
             if (want.method_26215()) {
                 if (this.clearArea.getValue() && !have.method_26215() && !have.method_45474() && SbWorld.breakable(w, m)) {
@@ -508,7 +542,39 @@ public final class SchematicBuilderModule extends Module {
                 }
                 continue;
             }
-            if (SbWorld.matches(want, have)) { done++; continue; }
+            if (SbWorld.matches(want, have)) {
+                // waterlogged in the schematic: pour water into it (last, like water)
+                if (fix && SbFix.waterlogged(want) && !SbFix.waterlogged(have) && SbFix.get(have, "waterlogged") != null && this.placeWater.getValue()
+                        && !this.skipped.contains(m.method_10063())) {
+                    class_2338 p = m.method_10062();
+                    this.tasks.put(p.method_10063(), new Task(p, want, true, SbFix.WATERLOG));
+                    list.add(p.method_10063());
+                    continue;
+                }
+                done++;
+                continue;
+            }
+            if (fix && !this.skipped.contains(m.method_10063()) && !SbWorld.secondaryPart(want)) {
+                // the right block is there but needs a click (repeater delay...), another item on it (double slab,
+                // candles...) or a tool (farmland, path, stripped log): no need to break it
+                int kind = SbFix.grows(want, have) ? SbFix.GROW : SbFix.clicks(want, have) > 0 ? SbFix.ADJUST
+                        : SbFix.convertBase(want) != null && SbFix.convertsFrom(want, have) ? SbFix.CONVERT : -1;
+                if (kind >= 0) {
+                    class_2338 p = m.method_10062();
+                    this.tasks.put(p.method_10063(), new Task(p, want, true, kind));
+                    list.add(p.method_10063());
+                    continue;
+                }
+                class_2680 base = SbFix.convertBase(want);
+                if (base != null && (have.method_26215() || have.method_45474())
+                        && (SbFix.needsAirAbove(want) || this.count(want.method_26204().method_8389()) == 0 && this.count(base.method_26204().method_8389()) > 0)) {
+                    // farmland / path / stripped log: place the dirt or the log first, then use the tool on it
+                    class_2338 p = m.method_10062();
+                    this.tasks.put(p.method_10063(), new Task(p, base, true));
+                    list.add(p.method_10063());
+                    continue;
+                }
+            }
             class_1792 item = want.method_26204().method_8389();
             boolean noItem = !(item instanceof class_1747) || !want.method_26227().method_15769() && want.method_26204() instanceof net.minecraft.class_2404;
             if (SbWorld.secondaryPart(want)) {
@@ -527,6 +593,8 @@ public final class SchematicBuilderModule extends Module {
             }
         }
         this.chunkStats.put(key, new int[]{total, done, unb});
+        if (limited) this.limitedChunks.add(key);
+        else this.limitedChunks.remove(key);
         this.chunkTasks.put(key, list);
         this.chunkScannedAt.put(key, now);
         this.dirtyChunks.remove(key);
@@ -583,8 +651,8 @@ public final class SchematicBuilderModule extends Module {
             // everything left needs material we don't have
             for (Task t : this.tasks.values()) {
                 if (!t.place || this.failedUntil.containsKey(t.pos.method_10063())) continue;
-                class_1792 it = itemFor(t.want);
-                if (this.count(it) == 0) {
+                class_1792 it = this.requiredItem(t);
+                if (it != null && this.count(it) == 0) {
                     if (this.useStorage.getValue() && !this.storage.isEmpty() && this.startRestock(w, pl)) return;
                     this.missing(it);
                     this.status = "Missing " + it.method_63680().getString();
@@ -604,11 +672,18 @@ public final class SchematicBuilderModule extends Module {
                 }
                 continue;
             }
+            if (t.interact()) {
+                if (eye.method_1025(class_243.method_24953(t.pos)) <= this.reach() * this.reach() && this.interactFace(w, pl, t, eye) != null) {
+                    this.startInteract(t);
+                    return;
+                }
+                continue;
+            }
             class_1792 item = itemFor(t.want);
             if (this.missingUntil.containsKey(item) || this.count(item) == 0) continue;
             if (eye.method_1025(class_243.method_24953(t.pos)) > (this.reach() + 0.8) * (this.reach() + 0.8)) continue;
             if (sims++ > 30) break;
-            if (isWater(t.want) ? this.waterClick(w, pl, t.pos, eye) != null : SbPlacer.find(this.mc, t.pos, t.want, (class_1747) item, eye, this.reach()) != null) {
+            if (isWater(t.want) ? this.waterClick(w, pl, t.pos, eye) != null : this.solution(t, (class_1747) item, eye, this.reach()) != null) {
                 this.task = t;
                 this.mode = Mode.PLACE;
                 this.modeTicks = 0;
@@ -619,10 +694,10 @@ public final class SchematicBuilderModule extends Module {
         // nothing reachable from here: walk to the best task
         int tries = 0;
         for (Task t : cands) {
-            if (t.place && !this.supported(w, t.pos)) continue; // nothing to build it against yet: comes later
+            if (t.place && t.kind == SbFix.PLACE && !this.supported(w, t.pos)) continue; // nothing to build it against yet: comes later
             if (tries++ >= 5) break;
-            if (t.place) {
-                class_1792 item = itemFor(t.want);
+            class_1792 item = t.place ? this.requiredItem(t) : null;
+            if (item != null) {
                 if (this.missingUntil.containsKey(item)) continue;
                 if (this.count(item) == 0) {
                     if (this.useStorage.getValue() && !this.storage.isEmpty() && this.startRestock(w, pl)) return;
@@ -631,10 +706,11 @@ public final class SchematicBuilderModule extends Module {
                 }
             }
             // tried before and still impossible: put a helper block next to it (top slabs, upside-down stairs...)
-            if (t.place && this.failCount.getOrDefault(t.pos.method_10063(), 0) > 2 && this.tryHelper(w, pl, t)) return;
-            if (t.place && this.failCount.getOrDefault(t.pos.method_10063(), 0) == 0 && this.walkToWorkSpot(w, pl, t)) return;
+            boolean plain = t.place && t.kind == SbFix.PLACE;
+            if (plain && this.failCount.getOrDefault(t.pos.method_10063(), 0) > 2 && this.tryHelper(w, pl, t)) return;
+            if (plain && this.failCount.getOrDefault(t.pos.method_10063(), 0) == 0 && this.walkToWorkSpot(w, pl, t)) return;
             if (this.walkNear(w, pl, t.pos, t)) return;
-            if (t.place && this.tryHelper(w, pl, t)) return;
+            if (plain && this.tryHelper(w, pl, t)) return;
             this.fail(t.pos, 20_000L, "nowalk");
         }
         // everything left waits for something that is on cool-down: retry that instead of standing around
@@ -648,14 +724,21 @@ public final class SchematicBuilderModule extends Module {
         double px = pl.method_23317(), py = pl.method_23318(), pz = pl.method_23321();
         int minY = Integer.MAX_VALUE;
         Map<class_1792, Boolean> carry = new HashMap<>();
+        class_638 cw = this.mc.field_1687;
         for (Task t : this.tasks.values()) {
             if (this.failedUntil.containsKey(t.pos.method_10063())) continue;
             // water only once the blocks around it stand, or it floods the build
-            if (t.place && isWater(t.want) && this.waterTooEarly(t)) continue;
+            if (t.place && (isWater(t.want) || t.kind == SbFix.WATERLOG) && this.waterTooEarly(t)) continue;
             // never close the last open side of a block that still has to be placed (it could never be reached)
-            if (t.place && this.sealsPending(t.pos)) continue;
+            if (t.place && t.kind == SbFix.PLACE && this.sealsPending(t.pos)) continue;
+            // not its turn yet: what it stands on / hangs on isn't there (crops before farmland, torches before
+            // their wall, sand with nothing below it would fall)
+            if (t.place && t.kind == SbFix.PLACE && !isWater(t.want) && !this.placeableNow(cw, t)) continue;
+            // a hoe / shovel needs air above the block
+            if (t.kind == SbFix.CONVERT && SbFix.needsAirAbove(t.want) && !this.airAboveOrClearable(cw, t.pos)) continue;
             // only work we can do right now (material in the inventory); the rest waits for a restock
-            if (t.place && !carry.computeIfAbsent(itemFor(t.want), it -> this.count(it) > 0)) continue;
+            class_1792 need = t.place ? this.requiredItem(t) : null;
+            if (need != null && !carry.computeIfAbsent(need, it -> this.count(it) > 0)) continue;
             all.add(t);
             if (t.place) minY = Math.min(minY, t.pos.method_10264());
         }
@@ -663,7 +746,12 @@ public final class SchematicBuilderModule extends Module {
         final float yaw = pl.method_36454();
         Map<Task, Double> sc = new HashMap<>();
         class_638 w = this.mc.field_1687;
-        for (Task t : all) sc.put(t, this.taskScore(t, px, py, pz, floorY, yaw) + this.planScore(w, t));
+        class_1792 held = pl.method_6047().method_7909();
+        for (Task t : all) {
+            // the same block as in the hand first: fewer item switches (faster and less bot-like)
+            double swap = t.place && t.kind != SbFix.ADJUST && this.requiredItem(t) != held ? 1.2 : 0.0;
+            sc.put(t, this.taskScore(t, px, py, pz, floorY, yaw) + this.planScore(w, t) + swap);
+        }
         all.sort((a, b) -> Double.compare(sc.get(a), sc.get(b)));
         return all.size() > max ? all.subList(0, max) : all;
     }
@@ -694,8 +782,15 @@ public final class SchematicBuilderModule extends Module {
         class_2338 p = t.pos;
         int edge = Math.min(Math.min(p.method_10263() - this.box[0], this.box[3] - p.method_10263()), Math.min(p.method_10260() - this.box[2], this.box[5] - p.method_10260()));
         double s = -Math.min(edge, 8) * 0.7;
-        if (isWater(t.want)) return 30.0; // water flows: only when everything around it stands
+        if (isWater(t.want) || t.kind == SbFix.WATERLOG) return 30.0; // water flows: only when everything around it stands
+        if (t.interact()) return s - 1.0; // the block is there already: just a click
         if (t.want.method_26220(w, p).method_1110()) s += 3.0;
+        if (this.redstoneLast.getValue()) {
+            // redstone after the blocks around it (an observer placed early fires at every block placed next to it,
+            // a piston beside a power source pushes) - but not when something above still needs it as support
+            double late = SbFix.redstoneLate(t.want);
+            if (late > 0 && !this.tasks.containsKey(p.method_10084().method_10063())) s += late;
+        }
         // something pending sits on / hangs on this one: do this first
         for (class_2350 d : class_2350.values()) {
             Task o = this.tasks.get(p.method_10093(d).method_10063());
@@ -755,7 +850,7 @@ public final class SchematicBuilderModule extends Module {
             if (sims++ >= 8) break;
             class_2338 p = (class_2338) o[0];
             class_243 eye = new class_243(p.method_10263() + 0.5, p.method_10264() + 1.27, p.method_10260() + 0.5);
-            if (SbPlacer.find(this.mc, t.pos, t.want, bi, eye, reach) == null) continue;
+            if (this.solution(t, bi, eye, reach) == null) continue;
             if (p.equals(me)) return false; // already here: the normal walk centres us
             long pk = p.method_10063();
             if (this.walk(w, pl, q -> q.method_10063() == pk, p, () -> {}, 9000)) {
@@ -783,10 +878,10 @@ public final class SchematicBuilderModule extends Module {
         Set<Integer> layers = new HashSet<>();
         int place = 0, fix = 0;
         for (Task t : this.tasks.values()) {
-            if (!t.place) { fix++; continue; }
+            if (!t.place || t.interact()) { fix++; continue; }
             place++;
             layers.add(t.pos.method_10264());
-            need.merge(itemFor(t.want), 1, Integer::sum);
+            need.merge(itemFor(t.want), SbFix.firstSteps(t.want).length > 1 ? 2 : 1, Integer::sum);
         }
         if (place == 0 && fix == 0) return;
         Map<class_1792, Integer> stored = new HashMap<>();
@@ -1127,6 +1222,9 @@ public final class SchematicBuilderModule extends Module {
             // still nothing after a while: we may have built ourselves in - allow breaking finished blocks to get
             // out (they get placed again later)
             if (++this.stuckRetries >= 4 && !this.escape) { this.escape = true; dbg("stuck: may break finished blocks to get out"); }
+            // the same spot keeps giving nothing (on top of our own scaffolding, in a corner...): look at it from
+            // somewhere else - a new spot a few blocks away, then plan again from there
+            if (this.stuckRetries % 6 == 3 && best != null && this.newViewpoint(w, pl)) return;
             if (this.stuckRetries >= 40) {
                 // nothing worked for a minute: what is left can't be reached or placed (it hangs on skipped
                 // blocks...). Give it up so the build finishes instead of standing here forever.
@@ -1144,6 +1242,33 @@ public final class SchematicBuilderModule extends Module {
             }
             this.waitTicks = 30;
         }
+    }
+
+    /** Walks to a random free spot a few blocks away (not one that already failed) to see the work from there. */
+    private boolean newViewpoint(class_638 w, class_746 pl) {
+        class_2338 f = feet(pl);
+        this.badSpots.put(f.method_10063(), System.currentTimeMillis() + 60_000L);
+        List<class_2338> spots = new ArrayList<>();
+        for (int dx = -6; dx <= 6; dx++) for (int dz = -6; dz <= 6; dz++) for (int dy = -6; dy <= 2; dy++) {
+            if (dx * dx + dz * dz < 5) continue;
+            class_2338 p = f.method_10069(dx, dy, dz);
+            if (this.badSpots.containsKey(p.method_10063()) || !SbWorld.standable(w, p)) continue;
+            spots.add(p);
+        }
+        java.util.Collections.shuffle(spots, this.rnd);
+        // lower spots first: off the scaffolding, back on the ground
+        spots.sort((a, b) -> Integer.compare(a.method_10264(), b.method_10264()));
+        int tries = 0;
+        for (class_2338 p : spots) {
+            if (tries++ >= 6) break;
+            long pk = p.method_10063();
+            if (this.walk(w, pl, q -> q.method_10063() == pk, p, () -> {}, 6000)) {
+                this.status = "Walking to another spot";
+                dbg("new viewpoint " + p.method_23854() + " from " + f.method_23854());
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void dbg(String m) {
@@ -1208,20 +1333,48 @@ public final class SchematicBuilderModule extends Module {
         if (t == null) { this.toIdle(); return; }
         class_2680 have = w.method_8320(t.pos);
         if (isWater(t.want) ? isWater(have) && have.toString().contains("level=0") : SbWorld.matches(t.want, have)) { this.finishedBlock(t); return; }
-        if (!have.method_26215() && !have.method_45474()) { this.toIdle(); return; }
+        if (!have.method_26215() && !have.method_45474()) {
+            // the first half is there (a single slab of a double one, a repeater that still needs its delay...):
+            // go on with it right away instead of waiting for the next scan
+            Task next = !this.finishStates.getValue() || isWater(t.want) ? null : SbFix.grows(t.want, have) ? new Task(t.pos, t.want, true, SbFix.GROW)
+                    : SbFix.clicks(t.want, have) > 0 ? new Task(t.pos, t.want, true, SbFix.ADJUST) : null;
+            if (next == null || t.kind == SbFix.GROW && next.kind == SbFix.GROW) {
+                if (next == null) { this.toIdle(); return; }
+            } else {
+                this.tasks.put(t.pos.method_10063(), next);
+                this.task = next;
+                t = next;
+                if (next.interact()) { this.startInteract(next); return; }
+                this.modeTicks = 0;
+                return;
+            }
+        }
         if (isWater(t.want)) { this.tickWater(w, pl, t); return; }
         class_1792 item = itemFor(t.want);
         if (!this.hold(pl, item)) {
             if (this.count(item) == 0) { this.missing(item); this.toIdle(); }
             return;
         }
-        this.keys(false, false, false, true); // sneak while placing: no opening chests / doors by accident
-        if (!pl.method_5715() && this.modeTicks < 6) return;
-        SbPlacer.Solution s = SbPlacer.find(this.mc, t.pos, t.want, (class_1747) item, pl.method_33571(), this.reach());
+        if (t.kind == SbFix.GROW) {
+            // another candle / pickle / egg onto the block: only standing up (sneaking places it beside instead)
+            this.keys(false, false, false, false);
+            if (pl.method_5715()) { this.growReady = this.tickNo + 3; return; }
+            if (this.tickNo < this.growReady) return; // the server has to see us standing first (eye height)
+            if (SbAcTest.ON) {
+                SbAcTest.intendedPos = t.pos.method_10063();
+                var sh = have.method_26218(w, t.pos);
+                SbAcTest.intendedBox = sh.method_1110() ? new class_238(t.pos) : sh.method_1107().method_996(t.pos);
+            }
+        } else {
+            this.keys(false, false, false, true); // sneak while placing: no opening chests / doors by accident
+            if (!pl.method_5715() && this.modeTicks < 6) return;
+        }
+        SbPlacer.Solution s = this.solution(t, (class_1747) item, pl.method_33571(), this.reach());
         if (s == null) {
             if (this.modeTicks > 3) { this.fail(t.pos, 8_000L, "nosolution"); this.toIdle(); }
             return;
         }
+        class_2680 stepWant = this.solWant;
         int r;
         if (s.score() >= 400.0) {
             // a state that needs the head turned away from the clicked spot (Anticheat Safe is off)
@@ -1230,7 +1383,7 @@ public final class SchematicBuilderModule extends Module {
             r = this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665() ? 1 : -1;
             this.lastClickTick = this.tickNo;
             if (r == 1) pl.method_6104(class_1268.field_5808);
-        } else r = this.aimAndPlace(w, pl, t.pos, t.want, (class_1747) item, s.yaw(), s.pitch(), this.modeTicks >= this.placeDelay());
+        } else r = this.aimAndPlace(w, pl, t.pos, t.kind == SbFix.GROW ? null : stepWant, (class_1747) item, s.yaw(), s.pitch(), this.modeTicks >= this.placeDelay());
         if (r == 0) return;
         if (r < 0) {
             if (++this.aimMiss > 6) { this.aimMiss = 0; this.fail(t.pos, 8_000L, "aim"); this.toIdle(); }
@@ -1244,7 +1397,7 @@ public final class SchematicBuilderModule extends Module {
             this.stuckRetries = 0;
             this.escape = false;
             this.placedByMe.add(t.pos.method_10063());
-            if (!this.helperPos.contains(t.pos.method_10063())) { this.verify.put(t.pos.method_10063(), this.tickNo); this.verifyWant.put(t.pos.method_10063(), t.want); }
+            if (!this.helperPos.contains(t.pos.method_10063()) && t.kind == SbFix.PLACE) { this.verify.put(t.pos.method_10063(), this.tickNo); this.verifyWant.put(t.pos.method_10063(), stepWant); }
             if (this.helperPos.remove(t.pos.method_10063())) this.scaffoldPlaced.add(t.pos.method_10063());
             this.touched(t.pos);
             this.waitTicks = 1;
@@ -1266,12 +1419,266 @@ public final class SchematicBuilderModule extends Module {
             class_2338 p = class_2338.method_10092(e.getKey());
             class_2680 want = this.verifyWant.remove(e.getKey());
             class_2680 have = w.method_8320(p);
-            if (want == null || SbWorld.matches(want, have)) continue;
+            if (want == null || SbWorld.matchesShape(want, have)) continue;
             this.wrongPlaced++;
             this.touched(p);
             if (System.getProperty("hook.carttest") != null) System.out.println("CARTTEST SB wrongstate " + p.method_23854() + " have " + have + " want " + want);
         }
     }
+
+    // ================================================================== finishing states, tools, defence
+
+    /** The block state the last {@link #solution} plans to place (a single slab for a double one...). */
+    private class_2680 solWant;
+
+    /**
+     * How to place this task from {@code eye}: a block that is finished by clicking it again (double slab) starts as
+     * a single one, more candles / layers are clicked onto the block that is there.
+     */
+    private SbPlacer.Solution solution(Task t, class_1747 item, class_243 eye, double reach) {
+        if (t.kind == SbFix.GROW) {
+            this.solWant = t.want;
+            return SbPlacer.findGrow(this.mc, t.pos, t.want, item, eye, reach);
+        }
+        for (class_2680 step : SbFix.firstSteps(t.want)) {
+            SbPlacer.Solution s = SbPlacer.find(this.mc, t.pos, step, item, eye, reach);
+            if (s != null) {
+                this.solWant = step;
+                return s;
+            }
+        }
+        return null;
+    }
+
+    /** The item this task uses up or needs in the hand (null = nothing special). */
+    private class_1792 requiredItem(Task t) {
+        return switch (t.kind) {
+            case SbFix.ADJUST -> null;
+            case SbFix.WATERLOG -> class_1802.field_8705;
+            case SbFix.CONVERT -> {
+                class_1792 tool = this.toolItem(SbFix.convertTool(t.want));
+                yield tool != null ? tool : itemById("iron" + SbFix.convertTool(t.want));
+            }
+            default -> itemFor(t.want);
+        };
+    }
+
+    private static final Map<String, class_1792> ITEMS = new HashMap<>();
+
+    static class_1792 itemById(String id) {
+        synchronized (ITEMS) {
+            if (ITEMS.isEmpty()) for (class_1792 it : net.minecraft.class_7923.field_41178) ITEMS.put(net.minecraft.class_7923.field_41178.method_10221(it).method_12832(), it);
+            return ITEMS.getOrDefault(id, class_1802.field_8162);
+        }
+    }
+
+    private static String itemId(class_1792 it) {
+        try {
+            return net.minecraft.class_7923.field_41178.method_10221(it).method_12832();
+        } catch (Throwable t) {
+            return "?";
+        }
+    }
+
+    /** A tool in the inventory whose id ends with {@code suffix} ("_hoe"...), the best material first, never one about to break. */
+    private class_1792 toolItem(String suffix) {
+        class_1661 inv = this.mc.field_1724.method_31548();
+        class_1792 best = null;
+        int bestRank = -1;
+        String[] order = {"wooden", "golden", "stone", "copper", "iron", "diamond", "netherite"};
+        for (int i = 0; i < 36; i++) {
+            class_1799 s = inv.method_5438(i);
+            if (s.method_7960() || this.nearlyBroken(s)) continue;
+            String id = itemId(s.method_7909());
+            if (!id.endsWith(suffix)) continue;
+            int rank = 0;
+            for (int k = 0; k < order.length; k++) if (id.startsWith(order[k])) rank = k + 1;
+            if (rank > bestRank) { bestRank = rank; best = s.method_7909(); }
+        }
+        return best;
+    }
+
+    /** It can stand there now: what it sits on / hangs on is there, and sand / gravel / concrete powder won't fall. */
+    private boolean placeableNow(class_638 w, Task t) {
+        if (w == null) return true;
+        try {
+            if (!t.want.method_26184(w, t.pos)) return false;
+            if (SbFix.falls(t.want)) {
+                class_2680 below = w.method_8320(t.pos.method_10074());
+                if (below.method_26215() || below.method_45474() || !below.method_26227().method_15769()) return false;
+            }
+        } catch (Throwable ignored) {
+        }
+        return true;
+    }
+
+    /** Air above, or only grass / flowers there that can simply be broken. */
+    private boolean airAboveOrClearable(class_638 w, class_2338 p) {
+        class_2680 up = w.method_8320(p.method_10084());
+        return up.method_26215() || up.method_45474() && up.method_26227().method_15769() && SbWorld.breakable(w, p.method_10084());
+    }
+
+    /** Where to click for an interact task (null = nothing to click from {@code eye}). */
+    private class_3965 interactFace(class_638 w, class_746 pl, Task t, class_243 eye) {
+        return this.facePoint(w, pl, t.pos, eye, t.kind != SbFix.ADJUST);
+    }
+
+    private long growReady;
+    private int interactClicks;
+    private long interactReady;
+
+    private void startInteract(Task t) {
+        this.task = t;
+        this.mode = Mode.INTERACT;
+        this.modeTicks = 0;
+        this.interactClicks = 0;
+        this.status = switch (t.kind) {
+            case SbFix.CONVERT -> "Using a tool";
+            case SbFix.WATERLOG -> "Waterlogging";
+            default -> "Setting " + t.want.method_26204().method_9518().getString();
+        };
+    }
+
+    /**
+     * Right-clicks a block that is already there: a repeater to its delay, a comparator to subtract, a note block to
+     * its note, a trapdoor open; a hoe on dirt for farmland, an axe on a log, a water bucket into a slab. Every click
+     * with the real crosshair on the block, one at a time, waiting for the server to answer before the next.
+     */
+    private void tickInteract(class_638 w, class_746 pl) {
+        Task t = this.task;
+        if (t == null) { this.toIdle(); return; }
+        class_2680 have = w.method_8320(t.pos);
+        boolean done = t.kind == SbFix.WATERLOG ? SbFix.waterlogged(have) || !SbWorld.matches(t.want, have) : SbWorld.matches(t.want, have);
+        if (done) { this.finishedBlock(t); return; }
+        if (t.kind == SbFix.ADJUST && SbFix.clicks(t.want, have) <= 0 || t.kind == SbFix.CONVERT && !SbFix.convertsFrom(t.want, have)) {
+            this.touched(t.pos);
+            this.toIdle();
+            return;
+        }
+        if (this.modeTicks > 300 || this.interactClicks > 30) { this.fail(t.pos, 15_000L, "interact"); this.toIdle(); return; }
+        // grass or a flower on top: a hoe / shovel needs air there
+        if (t.kind == SbFix.CONVERT && SbFix.needsAirAbove(t.want) && !w.method_8320(t.pos.method_10084()).method_26215()) {
+            class_2338 up = t.pos.method_10084();
+            if (this.airAboveOrClearable(w, t.pos) && this.visibleFace(w, pl, up) != null) { this.startBreak(up, null); return; }
+            this.fail(t.pos, 15_000L, "notair");
+            this.toIdle();
+            return;
+        }
+        class_1792 need = this.requiredItem(t);
+        if (need != null) {
+            if (this.count(need) == 0) { this.missing(need); this.toIdle(); return; }
+            if (!this.hold(pl, need)) return;
+        }
+        // a click without sneaking uses the block (repeater, trapdoor...); tools and buckets work while sneaking too
+        boolean sneak = t.kind != SbFix.ADJUST;
+        this.keys(false, false, false, sneak);
+        if (!sneak && pl.method_5715()) return;
+        if (sneak && !pl.method_5715() && this.modeTicks < 6) return;
+        if (this.tickNo < this.interactReady) return;
+        class_3965 face = this.interactFace(w, pl, t, pl.method_33571());
+        if (face == null) { this.fail(t.pos, 8_000L, "interactface"); this.toIdle(); return; }
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), face.method_17784());
+        if (!this.rotateTo(pl, rot[0], rot[1], 0.6f) || !settled(pl) || this.modeTicks < this.placeDelay()) return;
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null || !hit.method_17777().equals(t.pos) || t.kind != SbFix.ADJUST && hit.method_17780() == class_2350.field_11033) {
+            this.rotateTo(pl, rot[0], rot[1], 0.2f);
+            if (++this.aimMiss > 20) { this.aimMiss = 0; this.fail(t.pos, 8_000L, "interactaim"); this.toIdle(); }
+            return;
+        }
+        if (SbAcTest.ON) {
+            SbAcTest.intendedPos = t.pos.method_10063();
+            var sh = have.method_26218(w, t.pos);
+            SbAcTest.intendedBox = sh.method_1110() ? new class_238(t.pos) : sh.method_1107().method_996(t.pos);
+        }
+        var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+        if (t.kind == SbFix.WATERLOG && !res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        pl.method_6104(class_1268.field_5808);
+        this.lastClickTick = this.tickNo;
+        this.aimMiss = 0;
+        this.interactClicks++;
+        this.placedTotal++;
+        this.lastProgressMs = System.currentTimeMillis();
+        this.touched(t.pos);
+        dbg("interact " + t.kind + " at " + t.pos.method_23854() + " " + res + " have " + have);
+        // the server decides some of these (note blocks, tools): wait for its answer before clicking again
+        this.interactReady = this.tickNo + 7 + (this.human.getValue() ? this.rnd.nextInt(4) : 0);
+        this.modeTicks = 0;
+    }
+
+    private boolean defending;
+
+    /** A hostile mob close by: turn to it and hit it when the attack is charged (like a player would). */
+    private boolean tickDefend(class_638 w, class_746 pl) {
+        if (!this.defend.getValue() || this.mode == Mode.OPEN_CHEST || this.mode == Mode.TRANSFER || this.mode == Mode.ESCAPE || this.eating) return this.defending = false;
+        if (this.mode == Mode.WALK && !pl.method_24828()) return false; // mid-jump / pillar: finish that first
+        net.minecraft.class_1297 best = null;
+        double bd = 3.2 * 3.2;
+        for (net.minecraft.class_1309 e : w.method_8390(net.minecraft.class_1309.class, pl.method_5829().method_1014(4.5), e -> e instanceof net.minecraft.class_1569 && e.method_5805())) {
+            String id = BaseFinder.entityId(e);
+            // neutral until you hit them: leave them alone
+            if (id.equals("enderman") || id.equals("zombified_piglin") || id.equals("piglin") || id.equals("piglin_brute")) continue;
+            double d = pl.method_33571().method_1025(e.method_5829().method_1005());
+            if (d < bd && pl.method_6057(e)) { bd = d; best = e; }
+        }
+        if (best == null) {
+            if (this.defending) { this.defending = false; this.toIdle(); }
+            return false;
+        }
+        if (!this.defending) {
+            this.defending = true;
+            this.mc.field_1761.method_2925();
+            this.toIdle();
+            dbg("defend against " + BaseFinder.entityId(best));
+        }
+        this.status = "Defending";
+        this.keys(false, false, false, false);
+        class_1792 weapon = this.toolItem("_sword");
+        if (weapon == null) weapon = this.toolItem("_axe");
+        if (weapon != null) this.hold(pl, weapon);
+        class_243 aim = best.method_5829().method_1005();
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), aim);
+        this.rotateTo(pl, rot[0], rot[1], 3.0f);
+        if (pl.method_7261(0.5f) >= 0.92f && this.mc.field_1765 instanceof net.minecraft.class_3966 eh && eh.method_17782() == best) {
+            this.mc.field_1761.method_2918(pl, best);
+            pl.method_6104(class_1268.field_5808);
+            this.lastProgressMs = System.currentTimeMillis();
+        }
+        return true;
+    }
+
+    /** Chat list: what the rest of the build needs and how much of it is missing (inventory + known storage). */
+    private void listMaterials() {
+        if (this.mc.field_1724 == null) return;
+        if (this.tasks.isEmpty()) { this.say(this.placement == null ? "No schematic loaded." : "Nothing left to place (in the scanned part)."); return; }
+        Map<class_1792, Integer> need = new LinkedHashMap<>();
+        for (Task t : this.tasks.values()) {
+            if (!t.place || t.kind == SbFix.ADJUST) continue;
+            class_1792 it = this.requiredItem(t);
+            if (it == null || t.kind == SbFix.CONVERT || t.kind == SbFix.WATERLOG) continue;
+            need.merge(it, t.kind == SbFix.PLACE && SbFix.firstSteps(t.want).length > 1 ? 2 : 1, Integer::sum);
+        }
+        Map<class_1792, Integer> stored = new HashMap<>();
+        for (Map<class_1792, Integer> m : this.storageSeen.values()) for (var e : m.entrySet()) stored.merge(e.getKey(), e.getValue(), Integer::sum);
+        List<Map.Entry<class_1792, Integer>> rows = new ArrayList<>(need.entrySet());
+        rows.sort((a, b) -> b.getValue() - a.getValue());
+        int missingKinds = 0;
+        StringBuilder sb = new StringBuilder();
+        for (var e : rows) {
+            int have = this.count(e.getKey()) + stored.getOrDefault(e.getKey(), 0);
+            int miss = Math.max(0, e.getValue() - have);
+            if (miss == 0) continue;
+            if (missingKinds++ < 14) {
+                String stacks = miss >= 64 ? " (" + (miss / 64) + " stacks" + (miss % 64 > 0 ? " + " + miss % 64 : "") + ")" : "";
+                sb.append("\n §7- §f").append(miss).append("x ").append(e.getKey().method_63680().getString()).append(stacks);
+            }
+        }
+        boolean tool = false;
+        for (Task t : this.tasks.values()) if (t.kind == SbFix.CONVERT && this.toolItem(SbFix.convertTool(t.want)) == null) tool = true;
+        if (missingKinds == 0) this.say("§aYou have everything for the rest of the build" + (this.storage.isEmpty() ? "." : " (inventory + storage)."));
+        else this.say("§eStill missing " + missingKinds + " kind(s) of blocks:" + sb + (missingKinds > 14 ? "\n §7+" + (missingKinds - 14) + " more" : ""));
+        if (tool) this.say("§eThe build needs a tool you don't carry (hoe for farmland, shovel for paths or axe for stripped logs).");
+    }
+
 
     // ================================================================== legit actions (what a player could do)
 
@@ -1353,7 +1760,7 @@ public final class SchematicBuilderModule extends Module {
             return 0;
         }
         class_2680 st = SbPlacer.simulate(pl, w, item, hit, new float[]{pl.method_36454(), pl.method_36455()}, target, w.method_8320(target));
-        if (st == null || want != null && !SbWorld.matches(want, st)) {
+        if (st == null || want != null && !SbWorld.matchesShape(want, st)) {
             dbg("aim: target " + target.method_23854() + " crosshair " + hit.method_17777().method_23854() + " " + hit.method_17780() + " @" + hit.method_17784()
                     + " gives " + st + " want " + want + " rot " + pl.method_36454() + "/" + pl.method_36455() + " aim " + yaw + "/" + pitch + " eye " + pl.method_33571());
             this.aimPrecise = true; // the next try aims at the exact planned spot
@@ -1466,7 +1873,7 @@ public final class SchematicBuilderModule extends Module {
                 class_3965 hit = new class_3965(point, side, nb, false);
                 for (float[] rot : rots) {
                     class_2680 st = SbPlacer.simulate(pl, w, bi, hit, rot == null ? SbPlacer.lookAt(eye, point) : rot, t.pos, cur, true);
-                    if (st != null && SbWorld.matches(t.want, st)) { ok = true; break; }
+                    if (st != null && SbWorld.matchesShape(t.want, st)) { ok = true; break; }
                 }
                 if (ok) break;
             }
@@ -1515,12 +1922,31 @@ public final class SchematicBuilderModule extends Module {
     }
 
     private class_3965 visibleFace(class_638 w, class_746 pl, class_2338 p, class_243 eye) {
-        double[][] pts = {{0.5, 0.5, 0.5}, {0.5, 0.9, 0.5}, {0.5, 0.1, 0.5}, {0.1, 0.5, 0.5}, {0.9, 0.5, 0.5}, {0.5, 0.5, 0.1}, {0.5, 0.5, 0.9}};
+        return this.facePoint(w, pl, p, eye, false);
+    }
+
+    /**
+     * A spot on the block (its real outline: thin blocks like repeaters, rails or carpets too) the eye can see and
+     * reach. {@code notBottom}: the bottom face doesn't count (hoes / shovels / buckets).
+     */
+    private class_3965 facePoint(class_638 w, class_746 pl, class_2338 p, class_243 eye, boolean notBottom) {
+        class_238 bb;
+        try {
+            var shape = w.method_8320(p).method_26218(w, p);
+            bb = shape.method_1110() ? new class_238(p) : shape.method_1107().method_996(p);
+        } catch (Throwable t) {
+            bb = new class_238(p);
+        }
+        double cx = (bb.field_1323 + bb.field_1320) / 2, cy = (bb.field_1322 + bb.field_1325) / 2, cz = (bb.field_1321 + bb.field_1324) / 2;
+        double ex = (bb.field_1320 - bb.field_1323) * 0.4, ey = (bb.field_1325 - bb.field_1322) * 0.4, ez = (bb.field_1324 - bb.field_1321) * 0.4;
+        double[][] pts = {{cx, cy, cz}, {cx, bb.field_1325 - 0.01, cz}, {cx, bb.field_1322 + 0.01, cz}, {bb.field_1323 + 0.01, cy, cz}, {bb.field_1320 - 0.01, cy, cz},
+                {cx, cy, bb.field_1321 + 0.01}, {cx, cy, bb.field_1324 - 0.01}, {cx + ex, bb.field_1325 - 0.01, cz + ez}, {cx - ex, bb.field_1325 - 0.01, cz - ez},
+                {cx, cy + ey, bb.field_1321 + 0.01}, {cx, cy + ey, bb.field_1324 - 0.01}, {bb.field_1323 + 0.01, cy + ey, cz}, {bb.field_1320 - 0.01, cy + ey, cz}};
         for (double[] o : pts) {
-            class_243 to = new class_243(p.method_10263() + o[0], p.method_10264() + o[1], p.method_10260() + o[2]);
+            class_243 to = new class_243(o[0], o[1], o[2]);
             if (eye.method_1025(to) > this.reach() * this.reach()) continue;
             class_3965 r = SbPlacer.ray(w, pl, eye, to);
-            if (r != null && r.method_17777().equals(p)) return r;
+            if (r != null && r.method_17777().equals(p) && !(notBottom && r.method_17780() == class_2350.field_11033)) return r;
         }
         return null;
     }
@@ -1563,7 +1989,7 @@ public final class SchematicBuilderModule extends Module {
                 if (this.escape) return !SbWorld.container(this.mc.field_1687.method_8320(p));
                 class_2680 want = SbLitematica.target(sw, p);
                 // never break what is already correct in the build
-                return want.method_26215() || !SbWorld.matches(want, this.mc.field_1687.method_8320(p));
+                return want.method_26215() || !SbWorld.matchesShape(want, this.mc.field_1687.method_8320(p));
             }
             return true;
         };
@@ -1586,7 +2012,8 @@ public final class SchematicBuilderModule extends Module {
             // only spots from which the block can really be placed / hit (sneaking eye height)
             class_243 eye = new class_243(p.method_10263() + 0.5, p.method_10264() + 1.27, p.method_10260() + 0.5);
             if (t != null && t.place && isWater(t.want)) return this.waterClick(w, pl, target, eye) != null;
-            if (item instanceof class_1747 bi) return SbPlacer.find(this.mc, target, t.want, bi, eye, reach) != null;
+            if (t != null && t.interact()) return this.interactFace(w, pl, t, eye) != null;
+            if (item instanceof class_1747 bi) return this.solution(t, bi, eye, reach) != null;
             return this.visibleFace(w, pl, target, eye) != null;
         }, target, () -> {}, 9000);
     }
@@ -1891,7 +2318,7 @@ public final class SchematicBuilderModule extends Module {
         int types = 0;
         for (Task t : near) {
             if (!t.place) continue;
-            class_1792 it = itemFor(t.want);
+            class_1792 it = this.requiredItem(t);
             if (!(it instanceof class_1747)) continue;
             if (!want.containsKey(it)) { if (++types > 12) break; }
             want.merge(it, 1, Integer::sum);
@@ -2011,7 +2438,8 @@ public final class SchematicBuilderModule extends Module {
         // drop off junk when the inventory is nearly full
         if (free < 4) {
             Set<class_1792> useful = new HashSet<>();
-            for (Task t : this.tasks.values()) if (t.place) useful.add(itemFor(t.want));
+            for (Task t : this.tasks.values()) if (t.place && this.requiredItem(t) != null) useful.add(this.requiredItem(t));
+            useful.add(class_1802.field_8705);
             useful.add(this.scaffoldItem());
             for (int i = size; i < size + 36 && i < h.field_7761.size(); i++) {
                 class_1799 st = h.method_7611(i).method_7677();
@@ -2250,6 +2678,7 @@ public final class SchematicBuilderModule extends Module {
         BaseFinder.Draw d = new BaseFinder.Draw();
         Color accent = new Color(90, 200, 255, 230);
         if (this.task != null && this.mode == Mode.PLACE) d.block(this.task.pos, accent, 40);
+        if (this.task != null && this.mode == Mode.INTERACT) d.block(this.task.pos, new Color(200, 140, 255, 230), 40);
         if (this.breakPos != null && this.mode == Mode.BREAK) d.block(this.breakPos, new Color(255, 110, 90, 230), 40);
         if (this.path != null) {
             for (int i = Math.max(0, this.pathIdx); i < this.path.size(); i++) {

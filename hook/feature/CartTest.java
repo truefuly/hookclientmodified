@@ -508,6 +508,16 @@ final class CartTest {
                     {"5", "1", "0", "stone_bricks"},
                     {"5", "1", "2", "stone_bricks"},
                     {"5", "1", "1", "water"},
+                    // states that need a click, a second item or a tool
+                    {"1", "1", "4", "smooth_stone_slab[type=double]"},
+                    {"2", "1", "5", "repeater[facing=north,delay=3]"},
+                    {"4", "1", "3", "comparator[facing=west,mode=subtract]"},
+                    {"1", "1", "5", "note_block[note=5]"},
+                    {"0", "1", "2", "candle[candles=3]"},
+                    {"0", "1", "4", "farmland"},
+                    {"0", "2", "4", "wheat"},
+                    {"6", "1", "2", "stripped_oak_log[axis=x]"},
+                    {"2", "1", "6", "oak_trapdoor[facing=south,half=bottom,open=true]"},
             };
             for (String[] b : more) cmd("setblock " + (ox + Integer.parseInt(b[0])) + " " + (oy + Integer.parseInt(b[1])) + " " + (oz + Integer.parseInt(b[2])) + " " + b[3]);
         }
@@ -557,6 +567,9 @@ final class CartTest {
             if (b != null && sw != null) for (int x = b[0]; x <= b[3]; x++) for (int y = b[1]; y <= b[4]; y++) for (int z = b[2]; z <= b[5]; z++) {
                 net.minecraft.class_2680 st = sw.method_8320(new net.minecraft.class_2338(x, y, z));
                 if (st.method_26215() || SbWorld.secondaryPart(st)) continue;
+                String bid = SbFix.id(st.method_26204());
+                if (bid.equals("farmland")) { need.merge(SchematicBuilderModule.itemById("dirt"), 1, Integer::sum); continue; }
+                if (bid.startsWith("stripped_")) { need.merge(SchematicBuilderModule.itemById(bid.substring(9)), 1, Integer::sum); continue; }
                 net.minecraft.class_1792 it = st.method_26204().method_8389();
                 if (it instanceof net.minecraft.class_1747) need.merge(it, 1, Integer::sum);
             }
@@ -574,6 +587,8 @@ final class CartTest {
             cmd("give @s diamond_pickaxe");
             cmd("give @s diamond_shovel");
             cmd("give @s diamond_axe");
+            cmd("give @s diamond_hoe");
+            cmd("give @s diamond_sword");
             sbChest = new net.minecraft.class_2338(bx - 3, -60, bz);
             cmd("setblock " + sbChest.method_10263() + " -60 " + sbChest.method_10260() + " chest");
             if (most != null) {
@@ -610,6 +625,13 @@ final class CartTest {
         // get hungry mid-build: it has to stop, eat and go on
         if (clock == 300 + 20 * 70) { cmd("difficulty easy"); cmd("effect clear @s saturation"); cmd("effect give @s hunger 8 250 true"); }
         if (clock == 300 + 20 * 110) { cmd("effect give @s saturation infinite 0 true"); cmd("difficulty peaceful"); }
+        // a zombie walks up mid-build: it has to fight it off
+        if (clock == 300 + 20 * 130) { cmd("difficulty easy"); cmd("summon zombie ~3 ~ ~ {PersistenceRequired:1b}"); System.out.println("CARTTEST SB zombie summoned"); }
+        if (clock == 300 + 20 * 150) {
+            int z = mc.field_1687.method_8390(net.minecraft.class_1309.class, p.method_5829().method_1014(30), e -> BaseFinder.entityId(e).equals("zombie") && e.method_5805()).size();
+            System.out.println("CARTTEST SB zombies alive after 20s: " + z);
+            cmd("difficulty peaceful");
+        }
         if (clock == 300 + 20 * 60) {
             int d = SchematicBuilderModule.progress() == null ? 0 : SchematicBuilderModule.progress().done();
             System.out.println("CARTTEST SB menu closed placedWhileOpen=" + (d - sbMenuDone) + " screen=" + (mc.field_1755 == null ? "none" : mc.field_1755.getClass().getSimpleName()));
@@ -624,6 +646,21 @@ final class CartTest {
             sbLastPct = pct;
             if (pr != null && pr.state().equals("Finished") || clock > 300 + 20 * 480) {
                 shot(mc, "sb_end");
+                // every block of the schematic: is it really what was wanted (states included)?
+                Object plc = SbLitematica.placement(p.method_23317(), p.method_23318(), p.method_23321());
+                int[] bb = plc == null ? null : SbLitematica.box(plc);
+                net.minecraft.class_1937 sw = SbLitematica.world();
+                int bad = 0, all = 0;
+                if (bb != null && sw != null) for (int x = bb[0]; x <= bb[3]; x++) for (int y = bb[1]; y <= bb[4]; y++) for (int z = bb[2]; z <= bb[5]; z++) {
+                    net.minecraft.class_2338 q = new net.minecraft.class_2338(x, y, z);
+                    net.minecraft.class_2680 want = sw.method_8320(q), have = mc.field_1687.method_8320(q);
+                    if (want.method_26215()) continue;
+                    all++;
+                    if (SbWorld.matches(want, have) || want.method_26204() == net.minecraft.class_2246.field_10382 && have.method_26204() == want.method_26204()) continue;
+                    bad++;
+                    System.out.println("CARTTEST SB check BAD " + q.method_23854() + " want " + want + " have " + have);
+                }
+                System.out.println("CARTTEST SB check " + (all - bad) + "/" + all + " exact");
                 SbAcTest.report();
                 System.out.println("CARTTEST DONE ok=" + (pr != null && pr.state().equals("Finished") ? 1 : 0) + "/1");
                 sb.setEnabled(false);

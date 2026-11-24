@@ -230,7 +230,15 @@ final class SbAcTest {
         return Math.abs(q - Math.round(q)) > 0.03;
     }
 
+    /**
+     * A click the builder means to do on a block that changes by it (repeater delay, trapdoor open...): the client
+     * already changed the block before the packet is checked here, so check against the block as it was.
+     */
+    static long intendedPos = Long.MIN_VALUE;
+    static class_238 intendedBox;
+
     private static class_238 box(class_638 w, class_2338 pos) {
+        if (pos.method_10063() == intendedPos && intendedBox != null) return intendedBox;
         class_2680 st = w.method_8320(pos);
         var sh = st.method_26218(w, pos);
         if (sh.method_1110()) return new class_238(pos);
@@ -288,6 +296,7 @@ final class SbAcTest {
         if (!ok && what.equals("place")) flag("Grim.PositionPlace", pos.method_23854() + " " + side + " face can't be seen from " + String.format(java.util.Locale.ROOT, "%.2f %.2f %.2f", sx, sy, sz));
         if (!ok && what.equals("break")) flag("Grim.PositionBreak", pos.method_23854() + " " + side);
         boolean rot = false, sight = false;
+        if (pos.method_10063() == intendedPos) return best; // the crosshair was checked on the block before it changed
         for (double h : eyes()) {
             class_243 eye = new class_243(sx, sy + h, sz);
             if (rayHits(w, eye, syaw, spitch, pos)) { rot = true; if (los(w, eye, syaw, spitch, pos, side)) sight = true; }
@@ -314,6 +323,8 @@ final class SbAcTest {
         if (rel.field_1352 < -1.0E-3 || rel.field_1352 > 1.001 || rel.field_1351 < -1.0E-3 || rel.field_1351 > 1.001 || rel.field_1350 < -1.0E-3 || rel.field_1350 > 1.001)
             flag("Grim.FabricatedPlace", "hit vector outside the block " + rel);
         common(w, pos, hit.method_17780(), "place");
+        boolean intended = pos.method_10063() == intendedPos;
+        intendedPos = Long.MIN_VALUE; // one click only
         boolean placing = pl.method_6047().method_7909() instanceof net.minecraft.class_1747;
         if (placing) {
             places++;
@@ -331,7 +342,7 @@ final class SbAcTest {
             unconfirmed.put(pos.method_10093(hit.method_17780()).method_10063(), ib.method_42080());
         }
         if (invOpen) flag("Grim.InventoryB", "click on a block with the inventory open");
-        if (placing && !sneak && SbWorld.usable(w, pos) && !SbWorld.container(st)) flag("Bot.UsedBlock", "right-clicked " + st.method_26204() + " without sneaking (opens / flips it)");
+        if (placing && !sneak && SbWorld.usable(w, pos) && !SbWorld.container(st) && !intended) flag("Bot.UsedBlock", "right-clicked " + st.method_26204() + " without sneaking (opens / flips it)");
         needSwing = true;
         needSwingWhat = "right click";
     }

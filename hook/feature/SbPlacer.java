@@ -86,7 +86,7 @@ final class SbPlacer {
             if (h == null || !h.method_17777().equals(r.method_17777()) || h.method_17780() != r.method_17780()) return false;
             if (eye.method_1025(h.method_17784()) > reach * reach) return false;
             class_2680 st = simulate(pl, w, item, h, rr, target, cur);
-            if (st == null || want != null && !SbWorld.matches(want, st)) return false;
+            if (st == null || want != null && !SbWorld.matchesShape(want, st)) return false;
         }
         return true;
     }
@@ -127,7 +127,7 @@ final class SbPlacer {
                 hits.add(r);
                 class_2680 st = simulate(pl, w, item, r, rot, target, cur);
                 if (st == null) continue;
-                if (want != null && !SbWorld.matches(want, st)) continue;
+                if (want != null && !SbWorld.matchesShape(want, st)) continue;
                 if (!robust(pl, w, item, r, rot, target, cur, want, eye, reach)) continue;
                 best = new Solution(r, rot[0], rot[1], score);
             }
@@ -140,12 +140,62 @@ final class SbPlacer {
         for (class_3965 r : hits) {
             for (float[] rot : rots) {
                 class_2680 st = simulate(pl, w, item, r, rot, target, cur);
-                if (st == null || !SbWorld.matches(want, st)) continue;
+                if (st == null || !SbWorld.matchesShape(want, st)) continue;
                 double score = 400.0 + angle(rot[0], rot[1], curYaw, curPitch) + eye.method_1025(r.method_17784()) * 2.0;
                 if (best == null || score < best.score) best = new Solution(r, rot[0], rot[1], score);
             }
         }
         return best;
+    }
+
+    /**
+     * Clicking the block that is already there with the same item: a single slab becomes a double one, 1 candle
+     * becomes 2... Looks at spots on the block's real outline (a bottom slab's top is half way up).
+     */
+    static Solution findGrow(class_310 mc, class_2338 target, class_2680 want, class_1747 item, class_243 eye, double reach) {
+        class_638 w = mc.field_1687;
+        class_746 pl = mc.field_1724;
+        if (w == null || pl == null) return null;
+        class_2680 cur = w.method_8320(target);
+        var shape = cur.method_26218(w, target);
+        if (shape.method_1110()) return null;
+        class_238 bb = shape.method_1107().method_996(target);
+        float curYaw = pl.method_36454(), curPitch = pl.method_36455();
+        // candles, sea pickles and turtle eggs only take another one while NOT sneaking (it is clicked standing up)
+        boolean sneaking = pl.method_5715();
+        if (sneaking) pl.method_5660(false);
+        try {
+        Solution best = null;
+        double[] g = {-0.3, -0.15, 0.0, 0.15, 0.3};
+        for (class_2350 side : class_2350.values()) {
+            double fx = side.method_10148() > 0 ? bb.field_1320 : side.method_10148() < 0 ? bb.field_1323 : (bb.field_1323 + bb.field_1320) / 2;
+            double fy = side.method_10164() > 0 ? bb.field_1325 : side.method_10164() < 0 ? bb.field_1322 : (bb.field_1322 + bb.field_1325) / 2;
+            double fz = side.method_10165() > 0 ? bb.field_1324 : side.method_10165() < 0 ? bb.field_1321 : (bb.field_1321 + bb.field_1324) / 2;
+            double sx = (bb.field_1320 - bb.field_1323), sy = (bb.field_1325 - bb.field_1322), sz = (bb.field_1324 - bb.field_1321);
+            for (double u : g) for (double v : g) {
+                double ox, oy, oz;
+                if (side.method_10164() != 0) { ox = u * sx; oy = 0; oz = v * sz; }
+                else if (side.method_10148() != 0) { ox = 0; oy = v * sy; oz = u * sz; }
+                else { ox = u * sx; oy = v * sy; oz = 0; }
+                class_243 point = new class_243(fx + ox, fy + oy, fz + oz);
+                if ((eye.field_1352 - point.field_1352) * side.method_10148() + (eye.field_1351 - point.field_1351) * side.method_10164() + (eye.field_1350 - point.field_1350) * side.method_10165() <= 0.02) continue;
+                if (eye.method_1025(point) > reach * reach) continue;
+                float[] rot = lookAt(eye, point);
+                double score = angle(rot[0], rot[1], curYaw, curPitch) + eye.method_1025(point) * 2.0 + (Math.abs(u) + Math.abs(v)) * 4.0;
+                if (best != null && score >= best.score) continue;
+                class_3965 r = ray(w, pl, eye, point);
+                if (r == null || !r.method_17777().equals(target) || r.method_17780() != side) continue;
+                class_2680 st = simulate(pl, w, item, r, rot, target, cur);
+                if (st == null || st.method_26204() != want.method_26204() || st == cur) continue;
+                if (!SbWorld.matches(want, st) && !SbFix.grows(want, st)) continue;
+                if (!robust(pl, w, item, r, rot, target, cur, null, eye, reach)) continue;
+                best = new Solution(r, rot[0], rot[1], score);
+            }
+        }
+        return best;
+        } finally {
+            if (sneaking) pl.method_5660(true);
+        }
     }
 
     private static java.lang.reflect.Method getPlacementState;
