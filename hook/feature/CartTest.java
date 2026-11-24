@@ -695,9 +695,11 @@ final class CartTest {
     private static final java.util.List<int[]> SC_FOUND = new java.util.concurrent.CopyOnWriteArrayList<>(); // type index, chunk x, chunk z
     private static volatile boolean scLocated;
     private static int scVisit, scNext, scEndAt = -1, scAddedAt = -1, scPhase2 = -1;
-    private static final String[] SC_SETS = {"desert_pyramids", "jungle_temples", "swamp_huts", "villages", "pillager_outposts", "ocean_monuments"};
-    private static final String[] SC_IDS = {"desert_pyramid", "jungle_temple", "swamp_hut", "village", "outpost", "monument"};
-    private static final String[] SC_PLACE = {"desert_pyramid", "jungle_pyramid", "swamp_hut"};
+    private static final String[] SC_SETS = {"desert_pyramids", "jungle_temples", "swamp_huts", "villages", "pillager_outposts", "ocean_monuments", "shipwrecks", "igloos", "ruined_portals"};
+    private static final String[] SC_IDS = {"desert_pyramid", "jungle_temple", "swamp_hut", "village", "outpost", "monument", "shipwreck", "igloo", "ruined_portal"};
+    private static final String[] SC_PLACE = {"desert_pyramid", "jungle_pyramid", "swamp_hut", "", "", "monument", "shipwreck", "igloo", "ruined_portal"};
+    private static final int[] SC_VISIT = {0, 1, 2, 6, 7, 8};
+    private static int scAuto;
     private static volatile String scDirect;
 
     /**
@@ -736,12 +738,13 @@ final class CartTest {
             long seed = server.method_30002().method_8412();
             long h = SeedCracker.hashSeed(SeedCracker.sha(), seed);
             SeedCracker.debugTruth = seed;
+            StructureMatcher.debug = true;
             System.out.println("CARTTEST SEED real seed=" + seed + " myHash=" + h + " fast=" + SeedCracker.hashFast(seed, new int[64]) + " guava=" + com.google.common.hash.Hashing.sha256().hashLong(seed).asLong() + " module " + SeedCrackerModule.testState());
         }
         // build one of each temple kind at its real chunk and let the client find it
-        if (scLocated && scVisit < 3 && clock >= scNext && clock > 120) {
+        if (scLocated && scVisit < SC_VISIT.length && clock >= scNext && clock > 120) {
             int[] f = null;
-            for (int[] g : SC_FOUND) if (g[0] == scVisit) { f = g; break; }
+            for (int[] g : SC_FOUND) if (g[0] == SC_VISIT[scVisit]) { f = g; break; }
             int x = f[1] * 16 + 8, z = f[2] * 16 + 8;
             cmd("tp @s " + x + " 0 " + z);
             System.out.println("CARTTEST SEED visiting " + SC_IDS[f[0]] + " chunk " + f[1] + " " + f[2]);
@@ -755,8 +758,29 @@ final class CartTest {
                 mc.execute(SeedCrackerModule::testRescan);
             }).start();
         }
-        if (scVisit == 3 && clock >= scNext && scEndAt < 0) {
+        if (scVisit == SC_VISIT.length && clock >= scNext && scEndAt < 0) {
             System.out.println("CARTTEST SEED after visits: auto found " + SeedCrackerModule.testObs());
+            int good = 0;
+            for (int vi : SC_VISIT) {
+                int[] f = null;
+                for (int[] g : SC_FOUND) if (g[0] == vi) { f = g; break; }
+                boolean hit = false, wrong = false;
+                for (SeedCracker.Obs o : SeedCrackerModule.testObs()) {
+                    if (!o.type.id().equals(SC_IDS[vi])) continue;
+                    if (o.cx == f[1] && o.cz == f[2]) hit = true;
+                    // anything else of this kind must be a real placement chunk too (stale temples of older tests are dropped below)
+                    else if (vi >= 5 && SC_FOUND.stream().noneMatch(g -> g[0] == vi && g[1] == o.cx && g[2] == o.cz)) {
+                        // the basefinder test placed one of each by hand at fixed spots: finding those exactly is right too
+                        boolean other = false;
+                        for (String[] st : STRUCTS) if (st[0].equals(SC_IDS[vi]) && (Integer.parseInt(st[1]) >> 4) == o.cx && (Integer.parseInt(st[2]) >> 4) == o.cz) other = true;
+                        if (!other) wrong = true;
+                        else System.out.println("CARTTEST SEED AUTO " + SC_IDS[vi] + " also found the basefinder one exactly at chunk " + o.cx + " " + o.cz);
+                    }
+                }
+                if (hit && !wrong) good++;
+                System.out.println("CARTTEST SEED AUTO " + SC_IDS[vi] + " " + (hit ? "OK" : "MISS") + (wrong ? " +WRONG" : "") + " at chunk " + f[1] + " " + f[2]);
+            }
+            scAuto = good;
             // the flat test world also holds temples an older test built anywhere: those fit no seed, drop them
             SeedCrackerModule.testRetain(o -> SC_FOUND.stream().anyMatch(f -> SC_IDS[f[0]].equals(o.type.id()) && f[1] == o.cx && f[2] == o.cz));
             System.out.println("CARTTEST SEED kept " + SeedCrackerModule.testObs());
@@ -773,7 +797,7 @@ final class CartTest {
             // the rest by hand, like ".seed add" would: two of each temple kind, two villages a chunk off (radius 1), an outpost, a monument
             int[] per = new int[SC_SETS.length];
             for (int[] f : SC_FOUND) {
-                int lim = f[0] <= 3 ? 2 : 1;
+                int lim = f[0] <= 3 ? 2 : f[0] <= 5 ? 1 : 0;
                 if (per[f[0]]++ >= lim) continue;
                 int off = f[0] == 3 ? 1 : 0;
                 SeedCrackerModule.testAdd(new SeedCracker.Obs(SeedCracker.TYPES.get(SC_IDS[f[0]]), f[1] + off, f[2] - off, f[0] >= 3 ? 1 : 0, false));
@@ -807,7 +831,7 @@ final class CartTest {
             long real = server.method_30002().method_8412();
             boolean ok1 = got != null && got == real, ok2 = scDirect != null && scDirect.startsWith("OK");
             System.out.println("CARTTEST SEED RESULT2 " + scDirect);
-            System.out.println("CARTTEST DONE ok=" + ((ok1 ? 1 : 0) + (ok2 ? 1 : 0)) + "/2");
+            System.out.println("CARTTEST DONE ok=" + ((ok1 ? 1 : 0) + (ok2 ? 1 : 0) + (scAuto == SC_VISIT.length ? 1 : 0)) + "/3 auto=" + scAuto + "/" + SC_VISIT.length);
             mc.method_1592();
             phase = 99;
         }

@@ -97,6 +97,14 @@ public final class SeedCrackerModule extends Module {
         return INSTANCE == null ? null : INSTANCE.seed;
     }
 
+    private int announceAt = -1;
+
+    @Override
+    public void onEnable() {
+        super.onEnable();
+        this.announceAt = this.ticks + 60;
+    }
+
     @Override
     public void onDisable() {
         if (this.cancel != null) this.cancel.set(true);
@@ -122,6 +130,12 @@ public final class SeedCrackerModule extends Module {
             this.load();
             this.scanned.clear();
             this.queue.clear();
+            this.pending.clear();
+            this.announceAt = this.ticks + 60;
+        }
+        if (this.announceAt >= 0 && this.ticks >= this.announceAt) {
+            this.announceAt = -1;
+            if (this.notify.getValue() && this.seed == null && this.running == null) this.say("watching for structures: " + this.obs.size() + " known - " + this.needText());
         }
         if (this.seed == null) {
             if (this.dim.equals("overworld")) this.scanChunks(w);
@@ -182,7 +196,155 @@ public final class SeedCrackerModule extends Module {
             this.scanned.add(k);
             String found = detect(chunk, cx, cz);
             if (found != null) this.addObs(new SeedCracker.Obs(SeedCracker.TYPES.get(found), cx, cz, 0, true), true);
+            this.collectAnchors(chunk);
         }
+        this.workPending(w, budget + 1_500_000L);
+    }
+
+    // ------------------------------------------------------------------ template structures (shipwrecks, igloos, ruined portals) + monuments
+
+    /** A block that may belong to a structure, checked once enough around it is loaded. kind: index in StructureMatcher.KINDS, -1 = monument. */
+    private record Anchor(int kind, int x, int y, int z, int[] tries) {
+    }
+
+    private final java.util.ArrayDeque<Anchor> pending = new java.util.ArrayDeque<>();
+
+    private void collectAnchors(class_2818 chunk) {
+        class_2826[] sections = chunk.method_12006();
+        int minSec = chunk.method_32891();
+        int bx = chunk.method_12004().field_9181 << 4, bz = chunk.method_12004().field_9180 << 4;
+        int chests = 0, furnaces = 0, obsidian = 0;
+        boolean prism = false;
+        for (int si = 0; si < sections.length; si++) {
+            class_2826 sec = sections[si];
+            if (sec == null || sec.method_38292()) continue;
+            boolean any = sec.method_19523(st -> {
+                String id = BaseFinder.id(((class_2680) st).method_26204());
+                return id.equals("chest") || id.equals("furnace") || id.equals("obsidian") || id.equals("crying_obsidian") || id.equals("prismarine_bricks");
+            });
+            if (!any) continue;
+            int by = (minSec + si) << 4;
+            for (int y = 0; y < 16; y++) {
+                for (int z = 0; z < 16; z++) {
+                    for (int x = 0; x < 16; x++) {
+                        String id = BaseFinder.id(sec.method_12254(x, y, z).method_26204());
+                        switch (id) {
+                            case "chest" -> { if (chests++ < 4) this.addAnchor(0, bx + x, by + y, bz + z); }
+                            case "furnace" -> { if (furnaces++ < 2) this.addAnchor(1, bx + x, by + y, bz + z); }
+                            case "obsidian", "crying_obsidian" -> { if (obsidian++ % 5 == 0 && obsidian < 16) this.addAnchor(2, bx + x, by + y, bz + z); }
+                            case "prismarine_bricks" -> { if (!prism) { prism = true; this.addAnchor(-1, bx + x, by + y, bz + z); } }
+                            default -> { }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private void addAnchor(int kind, int x, int y, int z) {
+        // already known structure of this kind close by: nothing new to learn
+        String type = kind < 0 ? "monument" : StructureMatcher.KINDS[kind].type();
+        int near = kind < 0 ? 96 : 48;
+        for (SeedCracker.Obs o : this.obs) {
+            if (o.type.id().equals(type) && Math.abs(o.cx * 16 + 8 - x) < near && Math.abs(o.cz * 16 + 8 - z) < near) return;
+        }
+        if (kind < 0) for (Anchor a : this.pending) if (a.kind < 0 && Math.abs(a.x - x) < near && Math.abs(a.z - z) < near) return;
+        if (this.pending.size() < 400) this.pending.add(new Anchor(kind, x, y, z, new int[]{0, 0}));
+    }
+
+    private void workPending(class_638 w, long until) {
+        int n = this.pending.size();
+        for (int i = 0; i < n && System.nanoTime() < until; i++) {
+            Anchor a = this.pending.poll();
+            if (a.tries[1] > this.ticks) { this.pending.add(a); continue; }
+            boolean retry;
+            if (a.kind < 0) retry = this.checkMonument(w, a);
+            else {
+                StructureMatcher.Kind k = StructureMatcher.KINDS[a.kind];
+                boolean known = false;
+                for (SeedCracker.Obs o : this.obs) if (o.type.id().equals(k.type()) && Math.abs(o.cx * 16 + 8 - a.x) < 48 && Math.abs(o.cz * 16 + 8 - a.z) < 48) known = true;
+                if (known) continue;
+                StructureMatcher.Hit h = StructureMatcher.match(k, worldView(w), a.x, a.y, a.z);
+                retry = h != null && h.retry;
+                if (h != null && !h.retry) {
+                    System.out.println("Hook SeedCracker: " + k.type() + " " + h.template + " " + h.matched + "/" + h.total + " -> chunk " + h.cx + " " + h.cz);
+                    this.addObs(new SeedCracker.Obs(SeedCracker.TYPES.get(k.type()), h.cx, h.cz, 0, true), true);
+                }
+            }
+            if (retry && ++a.tries[0] < 30) {
+                a.tries[1] = this.ticks + 40;
+                this.pending.add(a);
+            }
+        }
+    }
+
+    private static StructureMatcher.World worldView(class_638 w) {
+        return new StructureMatcher.World() {
+            long key = Long.MIN_VALUE;
+            class_2818 chunk;
+            final class_2338.class_2339 pos = new class_2338.class_2339();
+
+            @Override
+            public String block(int x, int y, int z) {
+                long k = class_1923.method_8331(x >> 4, z >> 4);
+                if (k != this.key) {
+                    this.key = k;
+                    Object c = w.method_2935().method_2857(x >> 4, z >> 4, class_2806.field_12803, false);
+                    this.chunk = c instanceof class_2818 ch ? ch : null;
+                }
+                if (this.chunk == null) return null;
+                return BaseFinder.id(this.chunk.method_8320(this.pos.method_10103(x, y, z)).method_26204());
+            }
+        };
+    }
+
+    /**
+     * Ocean monument: its building is always 58 x 58 blocks from (chunk corner - 29) at y 39..61, whatever way it faces.
+     * When the prismarine around spans exactly that, the start chunk is exact. Returns true = try again later.
+     */
+    private boolean checkMonument(class_638 w, Anchor a) {
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        boolean missing = false;
+        class_2338.class_2339 pos = new class_2338.class_2339();
+        for (int cx = (a.x >> 4) - 4; cx <= (a.x >> 4) + 4; cx++) {
+            for (int cz = (a.z >> 4) - 4; cz <= (a.z >> 4) + 4; cz++) {
+                Object c = w.method_2935().method_2857(cx, cz, class_2806.field_12803, false);
+                if (!(c instanceof class_2818 chunk)) { missing = true; continue; }
+                class_2826[] sections = chunk.method_12006();
+                int minSec = chunk.method_32891();
+                for (int si = 0; si < sections.length; si++) {
+                    int by = (minSec + si) << 4;
+                    if (by + 15 < 39 || by > 61) continue;
+                    class_2826 sec = sections[si];
+                    if (sec == null || sec.method_38292()) continue;
+                    if (!sec.method_19523(st -> isPrismarine(BaseFinder.id(((class_2680) st).method_26204())))) continue;
+                    for (int y = Math.max(0, 39 - by); y < 16 && by + y <= 61; y++) {
+                        for (int z = 0; z < 16; z++) {
+                            for (int x = 0; x < 16; x++) {
+                                if (!isPrismarine(BaseFinder.id(sec.method_12254(x, y, z).method_26204()))) continue;
+                                int wx = (cx << 4) + x, wz = (cz << 4) + z;
+                                if (wx < minX) minX = wx;
+                                if (wx > maxX) maxX = wx;
+                                if (wz < minZ) minZ = wz;
+                                if (wz > maxZ) maxZ = wz;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (StructureMatcher.debug) System.out.println("Hook SeedCracker: monument check box " + minX + ".." + maxX + " " + minZ + ".." + maxZ + " missing=" + missing);
+        if (minX == Integer.MAX_VALUE) return false;
+        if (maxX - minX == 57 && maxZ - minZ == 57 && ((minX + 29) & 15) == 0 && ((minZ + 29) & 15) == 0) {
+            System.out.println("Hook SeedCracker: monument box " + minX + " " + minZ + " -> chunk " + ((minX + 29) >> 4) + " " + ((minZ + 29) >> 4));
+            this.addObs(new SeedCracker.Obs(SeedCracker.TYPES.get("monument"), (minX + 29) >> 4, (minZ + 29) >> 4, 0, true), true);
+            return false;
+        }
+        return missing || maxX - minX < 57 || maxZ - minZ < 57;
+    }
+
+    private static boolean isPrismarine(String id) {
+        return id.equals("prismarine") || id.equals("prismarine_bricks") || id.equals("dark_prismarine") || id.equals("sea_lantern");
     }
 
     /** Which structure started in this chunk (by its blocks), or null. */
@@ -277,7 +439,7 @@ public final class SeedCrackerModule extends Module {
             for (int p : this.pillars) if (p >= 0) n++;
             this.dataVersion++;
             this.save();
-            if (this.notify.getValue()) this.say("End pillars read: " + n + "/10");
+            if (this.notify.getValue()) this.say("End pillars read: " + n + "/10 - " + this.needText());
         }
     }
 
@@ -287,9 +449,21 @@ public final class SeedCrackerModule extends Module {
         this.dataVersion++;
         this.save();
         if (tell && this.notify.getValue()) {
-            String miss = SeedCracker.ready(this.obs, this.pillarSeedsOrNull(), this.hashed);
-            this.say("§a" + o.type.name() + "§f at " + (o.cx * 16) + " " + (o.cz * 16) + " §7(" + this.obs.size() + " structures" + (miss == null ? ", enough to crack" : ", " + miss) + ")");
+            this.say("§a" + o.type.name() + "§f found at " + (o.cx * 16) + " " + (o.cz * 16) + " §7(" + this.obs.size() + (this.obs.size() == 1 ? " structure" : " structures") + ") - " + this.needText());
         }
+    }
+
+    /** "~3 more structures needed (or ~1 + the End pillars)" / "enough - cracking". */
+    private String needText() {
+        int[] ps = this.pillarSeedsOrNull();
+        int k = SeedCracker.needMore(this.obs, ps, this.hashed);
+        if (k == 0) return "§aenough - " + (this.autoCrack.getValue() ? "cracking now" : "press Crack Now");
+        String s = "§e~" + k + " more structure" + (k == 1 ? "" : "s") + " needed";
+        if (ps == null) {
+            int e = SeedCracker.needMoreWithEnd(this.obs, null, this.hashed);
+            if (e < k) s += e == 0 ? "§7 (or just read the End pillars)" : "§7 (or ~" + e + " + reading the End pillars)";
+        }
+        return s;
     }
 
     private int[] pillarSeedsOrNull() {
@@ -309,7 +483,7 @@ public final class SeedCrackerModule extends Module {
             this.lastMissing = miss;
             return;
         }
-        if (this.obs.isEmpty() && ps == null) { this.say("nothing collected yet - walk around (temples, swamp huts) or visit the End"); return; }
+        if (this.obs.isEmpty() && ps == null) { this.say("nothing collected yet - walk around (temples, huts, igloos, shipwrecks, ruined portals, monuments) or visit the End"); return; }
         SeedCracker.Result res = new SeedCracker.Result();
         AtomicBoolean c = new AtomicBoolean();
         this.cancel = c;
@@ -388,7 +562,7 @@ public final class SeedCrackerModule extends Module {
         for (int p : this.pillars) if (p >= 0) n++;
         String miss = SeedCracker.ready(this.obs, this.pillarSeedsOrNull(), this.hashed);
         this.say(this.obs.size() + " structures, " + n + "/10 End pillars, hashed seed " + (this.hashed != 0 ? "known" : "§cmissing") + "§f - "
-            + (this.running != null ? this.progressText() : miss == null ? "enough to crack" : "have " + miss));
+            + (this.running != null ? this.progressText() : this.needText()) + (miss != null ? " §7(" + miss + ")" : ""));
         StringBuilder sb = new StringBuilder();
         for (SeedCracker.Obs o : this.obs) {
             if (sb.length() > 0) sb.append(", ");
@@ -467,7 +641,7 @@ public final class SeedCrackerModule extends Module {
             }
             default -> {
                 this.say(".seed status | crack | copy | stop | clear | types | remove (last) | add <type> <x> <z> [radius]");
-                this.say("§7Temples, swamp huts and End pillars are found by themselves. Add villages, monuments, outposts, buried treasure (exact chest chunk) etc. by hand.");
+                this.say("§7Temples, swamp huts, igloos, shipwrecks, ruined portals, ocean monuments and End pillars are found by themselves. Add villages, outposts, buried treasure (exact chest chunk) etc. by hand.");
             }
         }
     }

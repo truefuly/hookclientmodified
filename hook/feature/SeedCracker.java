@@ -340,6 +340,29 @@ public final class SeedCracker {
         return null;
     }
 
+    /**
+     * About how many more exactly found structures (temple / hut / igloo / shipwreck size) are needed before a crack can
+     * run: 0 = enough now. Each one adds its real bits and cuts the low-bit candidates by ~64.
+     */
+    static int needMore(List<Obs> obs, int[] pillars, long hashed) {
+        if (ready(obs, pillars, hashed) == null) return 0;
+        double need = hashed != 0 ? 48 - 18 : 46;
+        double have = bits(obs, pillars);
+        double per = new Obs(TYPES.get("desert_pyramid"), 0, 0, 0, true).bits() * REAL;
+        long low = low20(obs).length;
+        for (int k = 1; k <= 60; k++) {
+            long l = Math.max(1, low >> Math.min(60, 6 * k));
+            if (have + k * per >= need && work(obs, pillars, (int) Math.min(Integer.MAX_VALUE, l)) <= MAX_WORK) return k;
+        }
+        return 60;
+    }
+
+    /** needMore if all 10 End pillars were read too (to tell whether a trip to the End is worth it). */
+    static int needMoreWithEnd(List<Obs> obs, int[] pillars, long hashed) {
+        if (pillars != null) return needMore(obs, pillars, hashed);
+        return needMore(obs, new int[]{0}, hashed);
+    }
+
     /** The 48-bit structure seeds that fit everything; null if too much work (res.error set). */
     static long[] structureSeeds(List<Obs> obsIn, int[] pillars, int threads, Result res, AtomicBoolean cancel, Consumer<String> log) throws InterruptedException {
         List<Obs> obs = new ArrayList<>(obsIn);
