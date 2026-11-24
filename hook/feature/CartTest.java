@@ -513,6 +513,10 @@ final class CartTest {
                     {"5", "3", "2", "sugar_cane"},
                     {"4", "1", "6", "sand"},
                     {"4", "2", "6", "cactus"},
+                    // rotated by the look direction (16 steps) and a sign that opens its editor
+                    {"3", "1", "4", "oak_sign[rotation=6]"},
+                    {"1", "1", "2", "skeleton_skull[rotation=10]"},
+                    {"5", "1", "4", "white_banner[rotation=12]"},
                     // states that need a click, a second item or a tool
                     {"1", "1", "4", "smooth_stone_slab[type=double]"},
                     {"2", "1", "5", "repeater[facing=north,delay=3]"},

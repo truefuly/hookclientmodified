@@ -53,7 +53,13 @@ final class SbWorld {
         class_2680 s = w.method_8320(p);
         if (dangerous(s) || s.method_26204() == class_2246.field_16492) return false; // scaffolding: you sink through
         var shape = s.method_26220(w, p);
-        return !shape.method_1110() && shape.method_1105(net.minecraft.class_2350.class_2351.field_11052) >= 0.99;
+        if (shape.method_1110()) return false;
+        double top = shape.method_1105(net.minecraft.class_2350.class_2351.field_11052);
+        if (top < 0.99) return false;
+        // something at the top under a player standing in the middle (not an open trapdoor / door at the edge)
+        for (net.minecraft.class_238 b : shape.method_1090())
+            if (b.field_1325 >= top - 0.05 && b.field_1320 > 0.2 && b.field_1323 < 0.8 && b.field_1324 > 0.2 && b.field_1321 < 0.8) return true;
+        return false;
     }
 
     /** Lava (or fire) directly beside or below a spot: keep away from it. */

@@ -935,7 +935,8 @@ public final class SchematicBuilderModule extends Module {
     private boolean sealsPending(class_2338 p) {
         for (class_2350 d : class_2350.values()) {
             Task o = this.tasks.get(p.method_10093(d).method_10063());
-            if (o != null && o.place && !this.failedUntil.containsKey(o.pos.method_10063()) && this.openSides(o.pos, p) == 0) return true;
+            // also when it failed for now (it stood in the hole...): walled in, it could never be placed later
+            if (o != null && o.place && this.failCount.getOrDefault(o.pos.method_10063(), 0) < 6 && this.openSides(o.pos, p) == 0) return true;
         }
         return false;
     }
@@ -1041,6 +1042,7 @@ public final class SchematicBuilderModule extends Module {
         // like vanilla: the click on the block first (does nothing while sneaking), then the bucket itself
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (!res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        this.clickedBlock(); // Grim counts every block click as a place
         pl.method_6104(class_1268.field_5808);
         this.lastClickTick = this.tickNo;
         this.aimMiss = 0;
@@ -1431,6 +1433,7 @@ public final class SchematicBuilderModule extends Module {
             if (!this.rotateTo(pl, s.yaw(), s.pitch(), 0.4f) || this.modeTicks < this.placeDelay()) return;
             if (!pl.method_5715() && SbWorld.usable(w, s.hit().method_17777())) { this.forceSneakTicks = 10; return; }
             r = this.mc.field_1761.method_2896(pl, class_1268.field_5808, s.hit()).method_23665() ? 1 : -1;
+            this.clickedBlock(); // Grim counts every block click as a place
             this.lastClickTick = this.tickNo;
             if (r == 1) pl.method_6104(class_1268.field_5808);
         } else r = this.aimAndPlace(w, pl, t.pos, t.kind == SbFix.GROW ? null : stepWant, (class_1747) item, s.yaw(), s.pitch(), this.modeTicks >= this.placeDelay());
@@ -1642,6 +1645,7 @@ public final class SchematicBuilderModule extends Module {
         }
         var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         if (t.kind == SbFix.WATERLOG && !res.method_23665()) res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        this.clickedBlock(); // Grim counts every block click as a place
         pl.method_6104(class_1268.field_5808);
         this.lastClickTick = this.tickNo;
         this.aimMiss = 0;
@@ -1834,6 +1838,7 @@ public final class SchematicBuilderModule extends Module {
         class_3965 hit = this.crosshair(pl);
         if (hit != null) this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
         var res = this.mc.field_1761.method_2919(pl, class_1268.field_5808);
+        this.clickedBlock(); // Grim counts every block click as a place
         pl.method_6104(class_1268.field_5808);
         this.lastClickTick = this.tickNo;
         this.aimMiss = 0;
@@ -2595,6 +2600,7 @@ public final class SchematicBuilderModule extends Module {
         if (this.modeTicks % 20 == 5 || this.modeTicks < 5) {
             this.modeTicks = 6;
             this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+            this.clickedBlock(); // Grim counts every block click as a place
             pl.method_6104(class_1268.field_5808);
         }
     }
@@ -2856,6 +2862,12 @@ public final class SchematicBuilderModule extends Module {
 
     private float aimTY = Float.NaN, aimTP, aimOffY, aimOffP, aimSpeed, aimCap, aimLag, aimCurve, aimOSY, aimOSP;
     private boolean aimOvershoot, aimPrecise, afterPlace;
+
+    /** After any block click: the next turn must not repeat the one after the last click (Grim DuplicateRotPlace). */
+    private void clickedBlock() {
+        this.lastBeforePlace = this.lastTurnAbs;
+        this.afterPlace = true;
+    }
     private float lastTurnAbs, lastAfterPlace = Float.NaN, lastBeforePlace = Float.NaN, aimAccel = 0.6f, aimVel;
     private int aimHesitate, reactWait = -1;
     private final float[] walkPhase = {(float) (Math.random() * 6.3), (float) (Math.random() * 6.3), (float) (Math.random() * 6.3)};
