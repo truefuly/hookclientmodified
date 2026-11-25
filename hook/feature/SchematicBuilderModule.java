@@ -1257,12 +1257,34 @@ public final class SchematicBuilderModule extends Module {
             // top down: the lower blocks are the way up to the higher ones. Nearest-first took the pillar away
             // under a high block, which then needed a new pillar, which was taken away again...
             // The highest one left goes first (one in reach if there are several that high).
+            // The side we are on (inside the build or outside it) is cleared first: walking in and out through
+            // the door for every next-highest block wasted most of the time.
+            boolean inside = this.underRoof(sw, pl.method_24515());
+            boolean sideLeft = false;
+            for (Long l : this.scaffoldPlaced) {
+                if (this.failedUntil.containsKey(l)) continue;
+                class_2338 p = class_2338.method_10092(l);
+                if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue;
+                if (this.underRoof(sw, p) == inside) { sideLeft = true; break; }
+            }
+            // the pillar we stand on is the way to the block we came up for: it goes last, not first
+            // (top-down picked it as "highest in reach", we fell down, pillared up again... forever)
+            class_2338 feet = pl.method_24515();
+            boolean otherLeft = false;
+            for (Long l : this.scaffoldPlaced) {
+                if (this.failedUntil.containsKey(l)) continue;
+                class_2338 p = class_2338.method_10092(l);
+                if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue;
+                if (p.method_10263() != feet.method_10263() || p.method_10260() != feet.method_10260() || p.method_10264() >= feet.method_10264()) { otherLeft = true; break; }
+            }
             class_2338 best = null, bestNear = null;
             double d2 = Double.MAX_VALUE, dn = Double.MAX_VALUE, r2 = this.reach() * this.reach();
             for (Long l : this.scaffoldPlaced) {
                 if (this.failedUntil.containsKey(l)) continue;
                 class_2338 p = class_2338.method_10092(l);
                 if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue; // part of the build now
+                if (sideLeft && this.underRoof(sw, p) != inside) continue;
+                if (otherLeft && p.method_10263() == feet.method_10263() && p.method_10260() == feet.method_10260() && p.method_10264() < feet.method_10264()) continue;
                 double d = pl.method_33571().method_1025(class_243.method_24953(p));
                 if (d <= r2 && (bestNear == null || p.method_10264() > bestNear.method_10264() || p.method_10264() == bestNear.method_10264() && d < dn)
                         && this.visibleFace(w, pl, p) != null) { dn = d; bestNear = p; }
@@ -1403,6 +1425,14 @@ public final class SchematicBuilderModule extends Module {
 
     private String pfeet() {
         return this.mc.field_1724 == null ? "?" : this.mc.field_1724.method_24515().method_23854();
+    }
+
+    /** Inside the build: something of the schematic above it (a roof / ceiling), within the build area. */
+    private boolean underRoof(class_1937 sw, class_2338 p) {
+        if (sw == null || !this.inBox(p)) return false;
+        for (int y = p.method_10264() + 1; y <= this.box[4]; y++)
+            if (!SbLitematica.target(sw, new class_2338(p.method_10263(), y, p.method_10260())).method_26215()) return true;
+        return false;
     }
 
     private boolean inBox(class_2338 p) {

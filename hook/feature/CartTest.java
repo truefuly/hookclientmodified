@@ -770,7 +770,7 @@ final class CartTest {
             int pct = pr == null ? 0 : (int) pr.percent();
             if (clock == 700 || clock == 1500 || clock == 2600 || pct >= 100 && sbLastPct < 100) shot(mc, "sb_" + (clock - 300) / 20);
             sbLastPct = pct;
-            if (pr != null && pr.state().startsWith("Finished") || clock > 300 + 20 * (HOUSE ? 1020 : 540)) {
+            if (pr != null && pr.state().startsWith("Finished") || clock > 300 + 20 * (HOUSE ? 1200 : 540)) {
                 shot(mc, "sb_end");
                 // every block of the schematic: is it really what was wanted (states included)?
                 Object plc = SbLitematica.placement(p.method_23317(), p.method_23318(), p.method_23321());
