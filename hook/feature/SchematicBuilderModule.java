@@ -755,7 +755,7 @@ public final class SchematicBuilderModule extends Module {
         }
         // only blocks with nothing around them are left (a ridge of slabs over an empty attic): "later" never
         // comes for those - give the first one a helper block to sit on, walking there first if needed
-        if (tries == 0 && floating != null) {
+        if (tries == 0 && floating != null && !this.anySupportedLeft(w)) {
             dbg("only floating blocks left - helper for " + floating.pos.method_23854());
             if (this.tryHelper(w, pl, floating)) return;
             if (this.walkNear(w, pl, floating.pos, floating)) { this.status = "Walking (block needs a helper)"; return; }
@@ -1254,15 +1254,22 @@ public final class SchematicBuilderModule extends Module {
         // remove our scaffolding (only once nothing else is left to build)
         if (this.cleanup.getValue() && this.tasks.isEmpty()) {
             this.scaffoldPlaced.removeIf(l -> w.method_8320(class_2338.method_10092(l)).method_26204() != this.scaffoldItem().method_7711());
-            class_2338 best = null;
-            double d2 = Double.MAX_VALUE;
+            // top down: the lower blocks are the way up to the higher ones. Nearest-first took the pillar away
+            // under a high block, which then needed a new pillar, which was taken away again...
+            // The highest one left goes first (one in reach if there are several that high).
+            class_2338 best = null, bestNear = null;
+            double d2 = Double.MAX_VALUE, dn = Double.MAX_VALUE, r2 = this.reach() * this.reach();
             for (Long l : this.scaffoldPlaced) {
                 if (this.failedUntil.containsKey(l)) continue;
                 class_2338 p = class_2338.method_10092(l);
                 if (this.inBox(p) && !SbLitematica.target(sw, p).method_26215()) continue; // part of the build now
                 double d = pl.method_33571().method_1025(class_243.method_24953(p));
-                if (d < d2) { d2 = d; best = p; }
+                if (d <= r2 && (bestNear == null || p.method_10264() > bestNear.method_10264() || p.method_10264() == bestNear.method_10264() && d < dn)
+                        && this.visibleFace(w, pl, p) != null) { dn = d; bestNear = p; }
+                if (best == null || p.method_10264() > best.method_10264() || p.method_10264() == best.method_10264() && d < d2) { d2 = d; best = p; }
             }
+            // a lower one in reach only once nothing higher is left (it may be the way up there)
+            if (bestNear != null && bestNear.method_10264() >= best.method_10264()) { best = bestNear; d2 = dn; }
             if (best == null) {
                 // some scaffolding is left that failed a moment ago: not finished yet, try again from elsewhere
                 int left = 0;
@@ -2440,6 +2447,95 @@ public final class SchematicBuilderModule extends Module {
         return false;
     }
 
+    /** Some block that can be built the normal way is still left anywhere (then floating ones just wait for it). */
+    private boolean anySupportedLeft(class_638 w) {
+        for (Task t : this.tasks.values()) {
+            if (!t.place || t.kind != SbFix.PLACE) return true; // breaking / clicking work left
+            if (this.skipped.contains(t.pos.method_10063())) continue;
+            class_1792 it = itemFor(t.want);
+            if (this.count(it) == 0) continue;
+            if (this.supported(w, t.pos)) return true;
+        }
+        return false;
+    }
+
+    private class_2338 doorOpened;
+    private boolean doorPassed;
+    private int doorTicks;
+
+    /**
+     * Doors on the way: open a closed one in the next steps (like a player, aimed and clicked without sneaking),
+     * and close it again once we went through and are clear of it. True while busy with a door.
+     */
+    private boolean handleDoors(class_638 w, class_746 pl) {
+        class_243 eye = pl.method_33571();
+        double r2 = this.reach() * this.reach();
+        if (this.doorOpened != null) {
+            class_2338 d = this.doorOpened;
+            class_2680 ds = w.method_8320(d);
+            boolean inIt = pl.method_5829().method_994(new class_238(d)) || pl.method_5829().method_994(new class_238(d.method_10084()));
+            if (inIt) this.doorPassed = true;
+            double hx = pl.method_23317() - (d.method_10263() + 0.5), hz = pl.method_23321() - (d.method_10260() + 0.5);
+            if (!SbWorld.door(ds) || !SbWorld.doorOpen(ds) || eye.method_1025(class_243.method_24953(d)) > r2) this.doorOpened = null;
+            else if (this.doorPassed && !inIt && hx * hx + hz * hz > 1.5 * 1.5) {
+                this.keys(false, false, false, false);
+                if (this.clickDoor(w, pl, d)) { dbg("closed door " + d.method_23854() + " behind us"); this.doorOpened = null; }
+                else if (++this.doorTicks > 60) { dbg("could not close door " + d.method_23854()); this.doorOpened = null; this.doorTicks = 0; }
+                return true;
+            }
+        }
+        for (int i = this.pathIdx; i < Math.min(this.pathIdx + 2, this.path.size()); i++) {
+            class_2338 p = this.path.get(i).pos();
+            for (class_2338 q : new class_2338[]{p, p.method_10084()}) {
+                class_2680 st = w.method_8320(q);
+                if (!SbWorld.door(st) || SbWorld.doorOpen(st)) continue;
+                if (eye.method_1025(class_243.method_24953(q)) > r2) return false; // walk closer first
+                class_2338 low = SbWorld.door(w.method_8320(q.method_10074())) ? q.method_10074() : q;
+                this.keys(false, false, false, false);
+                if (this.clickDoor(w, pl, low)) { dbg("opened door " + low.method_23854()); this.doorOpened = low; this.doorPassed = false; }
+                else if (++this.doorTicks > 60) {
+                    dbg("could not open door " + low.method_23854() + " - new path");
+                    this.doorTicks = 0;
+                    this.avoid.put(low.method_10063(), System.currentTimeMillis() + 60_000L);
+                    this.replan(w, pl, this.path.get(this.path.size() - 1).pos());
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Looks at the door (the panel, wherever it is) and right-clicks it - never while sneaking. */
+    private boolean clickDoor(class_638 w, class_746 pl, class_2338 d) {
+        // a spot of the door really in sight (the wall beside it hides the middle when standing at an angle),
+        // the upper half first: that is at eye height
+        class_3965 f = SbWorld.door(w.method_8320(d.method_10084())) ? this.visibleFace(w, pl, d.method_10084()) : null;
+        if (f == null) f = this.visibleFace(w, pl, d);
+        if (f == null) return false;
+        float[] rot = SbPlacer.lookAt(pl.method_33571(), f.method_17784());
+        boolean there = this.rotateTo(pl, rot[0], rot[1], 0.6f);
+        if (!there || !settled(pl) || pl.method_5715()) return false;
+        class_3965 hit = this.crosshair(pl);
+        if (hit == null || !(hit.method_17777().equals(d) || hit.method_17777().equals(d.method_10084())) || !SbWorld.door(w.method_8320(hit.method_17777()))) {
+            this.rotateTo(pl, rot[0], rot[1], 0.2f);
+            return false;
+        }
+        if (SbAcTest.ON) {
+            class_2338 hp = hit.method_17777();
+            var hs = w.method_8320(hp).method_26218(w, hp);
+            SbAcTest.intendedPos = hp.method_10063();
+            SbAcTest.intendedBox = hs.method_1110() ? new class_238(hp) : hs.method_1107().method_996(hp);
+        }
+        if (this.dupRotRisk(pl)) return false;
+        var res = this.mc.field_1761.method_2896(pl, class_1268.field_5808, hit);
+        if (!res.method_23665()) return false;
+        pl.method_6104(class_1268.field_5808);
+        this.clickedBlock();
+        this.lastClickTick = this.tickNo;
+        this.doorTicks = 0;
+        return true;
+    }
+
     private void finishedBlock(Task t) {
         this.stuckRetries = 0;
         this.escape = false;
@@ -2666,6 +2762,7 @@ public final class SchematicBuilderModule extends Module {
                 return;
             }
         }
+        if (this.handleDoors(w, pl)) return;
         this.mc.field_1761.method_2925();
         double tx = s.pos().method_10263() + 0.5, tz = s.pos().method_10260() + 0.5;
         double dx = tx - pl.method_23317(), dz = tz - pl.method_23321();

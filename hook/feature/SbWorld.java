@@ -45,7 +45,18 @@ final class SbWorld {
     static boolean passable(class_638 w, class_2338 p) {
         class_2680 s = w.method_8320(p);
         if (dangerous(s)) return false;
+        if (door(s)) return true; // walking through opens it first
         return s.method_26220(w, p).method_1110();
+    }
+
+    /** A door you open by hand (not iron). */
+    static boolean door(class_2680 s) {
+        return s.method_26204() instanceof net.minecraft.class_2323 && !SbFix.id(s.method_26204()).endsWith("iron_door");
+    }
+
+    static boolean doorOpen(class_2680 s) {
+        for (var e : s.method_11656().entrySet()) if (e.getKey().method_11899().equals("open")) return Boolean.TRUE.equals(e.getValue());
+        return false;
     }
 
     /** Something solid to stand on (collision top reaches the block top). */
