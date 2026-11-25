@@ -230,6 +230,20 @@ public final class SchematicBuilderModule extends Module {
         this.storage.add(p.method_10063());
     }
 
+    /** Self-test: ticks spent per mode + status, most first (where the build time goes). */
+    private final Map<String, Integer> timeSpent = new HashMap<>();
+
+    private int walkCount, walkSteps;
+    private boolean exactLast;
+    private final Map<String, Integer> moveCount = new HashMap<>();
+
+    String testTimes() {
+        StringBuilder r = new StringBuilder(" walks=" + this.walkCount + " steps=" + this.walkSteps + " cut=" + this.walksCut + " moves=" + this.moveCount + " |");
+        this.timeSpent.entrySet().stream().sorted((a, b) -> b.getValue() - a.getValue()).filter(e -> e.getValue() >= 20).limit(14)
+                .forEach(e -> r.append(" [").append(e.getKey()).append("]=").append(e.getValue() / 20).append('s'));
+        return r.toString();
+    }
+
     String testStatus() {
         StringBuilder r = new StringBuilder();
         if (this.tasks.size() <= 10) for (Task t : this.tasks.values()) r.append(' ').append(t.place ? "" : "x").append(t.pos.method_23854().replace(" ", "")).append(this.failedUntil.containsKey(t.pos.method_10063()) ? "F" : "");
@@ -429,10 +443,12 @@ public final class SchematicBuilderModule extends Module {
         if (this.waitTicks > 0) {
             this.waitTicks--;
             this.keys(false, false, false, false);
+            this.timeSpent.merge("wait " + this.status, 1, Integer::sum);
             return;
         }
         this.watchdog(w, pl);
         this.modeTicks++;
+        this.timeSpent.merge(this.mode + " " + this.status, 1, Integer::sum);
         switch (this.mode) {
             case IDLE -> this.decide(w, pl);
             case PLACE -> this.tickPlace(w, pl);
@@ -2748,8 +2764,12 @@ public final class SchematicBuilderModule extends Module {
             if (cx * cx + cz * cz < 0.04) return false;
             p = new ArrayList<>(List.of(new SbPath.Step(feet(pl), SbPath.Move.WALK, List.of())));
         }
+        this.exactLast = p.size() == 1 && p.get(0).pos().equals(feet(pl)); // that step is all about the exact middle
         this.path = p;
         this.pathIdx = 0;
+        this.walkCount++;
+        this.walkSteps += p.size();
+        for (SbPath.Step st : p) this.moveCount.merge(st.move().toString(), 1, Integer::sum);
         this.arrived = onArrive;
         this.walkGoalHint = hint;
         this.mode = Mode.WALK;
@@ -2864,7 +2884,9 @@ public final class SchematicBuilderModule extends Module {
         }
         // reached?
         boolean last = this.pathIdx == this.path.size() - 1;
-        if (horiz < (last ? 0.2 : 0.6) && Math.abs(dy) < 0.75 && (ground || s.move() == SbPath.Move.DROP && dy < 0.2)) {
+        // the last spot: close enough at 0.35 (what is in reach gets checked from the real eye afterwards);
+        // creeping onto the exact middle while sneaking cost about a second at the end of every walk
+        if (horiz < (last ? (this.exactLast ? 0.2 : 0.35) : 0.6) && Math.abs(dy) < 0.75 && (ground || s.move() == SbPath.Move.DROP && dy < 0.2)) {
             this.nextStep();
             return;
         }
@@ -2880,7 +2902,7 @@ public final class SchematicBuilderModule extends Module {
         } else this.rotateTo(pl, yaw, 10.0f);
         boolean jump = s.move() == SbPath.Move.UP && ground && horiz < 1.6 && dy < 0.5 || pl.method_5799() && s.pos().method_10264() >= pl.method_23318() - 0.2;
         boolean sneak = this.edgeDanger(w, s.pos()) && s.move() != SbPath.Move.DROP && s.move() != SbPath.Move.UP
-                || last && horiz < 0.7 && ground; // creep onto the exact spot
+                || last && horiz < 0.45 && ground; // don't run past the spot
         boolean sprint = !sneak && this.path.size() - this.pathIdx > 5 && diff < 20 && !pl.method_5799();
         this.keys(diff < 60, jump, sprint, sneak);
         this.progress(horiz + Math.abs(dy), w, pl, s);

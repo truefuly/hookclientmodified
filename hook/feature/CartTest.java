@@ -793,6 +793,7 @@ final class CartTest {
                     System.out.println("CARTTEST SB check BAD " + q.method_23854() + " want " + want + " have " + have);
                 }
                 System.out.println("CARTTEST SB check " + (all - bad) + "/" + all + " exact");
+                System.out.println("CARTTEST SB time" + sb.testTimes());
                 int boxes = 0;
                 for (int i = 0; i < 36; i++) if (p.method_31548().method_5438(i).method_7909() == net.minecraft.class_1802.field_8545) boxes++;
                 System.out.println("CARTTEST SB shulker boxes in inventory at the end: " + boxes);
