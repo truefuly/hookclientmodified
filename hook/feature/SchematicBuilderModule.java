@@ -2678,12 +2678,23 @@ public final class SchematicBuilderModule extends Module {
             class_1747 pillarWith = buildItem != null ? buildItem : this.scaffoldItem();
             if (!this.hold(pl, pillarWith)) { if (this.count(pillarWith) == 0) { this.missing(pillarWith); this.toIdle(); } return; }
             boolean centered = horiz < 0.25;
-            float yaw = centered ? pl.method_36454() : (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+            // centred: keep the yaw that is already being aimed at - aiming at "wherever the head is now" plus the
+            // random aim offset chases itself every tick, the head never comes to rest and the jump passes unclicked
+            float yaw = !centered ? (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0)
+                    : !Float.isNaN(this.aimTY) && Math.abs(class_3532.method_15393(this.aimTY - pl.method_36454())) < 6.0f ? this.aimTY : pl.method_36454();
             boolean looking = this.rotateTo(pl, yaw, 89.0f, 1.0f);
             if (!centered) { this.keys(true, false, false, true); this.progress(horiz, w, pl, s); return; }
             this.keys(false, ground && looking && settled(pl), false, false);
             if (pl.method_23318() > under.method_10264() + 1.05 && w.method_8320(under).method_45474()) {
-                if (this.aimAndPlace(w, pl, under, null, pillarWith, yaw, 89.0f, true) == 1) {
+                int pr = this.aimAndPlace(w, pl, under, null, pillarWith, yaw, 89.0f, true);
+                if (pr != 1 && this.tickNo - this.pillarDbgTick > 4) {
+                    this.pillarDbgTick = this.tickNo;
+                    class_3965 ch = this.crosshair(pl);
+                    dbg("pillar jump no place r=" + pr + " rot " + pl.method_36454() + "/" + pl.method_36455() + " sent " + this.sentYaw + "/" + this.sentPitch
+                            + " react " + this.reactWait + " hit " + (ch == null ? "none" : ch.method_17777().method_23854() + " " + ch.method_17780())
+                            + " y+" + String.format("%.2f", pl.method_23318() - under.method_10264()) + " vy " + String.format("%.3f", pl.method_18798().field_1351));
+                }
+                if (pr == 1) {
                     if (buildItem == null) this.scaffoldPlaced.add(under.method_10063());
                     else { this.pillarBuilt++; this.placedTotal++; this.lastProgressMs = System.currentTimeMillis(); }
                 }
@@ -3380,6 +3391,7 @@ public final class SchematicBuilderModule extends Module {
     }
     private float lastTurnAbs, lastAfterPlace = Float.NaN, lastBeforePlace = Float.NaN, aimAccel = 0.6f, aimVel;
     private int aimHesitate, reactWait = -1;
+    private long pillarDbgTick;
     private final float[] walkPhase = {(float) (Math.random() * 6.3), (float) (Math.random() * 6.3), (float) (Math.random() * 6.3)};
     private float walkPitch = 14.0f;
 
