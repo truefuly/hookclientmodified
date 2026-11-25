@@ -2663,6 +2663,17 @@ public final class SchematicBuilderModule extends Module {
         if (s.move() == SbPath.Move.PILLAR) {
             class_2338 under = s.pos().method_10074();
             if (SbWorld.floor(w, under) && Math.abs(dy) < 0.6 && ground) { this.nextStep(); return; }
+            // nothing to set the block on (we only stand on the edge of the block next to it, the planned block
+            // below never came) or something sits in the spot (a torch): jumping here would go on forever
+            class_2680 us = w.method_8320(under);
+            boolean blocked = !SbWorld.floor(w, under) && !us.method_45474();
+            if (ground && (blocked || us.method_45474() && !SbWorld.floor(w, under.method_10074()))) {
+                dbg("pillar at " + under.method_23854() + " impossible (" + (blocked ? SbFix.id(us.method_26204()) + " in the way" : "nothing below") + ") - new path");
+                this.avoid.put(s.pos().method_10063(), System.currentTimeMillis() + 60_000L);
+                this.avoid.put(under.method_10063(), System.currentTimeMillis() + 60_000L);
+                this.replan(w, pl, s.pos());
+                return;
+            }
             class_1747 buildItem = this.pillarItem(SbLitematica.world(), under);
             class_1747 pillarWith = buildItem != null ? buildItem : this.scaffoldItem();
             if (!this.hold(pl, pillarWith)) { if (this.count(pillarWith) == 0) { this.missing(pillarWith); this.toIdle(); } return; }
@@ -2773,6 +2784,12 @@ public final class SchematicBuilderModule extends Module {
         this.noProgress = 0;
         this.bestDist = Double.MAX_VALUE;
         this.stuckLevel++;
+        dbg("stuck " + this.stuckLevel + " on " + s.move() + " to " + s.pos().method_23854() + " breaks=" + s.breaks().size() + " at "
+                + String.format(java.util.Locale.ROOT, "%.2f %.2f %.2f", pl.method_23317(), pl.method_23318(), pl.method_23321()) + " ground=" + pl.method_24828()
+                + " step " + this.pathIdx + "/" + this.path.size() + " status=" + this.status
+                + " pose=" + pl.method_18376() + " vy=" + String.format(java.util.Locale.ROOT, "%.3f", pl.method_18798().field_1351)
+                + " below=" + SbFix.id(w.method_8320(feet(pl).method_10074()).method_26204()) + " feet=" + SbFix.id(w.method_8320(feet(pl)).method_26204())
+                + " head=" + SbFix.id(w.method_8320(feet(pl).method_10084()).method_26204()) + " above=" + SbFix.id(w.method_8320(feet(pl).method_10086(2)).method_26204()));
         switch (this.stuckLevel) {
             case 1 -> { // hop
                 this.keys(true, true, false, false);
