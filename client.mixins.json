@@ -108,6 +108,7 @@
     "ForceRenderDistanceMixin",
     "ForceRenderBlockEntityMixin",
     "AutoMinerBreakMixin",
+    "PlayerEspGlowMixin",
     "NoRenderMixin",
     "NoRenderEntityRendererMixin",
     "NoRenderTickMixin",

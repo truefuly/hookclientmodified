@@ -42,26 +42,44 @@ abstract class EntityEspBase extends Module {
     /** The colour in the style's Default colour mode. */
     protected abstract Color color(class_1297 entity, class_243 pos);
 
+    /** Called once per frame before anything is drawn (lets a module set its style from simpler settings). */
+    protected void beforeFrame() {
+    }
+
+    /** False when the module shows its targets another way (Minecraft glow); then only tracers and bars are drawn here. */
+    protected boolean drawBoxes() {
+        return true;
+    }
+
+    /** The shared filters: not the player / camera, alive, visible (or Show Invisible), and wanted by the module. */
+    protected boolean shown(class_1297 e) {
+        if (e == this.mc.field_1724 || e == this.mc.method_1560() || e.method_31481() || NoRenderModule.hides(e)) return false;
+        if (e instanceof class_1309 living && !living.method_5805()) return false;
+        if (!this.invisible.getValue() && e.method_5767()) return false;
+        return this.wants(e);
+    }
+
     @EventListener
     public void onRender3D(Render3DEvent event) {
         if (this.mc.field_1687 == null || this.mc.field_1724 == null) return;
         class_4184 camera = RenderUtils.getCamera();
-        if (camera == null || !camera.method_19332() || !this.style.begin(camera)) return;
+        if (camera == null || !camera.method_19332()) return;
+        this.beforeFrame();
+        if (!this.style.begin(camera)) return;
+        boolean boxes = this.drawBoxes();
+        if (!boxes && !this.style.wantsTracers() && !this.healthBar.getValue()) return;
         float tick = camera.method_55437();
         double grow = this.expand.getValue();
         class_243 cam = camera.method_71156();
         this.bars.clear();
         int index = 0;
         for (class_1297 e : this.mc.field_1687.method_18112()) {
-            if (e == this.mc.field_1724 || e == this.mc.method_1560() || e.method_31481() || NoRenderModule.hides(e)) continue;
-            if (e instanceof class_1309 living && !living.method_5805()) continue;
-            if (!this.invisible.getValue() && e.method_5767()) continue;
-            if (!this.wants(e)) continue;
+            if (!this.shown(e)) continue;
             class_243 pos = e.method_30950(tick);
             if (!this.style.inRange(pos.field_1352, pos.field_1351, pos.field_1350)) continue;
             double half = e.method_17681() * 0.5 + grow;
             double h = e.method_17682();
-            this.style.box(pos.field_1352 - half, pos.field_1351 - grow, pos.field_1350 - half,
+            if (boxes || this.style.wantsTracers()) this.style.box(pos.field_1352 - half, pos.field_1351 - grow, pos.field_1350 - half,
                     pos.field_1352 + half, pos.field_1351 + h + grow, pos.field_1350 + half, this.color(e, pos), index++);
             if (this.healthBar.getValue() && e instanceof class_1309 living) this.bar(living, pos, half, h + grow * 2, cam);
         }

@@ -497,9 +497,24 @@ final class CartTest {
                 cmd("summon " + mobs[i] + " " + (-9 + i * 2) + " 151 " + (9 + (i % 2) * 4) + " {NoAI:1b,PersistenceRequired:1b}");
             cmd("summon wolf 0 151 18 {NoAI:1b,Owner:[I;0,0,0,1]}");
             for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) {
-                if (m instanceof PlayerEspModule || m instanceof MobEspModule) { if (!m.isEnabled()) m.setEnabled(true); }
+                if (m instanceof PlayerEspModule) { if (!m.isEnabled()) m.setEnabled(true); }
+                if (m instanceof MobEspModule && m.isEnabled()) m.setEnabled(false);
+            }
+            // a wall with two fake players behind it: Glow must show them through the wall
+            cmd("fill -6 151 5 6 156 5 stone");
+        }
+        if (clock == 120) {
+            PlayerEspModule.testBots = true;
+            for (int i = 0; i < 2; i++) {
+                net.minecraft.class_745 fake = new net.minecraft.class_745(mc.field_1687, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "EspTest" + i));
+                fake.method_5808(-2.0 + i * 4.0, 151.0, 8.0, 180.0f, 0.0f);
+                mc.field_1687.method_53875(fake);
             }
         }
+        if (clock == 140) shot(mc, "esp_glow");
+        if (clock == 141) ((PlayerEspModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(PlayerEspModule.class)).testMode(PlayerEspModule.Mode.Box);
+        if (clock == 148) shot(mc, "esp_box");
+        if (clock == 149) ((PlayerEspModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(PlayerEspModule.class)).testMode(PlayerEspModule.Mode.Glow);
         if (clock == 150) mc.field_1705.method_1743().method_1808(false);
         if (clock == 160) {
             StringBuilder sb = new StringBuilder("CARTTEST MOBS");
