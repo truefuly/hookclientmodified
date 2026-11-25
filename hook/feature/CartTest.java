@@ -57,6 +57,7 @@ final class CartTest {
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
+        if ("sky".equals(ONLY)) { sky(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
         if ("builder".equals(ONLY)) { builder(mc, p); return; }
         if ("seedcracker".equals(ONLY)) { seedcracker(mc, p); return; }
@@ -481,7 +482,29 @@ final class CartTest {
 
     private static final hook.module.Category[] ESP_TABS = hook.module.Category.values();
 
-    /** -Dhook.carttest.only=esp: Player ESP / Mob ESP on a mob zoo, then every click GUI tab with its sections. */
+    /** -Dhook.carttest.only=sky: Custom Skys at noon, sunset and midnight. */
+    private static void sky(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("weather clear");
+            cmd("gamerule doDaylightCycle false");
+            cmd("tp @s 0 200 0 0 -35");
+            CustomSkysModule m = hook.module.ext.ModuleRegistry.get(CustomSkysModule.class);
+            if (m != null && !m.isEnabled()) m.toggle(true);
+            for (hook.module.Module mm : hook.Hook.INSTANCE.getModuleManager().c())
+                if (mm instanceof SchematicBuilderModule && mm.isEnabled()) mm.setEnabled(false);
+            System.out.println("CARTTEST SKY start enabled=" + (m != null && m.isEnabled()));
+        }
+        if (clock == 110) cmd("time set noon");
+        if (clock == 140) shot(mc, "sky_noon");
+        if (clock == 150) cmd("time set 12500");
+        if (clock == 180) shot(mc, "sky_sunset");
+        if (clock == 190) cmd("time set midnight");
+        if (clock == 220) shot(mc, "sky_night");
+        if (clock == 240) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=esp:Player ESP / Mob ESP on a mob zoo, then every click GUI tab with its sections. */
     private static void esp(class_310 mc, net.minecraft.class_746 p) {
         if (clock == 100) {
             cmd("gamemode creative");

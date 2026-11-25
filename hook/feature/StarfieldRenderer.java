@@ -163,14 +163,16 @@ final class StarfieldRenderer {
         for (int var4 = 0; var4 < 2600; ++var4) {
             float var5 = 0.62f + 0.38f * class_3532.method_15374((double)(var1 * this.speed[var4] + this.phase[var4]));
             float var6 = class_3532.method_15363((float)(this.light[var4] * var5 * var2), (float)0.0f, (float)1.0f);
-            this.star(var3, var4, this.size[var4], var6);
+            this.star(var3, var4, this.size[var4], var6, 0.0f);
             if (!(this.light[var4] > 0.8f)) continue;
-            this.star(var3, var4, this.size[var4] * 4.0f, var6 * 0.12f);
+            // bright stars sparkle: the same small quad turned 45 degrees (an eight-pointed star). The old big flat
+            // glow quad showed up as a grey square around them.
+            this.star(var3, var4, this.size[var4] * 1.6f, var6 * 0.45f, (float)(Math.PI / 4.0));
         }
         this.starMesh.upload(var3);
     }
 
-    private void star(class_287 var1, int var2, float var3, float var4) {
+    private void star(class_287 var1, int var2, float var3, float var4, float turn) {
         float var10;
         float var9;
         float var8;
@@ -190,8 +192,8 @@ final class StarfieldRenderer {
         float var12 = var6 * (var10 /= var11) - var7 * (var9 /= var11);
         float var13 = var7 * (var8 /= var11) - var5 * var10;
         float var14 = var5 * var9 - var6 * var8;
-        float var15 = class_3532.method_15362((double)this.roll[var2]) * var3;
-        float var16 = class_3532.method_15374((double)this.roll[var2]) * var3;
+        float var15 = class_3532.method_15362((double)(this.roll[var2] + turn)) * var3;
+        float var16 = class_3532.method_15374((double)(this.roll[var2] + turn)) * var3;
         float var17 = var8 * var15 + var12 * var16;
         float var18 = var9 * var15 + var13 * var16;
         float var19 = var10 * var15 + var14 * var16;

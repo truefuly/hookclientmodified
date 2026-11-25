@@ -336,7 +336,7 @@ public final class HudLayoutEditor {
         ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.85f, 20, 21, 25), UiPalette.accent(0.85f), a * 0.6f));
         ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.18f), UiPalette.accent(0.9f), a));
         ui.textCentered(text, sw / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
-        String hint = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click vanilla parts to hide or show  \u00B7  Snaps to the center lines";
+        String hint = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click anything to hide or show it  \u00B7  Snaps to the center lines";
         ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
         this.resetBounds[0] = x; this.resetBounds[1] = y; this.resetBounds[2] = w; this.resetBounds[3] = h;
     }
@@ -349,9 +349,20 @@ public final class HudLayoutEditor {
         return null;
     }
 
-    /** Right click in the editor: hide / show a vanilla part. */
+    /** HookVisuals elements hidden with a right click in the editor. */
+    private final java.util.EnumSet<HudSection> hiddenSections = java.util.EnumSet.noneOf(HudSection.class);
+
+    /** Right click in the editor: hide / show any element (HookVisuals or vanilla). */
     public boolean rightClick(double mx, double my) {
         if (!editing) return false;
+        HudSection[] sections = HudSection.values();
+        for (int i = sections.length - 1; i >= 0; --i) {
+            float[] b = this.bounds.get(sections[i]);
+            if (b == null || mx < b[0] || mx >= b[0] + b[2] || my < b[1] || my >= b[1] + b[3]) continue;
+            if (!this.hiddenSections.remove(sections[i])) this.hiddenSections.add(sections[i]);
+            this.save();
+            return true;
+        }
         VanillaHud.Part part = this.partAt(mx, my);
         if (part == null) return false;
         VanillaHud.toggle(part);
@@ -397,9 +408,16 @@ public final class HudLayoutEditor {
 
     private float element(UiRenderer var1, HudSection var2, boolean var3, int var4, int var5, float var6, boolean var7, double var8, double var10, aetekhtbjzavpx var12, DrawAction var13) {
         adsdzhecwnzmbs var22;
+        // hidden with a right click in the editor: gone in game, shown faded (to bring it back) in the editor
+        boolean hid = this.hiddenSections.contains(var2);
+        if (hid && !var7) var3 = false;
         float var14 = this.anim("el:" + var2.name(), var3 ? 1.0f : 0.0f, 9.0f);
         if (var14 < 0.01f) {
             this.bounds.remove((Object)var2);
+            // an element that is only gone for a moment keeps its slot in the column, so the ones below never jump up
+            adsdzhecwnzmbs hp = this.places.get((Object)var2);
+            float[] hs = this.stackSlots.get(var2);
+            if (!hid && hs != null && (hp == null || !hp.moved) && var2 != HudSection.COORDS) return var6 + hs[0] * this.u + this.d(7.0f);
             return var6;
         }
         float baseU = this.u;
@@ -413,7 +431,7 @@ public final class HudLayoutEditor {
         float var20 = var18[1];
         this.bounds.put(var2, new float[]{var19, var20, var16, var17});
         float var21 = UiEasing.out(var14);
-        var1.pushAlpha(var21);
+        var1.pushAlpha(var21 * (hid ? 0.3f : 1.0f));
         var1.pushTransform(0.0f, (1.0f - var21) * this.d(-6.0f), 1.0f);
         this.u = baseU * this.scaleOf(var2);
         try {
@@ -779,6 +797,13 @@ public final class HudLayoutEditor {
         float s = this.scaleOf(HudSection.MUSIC_BAR);
         VerseFallHudAnchors.musicBarScale = s;
         boolean show = bar.interactive() && bar.width() > 0.0f;
+        if (!editor && this.hiddenSections.contains(HudSection.MUSIC_BAR)) {
+            // hidden: VerseFall still draws it, so park it far off screen
+            this.bounds.remove(HudSection.MUSIC_BAR);
+            bar.drag().setTarget(-100000.0f, -100000.0f);
+            bar.drag().syncToTarget();
+            return;
+        }
         this.element(ui, HudSection.MUSIC_BAR, show, sw, sh, 0.0f, editor, mx, my,
                 () -> new float[]{bar.width() * s * k, bar.height() * s * k},
                 (ex, ey) -> {
@@ -967,7 +992,7 @@ public final class HudLayoutEditor {
         var1.outline(var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f, this.d(10.0f), Math.max(1.0f, this.u), UiRenderer.white(0.22f + 0.35f * var12));
         this.drawHandle(var1, var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f,
                 this.resizingSection == var2 ? 1.0f : this.onHandle(var7, var9, var3 - var13, var4 - var13, var5 + var13 * 2.0f, var6 + var13 * 2.0f) ? 0.7f : var12 * 0.3f);
-        String label = var2.label + "  " + Math.round(this.scaleOf(var2) * 100.0f) + "%";
+        String label = var2.label + (this.hiddenSections.contains(var2) ? "  (hidden)" : "  " + Math.round(this.scaleOf(var2) * 100.0f) + "%");
         float var14 = this.textW(var1, label, this.d(10.0f), 1) + this.d(12.0f);
         float var15 = this.d(16.0f);
         boolean var16 = var3 + var5 / 2.0f > (float)this.lastSw / 2.0f;
@@ -1082,6 +1107,10 @@ public final class HudLayoutEditor {
                     for (String var2 : Files.readAllLines(this.file, StandardCharsets.UTF_8)) {
                         String[] var3 = var2.trim().split(",");
                         if (VanillaHud.parse(var3)) continue;
+                        if (var3.length == 2 && var3[0].equals("HIDE")) {
+                            try { this.hiddenSections.add(HudSection.valueOf(var3[1])); } catch (IllegalArgumentException ignored) { }
+                            continue;
+                        }
                         if (var3.length == 3 && var3[0].equals("SCALE")) {
                             try {
                                 this.scales.put(HudSection.valueOf(var3[1]), Float.parseFloat(var3[2]));
@@ -1120,6 +1149,7 @@ public final class HudLayoutEditor {
                 for (Map.Entry<HudSection, Float> sc : this.scales.entrySet()) {
                     var1.append("SCALE,").append(sc.getKey().name()).append(',').append(String.format(Locale.ROOT, "%.2f", sc.getValue())).append('\n');
                 }
+                for (HudSection hs : this.hiddenSections) var1.append("HIDE,").append(hs.name()).append('\n');
                 var1.append(VanillaHud.serialize());
                 Files.createDirectories(this.file.getParent(), new FileAttribute[0]);
                 Files.writeString(this.file, (CharSequence)var1.toString(), StandardCharsets.UTF_8, new OpenOption[0]);

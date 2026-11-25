@@ -66,15 +66,20 @@ final class SkyDomeRenderer {
     }
 
     void update(float var1, float var2, float var3, float var4, float var5, int var6, int var7, int var8) {
+        this.update(var1, var2, var3, var4, var5, var6, var7, var8, 3108822, 11850996);
+    }
+
+    /** dayZenith / dayHorizon: the theme's colours for the day sky (top and horizon at noon). */
+    void update(float var1, float var2, float var3, float var4, float var5, int var6, int var7, int var8, int dayZenith, int dayHorizon) {
         int var14;
         this.sunAngle = var1;
         this.moonAngle = var2;
         this.sunX = -class_3532.method_15374((double)var1);
         this.sunY = class_3532.method_15362((double)var1);
         int var9 = class_9848.method_61319((float)0.3f, (int)1319497, (int)var6);
-        int[] var10000 = new int[]{var6, var9, 5210048, 3108822};
+        int[] var10000 = new int[]{var6, var9, class_9848.method_61319(0.45f, dayZenith, 0xFFFFFF), dayZenith};
         int[] var10 = var10000;
-        var10000 = new int[]{var7, SkyDomeRenderer.scale(var8, 0.75f), 16032864, 11850996};
+        var10000 = new int[]{var7, SkyDomeRenderer.scale(var8, 0.75f), class_9848.method_61319(0.5f, var8, 16032864), dayHorizon};
         int[] var11 = var10000;
         var10000 = new int[]{var7, var8, 16747069, 16774362};
         int[] var12 = var10000;
