@@ -435,7 +435,7 @@ public final class HudLayoutEditor {
         float norm = var17 / Math.max(0.01f, baseU);
         if (slot == null || slot[1] != sc) this.stackSlots.put(var2, slot = new float[]{norm, sc});
         else if (norm > slot[0]) slot[0] = norm;
-        return var6 + (slot[0] * baseU + this.d(7.0f)) * var21;
+        return var6 + slot[0] * baseU + this.d(7.0f);
     }
 
     private void glass(UiRenderer var1, float var2, float var3, float var4, float var5, float var6, adhvjlahyjurfh var7) {
