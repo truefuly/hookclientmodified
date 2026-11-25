@@ -109,6 +109,7 @@
     "ForceRenderBlockEntityMixin",
     "AutoMinerBreakMixin",
     "PlayerEspGlowMixin",
+    "PlayerEspOutlineMixin",
     "NoRenderMixin",
     "NoRenderEntityRendererMixin",
     "NoRenderTickMixin",

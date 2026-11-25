@@ -498,7 +498,7 @@ final class CartTest {
             cmd("summon wolf 0 151 18 {NoAI:1b,Owner:[I;0,0,0,1]}");
             for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) {
                 if (m instanceof PlayerEspModule) { if (!m.isEnabled()) m.setEnabled(true); }
-                if (m instanceof MobEspModule && m.isEnabled()) m.setEnabled(false);
+                if ((m instanceof MobEspModule || m instanceof SchematicBuilderModule) && m.isEnabled()) m.setEnabled(false);
             }
             // a wall with two fake players behind it: Glow must show them through the wall
             cmd("fill -6 151 5 6 156 5 stone");
@@ -511,6 +511,7 @@ final class CartTest {
                 mc.field_1687.method_53875(fake);
             }
         }
+        if (clock == 130) cmd("tp @s 0 151 0 0 25");
         if (clock == 140) shot(mc, "esp_glow");
         if (clock == 141) ((PlayerEspModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(PlayerEspModule.class)).testMode(PlayerEspModule.Mode.Box);
         if (clock == 148) shot(mc, "esp_box");

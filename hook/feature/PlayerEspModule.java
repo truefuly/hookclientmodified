@@ -13,8 +13,8 @@ import net.minecraft.class_1657;
 import net.minecraft.class_243;
 
 /**
- * Other players through walls. Only five settings: how they are shown (Minecraft glow, box, outline or corners),
- * which colour, a custom colour, health bars and tracers. Everything else uses fixed good defaults
+ * Other players through walls. Only four settings: how they are shown (Minecraft glow, box, outline or corners),
+ * which colour, a custom colour and tracers (no health bars). Everything else uses fixed good defaults
  * (bots left out, invisible players shown, low-health players flash red, far players a bit fainter).
  */
 public final class PlayerEspModule extends EntityEspBase {
@@ -35,11 +35,11 @@ public final class PlayerEspModule extends EntityEspBase {
             .setDescription(EncryptedString.of("A line from your crosshair to every player"));
 
     public PlayerEspModule() {
-        super("Player ESP", "Shows other players through walls: Minecraft glow or boxes, health bars and tracers", Category.RENDER, 40, 0xFFFF5A6E, true);
+        super("Player ESP", "Shows other players through walls: Minecraft glow or boxes, with tracers", Category.RENDER, 40, 0xFFFF5A6E, false);
         instance = this;
         this.expand.getValue(0.05);
         SettingVisibility.set(this.custom, () -> this.colors.getValue() == Colors.Custom);
-        this.addSettings(this.mode, this.colors, this.custom, this.healthBar, this.tracers);
+        this.addSettings(this.mode, this.colors, this.custom, this.tracers);
     }
 
     void testMode(Mode m) {
@@ -56,6 +56,7 @@ public final class PlayerEspModule extends EntityEspBase {
             default -> EspStyle.Shape.Outline;
         });
         boolean glow = m == Mode.Glow;
+        this.healthBar.setValue(false);
         s.fillOpacity.getValue(40.0);
         s.outlineOpacity.getValue(glow ? 0.0 : 230.0);
         s.outlineWidth.getValue(2.0);
