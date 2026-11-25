@@ -729,8 +729,12 @@ public final class SchematicBuilderModule extends Module {
         }
         // nothing reachable from here: walk to the best task
         int tries = 0;
+        Task floating = null;
         for (Task t : cands) {
-            if (t.place && t.kind == SbFix.PLACE && !this.supported(w, t.pos)) continue; // nothing to build it against yet: comes later
+            if (t.place && t.kind == SbFix.PLACE && !this.supported(w, t.pos)) { // nothing to build it against yet: comes later
+                if (floating == null && this.count(itemFor(t.want)) > 0 && !this.missingUntil.containsKey(itemFor(t.want))) floating = t;
+                continue;
+            }
             if (tries++ >= 5) break;
             class_1792 item = t.place ? this.requiredItem(t) : null;
             if (item != null) {
@@ -748,6 +752,15 @@ public final class SchematicBuilderModule extends Module {
             if (this.walkNear(w, pl, t.pos, t)) return;
             if (plain && this.tryHelper(w, pl, t)) return;
             this.fail(t.pos, 20_000L, "nowalk");
+        }
+        // only blocks with nothing around them are left (a ridge of slabs over an empty attic): "later" never
+        // comes for those - give the first one a helper block to sit on, walking there first if needed
+        if (tries == 0 && floating != null) {
+            dbg("only floating blocks left - helper for " + floating.pos.method_23854());
+            if (this.tryHelper(w, pl, floating)) return;
+            if (this.walkNear(w, pl, floating.pos, floating)) { this.status = "Walking (block needs a helper)"; return; }
+            this.fail(floating.pos, 20_000L, "nohelper");
+            return;
         }
         // everything left waits for something that is on cool-down: retry that instead of standing around
         if (tries == 0) { this.nothingToDo(w, pl); return; }
