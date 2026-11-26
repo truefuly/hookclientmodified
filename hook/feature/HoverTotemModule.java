@@ -30,6 +30,7 @@ import net.minecraft.class_490;
 
 public final class HoverTotemModule
 extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(10.0);
     private final NumberSetting tickDelay = new NumberSetting(EncryptedString.of("Tick Delay"), 0.0, 20.0, 0.0, 1.0).getValue(EncryptedString.of("Ticks to wait between operations"));
     private final BooleanSetting hotbarTotem = new BooleanSetting(EncryptedString.of("Hotbar Totem"), true).setDescription(EncryptedString.of("Also places a totem in your preferred hotbar slot"));
     private final NumberSetting hotbarSlot = new NumberSetting(EncryptedString.of("Hotbar Slot"), 1.0, 9.0, 1.0, 1.0).getValue(EncryptedString.of("Your preferred hotbar slot for totem (1-9)"));
@@ -38,7 +39,8 @@ extends Module {
 
     public HoverTotemModule() {
         super(EncryptedString.of("Hover Totem"), EncryptedString.of("Equips a totem in offhand and optionally hotbar when hovering over one in inventory"), -1, Category.COMBAT);
-        this.addSettings(this.tickDelay, this.hotbarTotem, this.hotbarSlot, this.autoSwitchToTotem);
+        this.tickDelay.follow(this.speed, 0, 6);
+        this.addSettings(this.speed, this.hotbarTotem, this.hotbarSlot, this.autoSwitchToTotem);
     }
 
     @Override

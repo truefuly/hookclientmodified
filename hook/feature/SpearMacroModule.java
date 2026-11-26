@@ -19,6 +19,7 @@ import net.minecraft.class_7923;
  * item you were holding. Runs at the start of the client tick, before vanilla consumes the hotbar key press.
  */
 public final class SpearMacroModule extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(9.0);
     private final NumberSetting returnDelay = (NumberSetting) new NumberSetting(EncryptedString.of("Return Delay"), 0.0, 10.0, 1.0, 1.0).setDescription(EncryptedString.of("Ticks before your previous item comes back (0 = same tick)"));
     private final BooleanSetting moddedSpears = new BooleanSetting(EncryptedString.of("Modded Spears"), true).setDescription(EncryptedString.of("Also react to spears added by other mods"));
 
@@ -27,7 +28,8 @@ public final class SpearMacroModule extends Module {
 
     public SpearMacroModule() {
         super(EncryptedString.of("Spear Macro"), EncryptedString.of("Press a spear's hotbar key to jab instantly, then swap back"), -1, Category.COMBAT);
-        this.addSettings(this.returnDelay, this.moddedSpears);
+        this.returnDelay.follow(this.speed, 0, 6);
+        this.addSettings(this.speed, this.moddedSpears);
     }
 
     @Override

@@ -29,6 +29,7 @@ import net.minecraft.class_9362;
  * then the mace follows up. Ground hits stay vanilla unless "Only Smash Hits" is off.
  */
 public final class MaceSwapModule extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(9.0);
     public enum Preferred { Density, Breach, WindBurst }
 
     private final ModeSetting<Preferred> preferred = new ModeSetting<>(EncryptedString.of("Preferred Mace"), Preferred.Density, Preferred.class);
@@ -52,8 +53,10 @@ public final class MaceSwapModule extends Module {
 
     public MaceSwapModule() {
         super(EncryptedString.of("Mace Swap"), EncryptedString.of("Swaps to your mace for smash hits, with optional Stun Slam against shields"), -1, Category.COMBAT);
-        this.addSettings(this.preferred, this.onlySmash, this.onlyPlayers, this.stunSlam, this.followUp, this.holdTime, this.switchBack, this.messages);
-        this.moreSettings(this.stunSlam, this.followUp, this.holdTime, this.messages);
+        this.followUp.follow(this.speed, 0, 3);
+        this.holdTime.follow(this.speed, 2, 8);
+        this.addSettings(this.preferred, this.onlySmash, this.onlyPlayers, this.stunSlam, this.speed, this.switchBack, this.messages);
+        this.moreSettings(this.stunSlam, this.messages);
         instance = this;
     }
 

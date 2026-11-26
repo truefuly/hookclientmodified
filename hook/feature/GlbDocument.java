@@ -147,8 +147,8 @@ final class GlbDocument {
             return null;
         }
         JsonObject var5 = GlbDocument.array(this.json, "images").get(var4).getAsJsonObject();
-        if (var5.has("view")) {
-            ByteBuffer var8 = this.view(var5.get("view").getAsInt(), 0);
+        if (var5.has("bufferView")) {
+            ByteBuffer var8 = this.view(var5.get("bufferView").getAsInt(), 0);
             byte[] var7 = new byte[var8.remaining()];
             var8.get(var7);
             return var7;
@@ -168,10 +168,10 @@ final class GlbDocument {
         JsonElement var6 = var2.get("normalized");
         boolean var7 = var6 != null && var6.getAsBoolean();
         float[] var8 = new float[var3 * var4];
-        if (!var2.has("view")) {
+        if (!var2.has("bufferView")) {
             return var8;
         }
-        ByteBuffer var9 = this.view(var2.get("view").getAsInt(), GlbDocument.integer(var2, "byteOffset", 0));
+        ByteBuffer var9 = this.view(var2.get("bufferView").getAsInt(), GlbDocument.integer(var2, "byteOffset", 0));
         int var10 = this.stride(var2, var4, var5);
         int var11 = GlbDocument.size(var5);
         for (int var12 = 0; var12 < var3; ++var12) {
@@ -206,7 +206,7 @@ final class GlbDocument {
         int var3 = var2.get("count").getAsInt();
         int var4 = GlbDocument.components(var2.get("type").getAsString());
         int var5 = var2.get("componentType").getAsInt();
-        ByteBuffer var6 = this.view(var2.get("view").getAsInt(), GlbDocument.integer(var2, "byteOffset", 0));
+        ByteBuffer var6 = this.view(var2.get("bufferView").getAsInt(), GlbDocument.integer(var2, "byteOffset", 0));
         int var7 = this.stride(var2, var4, var5);
         int var8 = GlbDocument.size(var5);
         int[] var9 = new int[var3 * var4];
@@ -237,7 +237,7 @@ final class GlbDocument {
     }
 
     private ByteBuffer view(int var1, int var2) throws IOException {
-        JsonObject var3 = GlbDocument.array(this.json, "views").get(var1).getAsJsonObject();
+        JsonObject var3 = GlbDocument.array(this.json, "bufferViews").get(var1).getAsJsonObject();
         if (GlbDocument.integer(var3, "buffer", 0) != 0) {
             throw new IOException("its data is split over several files");
         }
@@ -250,7 +250,7 @@ final class GlbDocument {
     }
 
     private int stride(JsonObject var1, int var2, int var3) {
-        JsonObject var4 = GlbDocument.array(this.json, "views").get(var1.get("view").getAsInt()).getAsJsonObject();
+        JsonObject var4 = GlbDocument.array(this.json, "bufferViews").get(var1.get("bufferView").getAsInt()).getAsJsonObject();
         return GlbDocument.integer(var4, "byteStride", var2 * GlbDocument.size(var3));
     }
 

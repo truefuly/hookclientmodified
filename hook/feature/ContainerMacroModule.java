@@ -21,6 +21,7 @@ import net.minecraft.class_7923;
 
 /** Shared parts of the GUI-clicking macros: timing settings and safe container helpers. (Ported from SilentClient.) */
 public abstract class ContainerMacroModule extends Module {
+    protected final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(8.0);
     protected final NumberSetting actionDelay = new NumberSetting(EncryptedString.of("Click Delay"), 1.0, 20.0, 3.0, 1.0).getValue(EncryptedString.of("Ticks to wait after a menu opens before clicking"));
     protected final NumberSetting cycleDelay = new NumberSetting(EncryptedString.of("Cycle Delay"), 1.0, 40.0, 8.0, 1.0).getValue(EncryptedString.of("Ticks to pause between two rounds"));
     protected final NumberSetting timeout = new NumberSetting(EncryptedString.of("Timeout"), 20.0, 200.0, 80.0, 10.0).getValue(EncryptedString.of("Restarts the round if the server doesn't answer (ticks)"));
@@ -29,7 +30,10 @@ public abstract class ContainerMacroModule extends Module {
 
     protected ContainerMacroModule(String name, String description) {
         super(EncryptedString.of(name), EncryptedString.of(description), -1, Category.MACROS);
-        this.addSettings(this.actionDelay, this.cycleDelay, this.timeout, this.autoClose);
+        this.actionDelay.follow(this.speed, 1, 10);
+        this.cycleDelay.follow(this.speed, 2, 30);
+        this.addSettings(this.speed, this.autoClose, this.timeout);
+        this.moreSettings(this.timeout);
     }
 
     protected abstract String tag();

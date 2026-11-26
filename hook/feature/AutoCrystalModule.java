@@ -44,6 +44,7 @@ import net.minecraft.class_3966;
 
 public final class AutoCrystalModule
 extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(10.0);
     private final BindSetting activateKey = new BindSetting(EncryptedString.of("Activate Key"), 1, false).setDescription(EncryptedString.of("Key that does the crystalling"));
     private final NumberSetting placeDelay = new NumberSetting(EncryptedString.of("Place Delay"), 0.0, 20.0, 0.0, 1.0);
     private final NumberSetting breakDelay = new NumberSetting(EncryptedString.of("Break Delay"), 0.0, 20.0, 0.0, 1.0);
@@ -55,7 +56,9 @@ extends Module {
 
     public AutoCrystalModule() {
         super(EncryptedString.of("Auto Crystal"), EncryptedString.of("Places and breaks end crystals for you while you hold the key"), -1, Category.COMBAT);
-        Setting[] var10001 = new Setting[]{this.activateKey, this.placeDelay, this.breakDelay, this.smartPlace};
+        this.placeDelay.follow(this.speed, 0, 6);
+        this.breakDelay.follow(this.speed, 0, 6);
+        Setting[] var10001 = new Setting[]{this.activateKey, this.speed, this.smartPlace};
         this.addSettings(var10001);
     }
 

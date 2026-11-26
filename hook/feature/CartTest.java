@@ -56,6 +56,7 @@ final class CartTest {
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
+        if ("character".equals(ONLY)) { character(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
         if ("sky".equals(ONLY)) { sky(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
@@ -392,6 +393,50 @@ final class CartTest {
         if (clock == 255) shot(mc, "fog_lava_on");
         if (clock == 260) System.out.println("CARTTEST FOG medium=" + mc.field_1773.method_19418().method_19334() + " enabled=" + nf.isEnabled());
         if (clock == 270) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /** -Dhook.carttest.only=character: 3D Character, each built-in character from the front, side and back (F5). */
+    private static void character(class_310 mc, net.minecraft.class_746 p) {
+        String[] names = System.getProperty("hook.char.names", "Tung Tung Tung Sahur,CJ,Neighbor").split(",");
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("tp @s 0 151 0 0 0");
+            cmd("effect give @s night_vision infinite 0");
+            hook.module.Module sbm = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SchematicBuilderModule.class);
+            if (sbm != null && sbm.isEnabled()) sbm.setEnabled(false);
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && hud.isEnabled()) hud.setEnabled(false);
+            Character3dHelper.refresh();
+            System.out.println("CARTTEST CHAR names " + Character3dHelper.names());
+            mc.field_1690.method_31043(net.minecraft.class_5498.field_26666);
+            mc.field_1690.field_1842 = true;
+        }
+        int step = clock - 120;
+        if (step < 0) return;
+        int c = step / 160;
+        int k = step % 160;
+        if (c >= names.length) {
+            mc.field_1690.field_1842 = false;
+            System.out.println("CARTTEST DONE ok=1/1");
+            mc.method_1592();
+            phase = 99;
+            return;
+        }
+        Character3dModule m = hook.module.ext.ModuleRegistry.get(Character3dModule.class);
+        if (k == 0) {
+            for (hook.module.ext.setting.Setting st : m.extSettings()) if (st instanceof hook.module.ext.setting.ModeSetting ms && ms.modes().contains(names[c])) ms.set(names[c]);
+            if (!m.isEnabled()) m.toggle(true);
+            System.out.println("CARTTEST CHAR show " + names[c]);
+        }
+        String tag = names[c].replaceAll("[^A-Za-z]", "").toLowerCase();
+        if (k == 10) { p.method_36456(0f); p.method_36457(0f); }
+        if (k == 90) shot(mc, "char_" + tag + "_front");
+        if (k == 95) { p.method_36456(90f); }
+        if (k == 115) shot(mc, "char_" + tag + "_side");
+        if (k == 120) { p.method_36456(150f); p.method_36457(-20f); }
+        if (k == 140) shot(mc, "char_" + tag + "_back");
     }
 
     /** -Dhook.carttest.only=hud: HUD editor with grid, every vanilla part framed, window resize keeps anchors. */

@@ -29,6 +29,7 @@ import net.minecraft.class_3965;
 
 public final class DoubleAnchorModule
 extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(10.0);
     private final BindSetting activateKey = new BindSetting(EncryptedString.of("Activate Key"), 71, false).setDescription(EncryptedString.of("Key that starts double anchoring"));
     private final NumberSetting switchDelay = new NumberSetting(EncryptedString.of("Switch Delay"), 0.0, 20.0, 0.0, 1.0);
     private final NumberSetting totemSlot = new NumberSetting(EncryptedString.of("Totem Slot"), 1.0, 9.0, 1.0, 1.0);
@@ -38,7 +39,8 @@ extends Module {
 
     public DoubleAnchorModule() {
         super(EncryptedString.of("Double Anchor"), EncryptedString.of("Places and detonates two respawn anchors in a row"), -1, Category.COMBAT);
-        Setting[] var10001 = new Setting[]{this.switchDelay, this.totemSlot, this.activateKey};
+        this.switchDelay.follow(this.speed, 0, 6);
+        Setting[] var10001 = new Setting[]{this.speed, this.totemSlot, this.activateKey};
         this.addSettings(var10001);
     }
 

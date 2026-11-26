@@ -22,6 +22,7 @@ import net.minecraft.class_310;
  * (so the attack itself syncs the slot), then switches back after a short delay.
  */
 public final class ShieldBreakerModule extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(7.0);
     private static ShieldBreakerModule instance;
     private final NumberSetting returnDelay = (NumberSetting) new NumberSetting(EncryptedString.of("Switch Back Delay"), 0.0, 10.0, 4.0, 1.0).setDescription(EncryptedString.of("Ticks before your old item comes back"));
     private final NumberSetting chance = (NumberSetting) new NumberSetting(EncryptedString.of("Consistency"), 50.0, 100.0, 100.0, 1.0).setDescription(EncryptedString.of("How often (%) a shield hit triggers the swap"));
@@ -34,7 +35,8 @@ public final class ShieldBreakerModule extends Module {
 
     public ShieldBreakerModule() {
         super(EncryptedString.of("Shield Breaker"), EncryptedString.of("Swaps to your axe when you hit a shielding target, then back"), -1, Category.COMBAT);
-        this.addSettings(this.returnDelay, this.chance, this.playersOnly, this.groundOnly);
+        this.returnDelay.follow(this.speed, 1, 10);
+        this.addSettings(this.speed, this.chance, this.playersOnly, this.groundOnly);
         instance = this;
     }
 

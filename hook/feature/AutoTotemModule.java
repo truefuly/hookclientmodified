@@ -23,12 +23,14 @@ import net.minecraft.class_1802;
 
 public final class AutoTotemModule
 extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(8.0);
     private final NumberSetting delay = new NumberSetting(EncryptedString.of("Delay"), 0.0, 5.0, 1.0, 1.0);
     private int delayCounter;
 
     public AutoTotemModule() {
         super(EncryptedString.of("Auto Totem"), EncryptedString.of("Keeps a totem of undying in your off hand"), -1, Category.COMBAT);
-        this.addSettings(this.delay);
+        this.delay.follow(this.speed, 0, 5);
+        this.addSettings(this.speed);
     }
 
     @Override

@@ -34,6 +34,7 @@ import net.minecraft.class_746;
  * half a block higher, exactly in the arrow's way (with no block there, one from your hotbar is put down first).
  */
 public final class BowCartModule extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(7.0);
     private static BowCartModule instance;
     private final BooleanSetting highlight = new BooleanSetting(EncryptedString.of("Highlight"), true);
     private final RgbSetting color = new RgbSetting(EncryptedString.of("Highlight Color"), 0xFFFF8A3D);
@@ -95,9 +96,11 @@ public final class BowCartModule extends Module {
         this.humanize.setDescription(EncryptedString.of("Places like a player: one real mouse-like look at the spot (no extra rotation packets), click points on that view line instead of the exact centre, one arm swing per placement, random swap-back pause. Off = rotation packets only."));
         this.lookBack.setDescription(EncryptedString.of("After placing, the head moves smoothly back to where you were aiming, like you would."));
         hook.module.setting.SettingVisibility.set(this.lookBack, this.humanize::getValue);
-        this.addSettings(this.crosshair, this.humanize, this.lookBack, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
+        this.cooldown.follow(this.speed, 2, 30);
+        this.swapDelay.follow(this.speed, 0, 6);
+        this.addSettings(this.crosshair, this.humanize, this.lookBack, this.flameOnly, this.speed, this.minPower, this.skipIfCart, this.swapBack, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
-        this.moreSettings(this.lookBack, this.minPower, this.cooldown, this.skipIfCart, this.swapDelay, this.quickDraw, this.color, this.messages);
+        this.moreSettings(this.lookBack, this.minPower, this.skipIfCart, this.quickDraw, this.color, this.messages);
         instance = this;
     }
 

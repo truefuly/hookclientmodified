@@ -38,6 +38,7 @@ import thetruetrident.cartcore.CartcoreCore;
  * two actions in the same tick, nothing outside vanilla reach.
  */
 public final class XbowCartModule extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(8.0);
     public static XbowCartModule instance;
     private final BooleanSetting humanize = new BooleanSetting(EncryptedString.of("Humanize"), true);
     private final NumberSetting turnSpeed = new NumberSetting(EncryptedString.of("Speed %"), 50.0, 250.0, 100.0, 5.0);
@@ -104,8 +105,11 @@ public final class XbowCartModule extends Module {
         this.useFire.setDescription(EncryptedString.of("Puts fire in the arrow's path (needed unless the crossbow has Flame-like ignition)."));
         this.swapBack.setDescription(EncryptedString.of("Switches back to the slot you had afterwards (after a short random pause)."));
         hook.module.setting.SettingVisibility.set(this.turnSpeed, this.humanize::getValue);
-        this.addSettings(this.humanize, this.turnSpeed, this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
-        this.moreSettings(this.turnSpeed, this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages);
+        this.turnSpeed.follow(this.speed, 200, 50);
+        this.stepDelay.follow(this.speed, 0, 2);
+        this.cooldown.follow(this.speed, 2, 30);
+        this.addSettings(this.speed, this.humanize, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
+        this.moreSettings(this.skipIfCart, this.useFire, this.swapBack, this.messages);
         instance = this;
         disableLegacy();
     }

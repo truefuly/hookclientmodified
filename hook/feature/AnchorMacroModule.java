@@ -32,6 +32,7 @@ import org.lwjgl.glfw.GLFW;
 
 public final class AnchorMacroModule
 extends Module {
+    private final hook.module.setting.NumberSetting speed = hook.module.setting.NumberSetting.speed(10.0);
     private final NumberSetting switchDelay = new NumberSetting(EncryptedString.of("Switch Delay"), 0.0, 20.0, 0.0, 1.0);
     private final NumberSetting glowstoneDelay = new NumberSetting(EncryptedString.of("Glowstone Delay"), 0.0, 20.0, 0.0, 1.0);
     private final NumberSetting explodeDelay = new NumberSetting(EncryptedString.of("Explode Delay"), 0.0, 20.0, 0.0, 1.0);
@@ -42,7 +43,10 @@ extends Module {
 
     public AnchorMacroModule() {
         super(EncryptedString.of("Anchor Macro"), EncryptedString.of("Charges and blows up respawn anchors for you"), -1, Category.COMBAT);
-        Setting[] var10001 = new Setting[]{this.switchDelay, this.glowstoneDelay, this.explodeDelay, this.totemSlot};
+        this.switchDelay.follow(this.speed, 0, 6);
+        this.glowstoneDelay.follow(this.speed, 0, 6);
+        this.explodeDelay.follow(this.speed, 0, 6);
+        Setting[] var10001 = new Setting[]{this.speed, this.totemSlot};
         this.addSettings(var10001);
     }
 
