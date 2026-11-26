@@ -75,6 +75,7 @@ public final class CleanHitboxesModule extends Module {
         this.addSettings(this.players, this.playerColor, this.hostile, this.hostileColor, this.passive, this.passiveColor,
             this.items, this.itemColor, this.projectiles, this.projectileColor, this.others, this.otherColor,
             this.self, this.invisible, this.lookLine, this.eyeHeight, this.range, this.width, this.opacity, this.throughWalls);
+        this.moreSettings(this.items, this.itemColor, this.projectiles, this.projectileColor, this.others, this.otherColor, this.self, this.invisible, this.lookLine, this.eyeHeight, this.width, this.opacity);
     }
 
     @EventListener

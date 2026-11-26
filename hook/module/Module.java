@@ -129,6 +129,18 @@ implements Serializable {
         this.settings.addAll(Arrays.asList(a));
     }
 
+    /**
+     * Keeps a module simple: the given fine-tuning settings stay hidden behind one "More Settings" switch at the end.
+     * Call it at the end of the constructor, after addSettings and other visibility rules.
+     */
+    protected hook.module.setting.BooleanSetting moreSettings(Setting... advanced) {
+        hook.module.setting.BooleanSetting more = new hook.module.setting.BooleanSetting(hook.utils.EncryptedString.of("More Settings"), false)
+                .setDescription(hook.utils.EncryptedString.of("Shows the extra fine-tuning options"));
+        this.settings.add(more);
+        hook.module.setting.SettingVisibility.advanced(more::getValue, advanced);
+        return more;
+    }
+
     /** Puts every setting of this module back to its default (keybinds stay). */
     public void resetSettings() {
         for (Object s : this.getSettings()) {

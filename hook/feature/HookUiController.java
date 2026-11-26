@@ -410,6 +410,12 @@ public final class HookUiController {
     }
 
     /** Self-test: jump to a tab with the cards already faded in. */
+    /** Self-test: opens a module's settings page. */
+    public void testPage(Module var1) {
+        this.page = var1;
+        this.tabT = 10.0f;
+    }
+
     public void testTab(Category var1) {
         this.selectTab(var1);
         this.tabT = 10.0f;

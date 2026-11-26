@@ -58,6 +58,7 @@ public final class SlimeChunkModule extends Module {
         this.throughWalls.setDescription(EncryptedString.of("On: outlines visible through blocks. Off: hidden behind blocks."));
         this.notify.setDescription(EncryptedString.of("Action bar note when you walk into a slime chunk, and when a new one is found."));
         this.addSettings(this.seed, this.learn, this.range, this.color, this.fill, this.throughWalls, this.notify);
+        this.moreSettings(this.range, this.fill, this.throughWalls, this.notify);
     }
 
     /** Seed Cracker result: used when no seed is typed in yet (slime chunks only need the lower 48 bits). */

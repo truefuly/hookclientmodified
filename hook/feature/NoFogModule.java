@@ -51,6 +51,7 @@ public final class NoFogModule extends Module {
         SettingVisibility.set(this.end, () -> this.mode.getValue() == Mode.Custom);
         SettingVisibility.set(this.color, this.tint::getValue);
         SettingVisibility.set(this.tintStrength, this.tint::getValue);
+        this.moreSettings(this.sky, this.clouds, this.darkSky, this.snow, this.blindness, this.darkness, this.tint, this.color, this.tintStrength);
         instance = this;
     }
 

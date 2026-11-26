@@ -74,6 +74,7 @@ public final class AutoBreedModule extends Module {
         this.entities.setDescription(EncryptedString.of("Animals that get bred"));
         this.addSettings(this.entities, this.range, this.hand, this.switchFood, this.ageFilter, this.perTick, this.continuous, this.interval);
         SettingVisibility.set(this.interval, this.continuous::getValue);
+        this.moreSettings(this.hand, this.ageFilter, this.perTick, this.interval);
         instance = this;
     }
 

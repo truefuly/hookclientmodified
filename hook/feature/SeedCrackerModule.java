@@ -85,6 +85,7 @@ public final class SeedCrackerModule extends Module {
         this.status.setDescription(EncryptedString.of("Prints what is known so far into chat."));
         this.clear.setDescription(EncryptedString.of("Forgets everything collected in this world."));
         this.addSettings(this.autoCrack, this.notify, this.slime, this.threads, this.crackNow, this.copy, this.status, this.clear);
+        this.moreSettings(this.threads, this.status, this.clear);
         Arrays.fill(this.pillars, -1);
     }
 

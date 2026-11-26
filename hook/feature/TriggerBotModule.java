@@ -34,6 +34,7 @@ public final class TriggerBotModule extends Module {
     public TriggerBotModule() {
         super(EncryptedString.of("Trigger Bot"), EncryptedString.of("Hits the target under your crosshair automatically"), -1, Category.COMBAT);
         this.addSettings(this.range, this.playersOnly, this.weaponsOnly, this.swordOnly, this.verticalAim, this.verticalAimSpeed, this.requireCooldown, this.attackWhileUsing);
+        this.moreSettings(this.swordOnly, this.verticalAimSpeed, this.requireCooldown, this.attackWhileUsing);
     }
 
     @EventListener

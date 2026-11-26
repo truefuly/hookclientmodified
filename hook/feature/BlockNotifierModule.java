@@ -94,6 +94,7 @@ extends Module {
     public BlockNotifierModule() {
         super(EncryptedString.of("Block Notifier"), EncryptedString.of("Notifies and highlights selected blocks when chunks load"), -1, Category.RENDER);
         this.addSettings(this.blocks, this.notificationMode, this.disconnectOnFind, this.notifications, this.webhookEnabled, this.webhookUrl, this.selfPing, this.discordId, this.showEsp, this.alpha, this.outlines, this.tracers, this.onlyNew, this.renderDistance);
+        this.moreSettings(this.webhookEnabled, this.webhookUrl, this.selfPing, this.discordId, this.alpha, this.outlines, this.onlyNew, this.renderDistance);
     }
 
     private static StorageBlocksSetting createPalette() {

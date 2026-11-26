@@ -120,6 +120,7 @@ public final class BaseFinderModules {
             this.chunks.setDescription(EncryptedString.of("Colours whole chunks that reach the base score."));
             this.blocks.setDescription(EncryptedString.of("Boxes around every single player block."));
             this.addSettings(this.color, this.minScore, this.chunks, this.blocks, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minScore, this.range, this.fill, this.walls);
         }
 
         boolean isBase(BaseFinder.ChunkData cd) {
@@ -174,6 +175,7 @@ public final class BaseFinderModules {
             this.minChunk.setDescription(EncryptedString.of("This many player containers in one chunk = stash alert."));
             this.structureLoot.setDescription(EncryptedString.of("Also show containers inside villages, mineshafts, strongholds and other structures."));
             this.addSettings(this.types, this.entities, this.structureLoot, this.minChunk, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minChunk, this.range, this.fill, this.walls);
         }
 
         private static String typeKey(String id) {
@@ -269,6 +271,7 @@ public final class BaseFinderModules {
             this.maxChunks.setDescription(EncryptedString.of("How many detected chunks are kept (oldest are forgotten)."));
             hook.module.setting.SettingVisibility.set(this.height, () -> this.heightMode.getValue() == HeightMode.Fixed);
             this.addSettings(this.newColor, this.oldColor, this.showOld, this.fill, this.heightMode, this.below, this.height, this.maxChunks);
+            this.moreSettings(this.fill, this.heightMode, this.below, this.height, this.maxChunks);
         }
 
         @Override
@@ -446,6 +449,7 @@ public final class BaseFinderModules {
             this.minPct.setDescription(EncryptedString.of("Share of the kelp that could still grow that actually grew."));
             this.marks.setDescription(EncryptedString.of("Boxes on every grown kelp top."));
             this.addSettings(this.color, this.minGrown, this.minPct, this.marks, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minGrown, this.minPct, this.range, this.fill, this.walls);
         }
 
         boolean grown(BaseFinder.ChunkData cd) {
@@ -504,6 +508,7 @@ public final class BaseFinderModules {
             this.minClusters.setDescription(EncryptedString.of("Clusters needed before a chunk is judged."));
             this.all.setDescription(EncryptedString.of("Also box clusters in geodes that are not grown."));
             this.addSettings(this.color, this.minPct, this.minClusters, this.all, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minPct, this.minClusters, this.range, this.fill, this.walls);
         }
 
         boolean grown(BaseFinder.ChunkData cd) {
@@ -551,6 +556,7 @@ public final class BaseFinderModules {
             this.chunks.setDescription(EncryptedString.of("Colours chunks with a clue."));
             this.marks.setDescription(EncryptedString.of("Boxes the plants that gave the clue."));
             this.addSettings(this.color, this.chunks, this.marks, this.range, this.fill, this.walls, this.alerts);
+            this.moreSettings(this.range, this.fill, this.walls);
         }
 
         /** null = no sign, else a short reason. */
@@ -611,6 +617,7 @@ public final class BaseFinderModules {
             this.hidden.setDescription(EncryptedString.of("Marks dark-cave air that is lit (9+) where no lava, glow lichen, magma, glow berries, sea pickles... in reach could do it: someone put light there."));
             this.minLit.setDescription(EncryptedString.of("Unexplained lit spots a chunk needs before it is marked."));
             this.addSettings(this.color, this.sources, this.hidden, this.minLit, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minLit, this.range, this.fill, this.walls);
         }
 
         @Override
@@ -656,6 +663,7 @@ public final class BaseFinderModules {
         public Portals() {
             super("Portal ESP", "Lit nether portals (ruined portals are never lit - a lit one was made by a player) and activated end portals (not the End's exit portal).", 0xFFB050FF);
             this.addSettings(this.color, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.range, this.fill, this.walls);
         }
 
         @Override
@@ -685,6 +693,7 @@ public final class BaseFinderModules {
             super("Sign ESP", "Boxes every player sign through walls and writes its text with coordinates in chat (bases are full of signs: names, warnings, shop labels). Village and igloo signs are left out.", 0xFF8BD3FF);
             this.log.setDescription(EncryptedString.of("Each sign's text goes into chat once."));
             this.addSettings(this.color, this.log, this.range, this.fill, this.tracers, this.walls);
+            this.moreSettings(this.range, this.fill, this.walls);
         }
 
         private boolean ok(BaseFinder.ChunkData cd) {
@@ -740,6 +749,7 @@ public final class BaseFinderModules {
             this.farmSize.setDescription(EncryptedString.of("This many animals of one kind within 6 blocks = farm."));
             this.villagers.setDescription(EncryptedString.of("6+ villagers locked in cells within 8 blocks."));
             this.addSettings(this.color, this.frames, this.pets, this.farms, this.farmSize, this.villagers, this.misc, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.farmSize, this.range, this.fill, this.walls);
         }
 
         private String clue(class_1297 e, String id) {
@@ -816,6 +826,7 @@ public final class BaseFinderModules {
             super("Tunnel Finder", "Dead-straight tunnels (1x2 from 8 blocks, up to 3x3 from 12) with solid floor, roof and walls - caves never look like that; strip mines, travel tunnels and nether highways do. Mineshafts, strongholds and other structures are left out.", 0xFF4FA3FF);
             this.minSpots.setDescription(EncryptedString.of("Tunnel spots a chunk needs (higher = only long tunnels)."));
             this.addSettings(this.color, this.minSpots, this.range, this.fill, this.tracers, this.walls, this.alerts);
+            this.moreSettings(this.minSpots, this.range, this.fill, this.walls);
         }
 
         @Override

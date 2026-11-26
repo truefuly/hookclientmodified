@@ -63,6 +63,7 @@ public final class MobEspModule extends EntityEspBase {
         this.addSettings(this.filter, this.hostile, this.neutral, this.passive, this.water, this.villagers, this.pets, this.bosses, this.others, this.list);
         this.addSettings(this.aggro, this.onlyAggro, this.colors, this.healthBar, this.invisible, this.expand);
         this.addSettings(this.style.settings());
+        this.moreSettings(this.onlyAggro, this.colors, this.healthBar, this.invisible, this.expand);
     }
 
     private static BooleanSetting group(String name, boolean on, String desc) {

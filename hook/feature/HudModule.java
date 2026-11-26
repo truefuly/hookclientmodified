@@ -60,6 +60,7 @@ extends Module {
     public HudModule() {
         super(EncryptedString.of("HUD"), EncryptedString.of("Glass HUD; open chat to move elements, resize/hide boss bar and scoreboard, or reset"), -1, Category.CLIENT);
         this.addSettings(this.showWatermark, this.showTime, this.showInfo, this.showPlayer, this.showCoordinates, this.showDirection, this.showNether, this.showModules, this.rainbow, this.rainbowSpeed, this.hudScale, this.opacity, HIDE_POTION_HUD, this.customIp, this.spoofPing, this.spoofedPing);
+        this.moreSettings(this.showTime, this.showDirection, this.showNether, this.rainbow, this.rainbowSpeed, this.opacity, HIDE_POTION_HUD, this.customIp, this.spoofPing, this.spoofedPing);
         try {
             this.hud.setFile(FabricLoader.getInstance().getConfigDir().resolve("hook-hud-layout.txt"));
             this.hud.load(); // boss bar / scoreboard layout applies even while the HUD module is off

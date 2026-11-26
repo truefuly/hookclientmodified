@@ -41,6 +41,7 @@ extends Module {
     public Hook() {
         super(EncryptedString.of("HookVisuals"), EncryptedString.of("Settings for the client"), 344, Category.CLIENT);
         this.addSettings(theme, uiSounds, uiVolume, halloweenMusic, halloweenVolume, beatShake, shakeStrength, guiSize, this.preventClose, lobbyTheme);
+        this.moreSettings(uiVolume, halloweenMusic, halloweenVolume, beatShake, shakeStrength, this.preventClose);
     }
 
     @Override

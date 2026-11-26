@@ -593,7 +593,14 @@ final class CartTest {
         int t = (clock - 200) / 25;
         if (clock >= 200 && (clock - 200) % 25 == 0 && t < ESP_TABS.length && mc.field_1755 instanceof HookClickGuiScreen gui) gui.testTab(ESP_TABS[t]);
         if (clock >= 200 && (clock - 200) % 25 == 20 && t < ESP_TABS.length) shot(mc, "sb_tab_" + ESP_TABS[t].name());
-        if (clock == 200 + 25 * ESP_TABS.length + 10) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+        int pg = clock - (200 + 25 * ESP_TABS.length + 10);
+        hook.module.Module nt = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(NametagsModule.class);
+        if (pg == 0 && mc.field_1755 instanceof HookClickGuiScreen gui) gui.testPage(nt);
+        if (pg == 20) shot(mc, "page_simple");
+        if (pg == 22) for (hook.module.setting.Setting st : nt.getSettings()) if (st instanceof hook.module.setting.BooleanSetting b && "More Settings".contentEquals(st.getName())) b.setValue(true);
+        if (pg == 40) shot(mc, "page_more");
+        if (pg == 42) for (hook.module.setting.Setting st : nt.getSettings()) if (st instanceof hook.module.setting.BooleanSetting b && "More Settings".contentEquals(st.getName())) b.setValue(false);
+        if (pg == 45) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
     }
 
     private static final boolean HOUSE = "house".equals(System.getProperty("hook.sb.scene"));

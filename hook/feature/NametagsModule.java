@@ -68,6 +68,7 @@ public final class NametagsModule extends Module {
         hook.module.setting.SettingVisibility.set(this.minSize, this.shrink::getValue);
         hook.module.setting.SettingVisibility.set(this.closeRange, this.shrinkClose::getValue);
         hook.module.setting.SettingVisibility.set(this.closeSize, this.shrinkClose::getValue);
+        this.moreSettings(this.self, this.shrink, this.minSize, this.zoomScaling, this.shrinkClose, this.closeRange, this.closeSize, this.throughWalls, this.distance, this.gameMode, this.durability, this.maxTags, this.background);
         instance = this;
     }
 

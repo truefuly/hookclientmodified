@@ -53,6 +53,7 @@ public final class MaceSwapModule extends Module {
     public MaceSwapModule() {
         super(EncryptedString.of("Mace Swap"), EncryptedString.of("Swaps to your mace for smash hits, with optional Stun Slam against shields"), -1, Category.COMBAT);
         this.addSettings(this.preferred, this.onlySmash, this.onlyPlayers, this.stunSlam, this.followUp, this.holdTime, this.switchBack, this.messages);
+        this.moreSettings(this.stunSlam, this.followUp, this.holdTime, this.messages);
         instance = this;
     }
 

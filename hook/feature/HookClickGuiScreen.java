@@ -57,6 +57,10 @@ implements HookUiController.UiDataSource {
     private final HookUiController ui = new HookUiController(this);
 
     /** Self-test: shows the given tab. */
+    public void testPage(hook.module.Module module) {
+        this.ui.testPage(module);
+    }
+
     public void testTab(hook.module.Category category) {
         this.ui.testTab(category);
     }

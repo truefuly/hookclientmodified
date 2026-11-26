@@ -105,6 +105,7 @@ public final class XbowCartModule extends Module {
         this.swapBack.setDescription(EncryptedString.of("Switches back to the slot you had afterwards (after a short random pause)."));
         hook.module.setting.SettingVisibility.set(this.turnSpeed, this.humanize::getValue);
         this.addSettings(this.humanize, this.turnSpeed, this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages, this.usage);
+        this.moreSettings(this.turnSpeed, this.stepDelay, this.cooldown, this.skipIfCart, this.useFire, this.swapBack, this.messages);
         instance = this;
         disableLegacy();
     }

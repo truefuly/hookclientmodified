@@ -73,6 +73,7 @@ extends Module {
     public SpawnerNotifyModule() {
         super(EncryptedString.of("Spawner Notify"), EncryptedString.of("Highlights nearby spawners and alerts when one is found"), -1, Category.RENDER);
         this.addSettings(this.range, this.pillar, this.pillarAlpha, this.spawnerBox, this.boxAlpha, this.chatAlerts, this.soundAlerts);
+        this.moreSettings(this.pillarAlpha, this.boxAlpha, this.soundAlerts);
     }
 
     @Override

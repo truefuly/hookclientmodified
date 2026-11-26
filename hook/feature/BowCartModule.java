@@ -97,6 +97,7 @@ public final class BowCartModule extends Module {
         hook.module.setting.SettingVisibility.set(this.lookBack, this.humanize::getValue);
         this.addSettings(this.crosshair, this.humanize, this.lookBack, this.flameOnly, this.minPower, this.cooldown, this.skipIfCart, this.swapBack, this.swapDelay, this.quickDraw, this.highlight, this.color, this.messages);
         hook.module.setting.SettingVisibility.set(this.color, this.highlight::getValue);
+        this.moreSettings(this.lookBack, this.minPower, this.cooldown, this.skipIfCart, this.swapDelay, this.quickDraw, this.color, this.messages);
         instance = this;
     }
 

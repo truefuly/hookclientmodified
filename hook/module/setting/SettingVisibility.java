@@ -20,6 +20,15 @@ public final class SettingVisibility {
         }
     }
 
+    /** Hides the given settings until {@code shown} is true, keeping any rule they already have. */
+    public static void advanced(BooleanSupplier shown, Setting... settings) {
+        for (Setting s : settings) {
+            if (s == null) continue;
+            BooleanSupplier old = RULES.get(s);
+            RULES.put(s, old == null ? shown : () -> shown.getAsBoolean() && old.getAsBoolean());
+        }
+    }
+
     public static boolean visible(Setting var0) {
         BooleanSupplier var1 = RULES.get(var0);
         try {
