@@ -227,6 +227,21 @@ public final class ModuleManager {
     @EventListener
     public void keepHudAnchored(hook.event.events.Render2DEvent event) {
         hook.feature.VerseFallHudAnchors.update();
+        // the "HUD Editor" button in the chat (and the editor itself) is there even while the HUD module is off
+        hook.feature.HudModule h = (hook.feature.HudModule) this.getModuleByClass(hook.feature.HudModule.class);
+        if (h != null && !h.isEnabled()) h.renderWhileOff(event);
+    }
+
+    @EventListener
+    public void hudEditorMouse(hook.event.events.MouseButtonEvent event) {
+        hook.feature.HudModule h = (hook.feature.HudModule) this.getModuleByClass(hook.feature.HudModule.class);
+        if (h != null && !h.isEnabled()) h.onMouseButton(event);
+    }
+
+    @EventListener
+    public void hudEditorScroll(hook.event.events.MouseScrolledEvent event) {
+        hook.feature.HudModule h = (hook.feature.HudModule) this.getModuleByClass(hook.feature.HudModule.class);
+        if (h != null && !h.isEnabled()) h.onMouseScrolled(event);
     }
 
     @EventListener

@@ -78,6 +78,11 @@ extends Module {
     private Render2DEvent standInFor;
 
     /** HUD module off: other modules (Effect Timer, Schematic Builder) still get their own HUD elements drawn, once per frame. */
+    /** HUD module off: still the chat's "HUD Editor" button, the editor and other modules' elements (once per frame). */
+    public void renderWhileOff(Render2DEvent event) {
+        this.renderEffectsOnly(event);
+    }
+
     void renderEffectsOnly(Render2DEvent event) {
         if (this.isEnabled() || this.standInFor == event) return;
         this.standInFor = event;

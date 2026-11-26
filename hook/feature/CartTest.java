@@ -408,6 +408,8 @@ final class CartTest {
             cmd("effect give @s slow_falling infinite 0");
             hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
             if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            hook.module.Module sbm = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SchematicBuilderModule.class);
+            if (sbm != null && sbm.isEnabled()) sbm.setEnabled(false);
             hook.module.Module et = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(EffectTimerModule.class);
             if (et != null && !et.isEnabled()) et.setEnabled(true);
             com.spotifyclient.ModSettings.enableHudLyrics = true;
@@ -474,11 +476,38 @@ final class CartTest {
                 sb.append(String.format(java.util.Locale.ROOT, " | %s %.0f,%.0f->%.0f,%.0f %s", e.getKey(), ax, ay, bx, by, ok ? "ok" : "MOVED"));
             }
             System.out.println(sb);
-            System.out.println("CARTTEST DONE ok=" + (moved == 0 ? 1 : 0) + "/1");
+            hudStable = moved == 0;
+            // HUD module off: the chat button must still be there
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && hud.isEnabled()) hud.setEnabled(false);
+            mc.method_1507(new net.minecraft.class_408("", false));
+        }
+        if (clock == 445) {
+            float[] bc = HudModule.instance.editor().editorButtonCenter();
+            hudButtonOff = bc != null;
+            System.out.println("CARTTEST HUD off, chat button " + (hudButtonOff ? "shown" : "MISSING"));
+            shot(mc, "hud_off_chat_button");
+            // Undo: a full reset can be stepped back to exactly the layout before it
+            HudLayoutEditor ed = HudModule.instance.editor();
+            String before = ed.layoutText();
+            ed.resetLayout();
+            String reset = ed.layoutText();
+            ed.undoLast();
+            String after = ed.layoutText();
+            hudUndo = before.equals(after);
+            System.out.println("CARTTEST HUD undo " + (hudUndo ? "ok" : "FAILED") + " resetChanged=" + !before.equals(reset));
+        }
+        if (clock == 450) {
+            mc.method_1507(null);
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            System.out.println("CARTTEST DONE ok=" + (hudStable && hudButtonOff && hudUndo ? 1 : 0) + "/1");
             mc.method_1592();
             phase = 99;
         }
     }
+
+    private static boolean hudStable, hudButtonOff, hudUndo;
 
     private static final hook.module.Category[] ESP_TABS = hook.module.Category.values();
 

@@ -325,20 +325,32 @@ public final class HudLayoutEditor {
     }
 
     private void drawResetButton(UiRenderer ui, int sw, double mx, double my) {
-        String text = "Reset HUD";
-        float w = this.textW(ui, text, this.d(11.0f), 1) + this.d(28.0f);
-        float h = this.d(24.0f);
-        float x = sw / 2.0f - w / 2.0f;
+        String undoText = "Undo", allText = "Reset All";
+        float h = this.d(24.0f), gap = this.d(8.0f);
+        float uw = this.textW(ui, undoText, this.d(11.0f), 1) + this.d(28.0f);
+        float aw = this.textW(ui, allText, this.d(11.0f), 1) + this.d(28.0f);
+        float x = sw / 2.0f - (uw + gap + aw) / 2.0f;
         // below the boss bar area, above the crosshair: never covers the boss bar or its label
         float y = net.minecraft.class_310.method_1551().method_22683().method_4506() * 0.30f;
-        boolean hot = mx >= x && mx < x + w && my >= y && my < y + h;
-        float a = this.anim("reset", hot ? 1.0f : 0.0f, 14.0f);
+        this.pill(ui, "undo", undoText, x, y, uw, h, mx, my, this.canUndo());
+        this.undoBounds[0] = x; this.undoBounds[1] = y; this.undoBounds[2] = uw; this.undoBounds[3] = h;
+        float ax = x + uw + gap;
+        this.pill(ui, "reset", allText, ax, y, aw, h, mx, my, true);
+        this.resetBounds[0] = ax; this.resetBounds[1] = y; this.resetBounds[2] = aw; this.resetBounds[3] = h;
+        String hint = "Drag to move  \u00B7  Scroll or drag the corner to resize  \u00B7  Right-click to hide / show  \u00B7  Undo: back one step";
+        ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
+    }
+
+    private final float[] undoBounds = new float[4];
+
+    private void pill(UiRenderer ui, String id, String text, float x, float y, float w, float h, double mx, double my, boolean on) {
+        boolean hot = on && mx >= x && mx < x + w && my >= y && my < y + h;
+        float a = this.anim(id, hot ? 1.0f : 0.0f, 14.0f);
+        ui.pushAlpha(on ? 1.0f : 0.45f);
         ui.round(x, y, w, h, h / 2.0f, UiEasing.mix(UiRenderer.argb(0.85f, 20, 21, 25), UiPalette.accent(0.85f), a * 0.6f));
         ui.outline(x, y, w, h, h / 2.0f, Math.max(1.0f, this.u), UiEasing.mix(UiRenderer.white(0.18f), UiPalette.accent(0.9f), a));
-        ui.textCentered(text, sw / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
-        String hint = "Drag to move  \u00B7  Drag the corner or scroll to resize  \u00B7  Right-click anything to hide or show it  \u00B7  Snaps to the center lines";
-        ui.textCentered(hint, sw / 2.0f, y + h + this.d(6.0f), this.d(9.5f), 0, UiRenderer.white(0.6f));
-        this.resetBounds[0] = x; this.resetBounds[1] = y; this.resetBounds[2] = w; this.resetBounds[3] = h;
+        ui.textCentered(text, x + w / 2.0f, y + (h - this.d(11.0f)) / 2.0f - this.d(0.5f), this.d(11.0f), 1, UiRenderer.white(0.95f));
+        ui.popAlpha();
     }
 
     private VanillaHud.Part partAt(double mx, double my) {
@@ -1033,6 +1045,10 @@ public final class HudLayoutEditor {
             this.resetLayout();
             return true;
         }
+        if (this.undoBounds[2] > 0.0f && var1 >= this.undoBounds[0] && var1 < this.undoBounds[0] + this.undoBounds[2] && var3 >= this.undoBounds[1] && var3 < this.undoBounds[1] + this.undoBounds[3]) {
+            this.undoLast();
+            return true;
+        }
         VanillaHud.Part part = this.partAt(var1, var3);
         if (part != null) {
             float[] r = this.partRect(part);
@@ -1069,9 +1085,11 @@ public final class HudLayoutEditor {
         }
     }
 
+    /** "Reset All": every element back to its default place, size and visibility (can be undone too). */
     public void resetLayout() {
         this.places.clear();
         this.scales.clear();
+        this.hiddenSections.clear();
         VanillaHud.reset();
         VerseFallHudAnchors.reset();
         this.save();
@@ -1104,42 +1122,97 @@ public final class HudLayoutEditor {
             this.loaded = true;
             try {
                 if (this.file != null && Files.isRegularFile(this.file, new LinkOption[0])) {
-                    for (String var2 : Files.readAllLines(this.file, StandardCharsets.UTF_8)) {
-                        String[] var3 = var2.trim().split(",");
-                        if (VanillaHud.parse(var3)) continue;
-                        if (var3.length == 2 && var3[0].equals("HIDE")) {
-                            try { this.hiddenSections.add(HudSection.valueOf(var3[1])); } catch (IllegalArgumentException ignored) { }
-                            continue;
-                        }
-                        if (var3.length == 3 && var3[0].equals("SCALE")) {
-                            try {
-                                this.scales.put(HudSection.valueOf(var3[1]), Float.parseFloat(var3[2]));
-                            } catch (IllegalArgumentException ignored) {
-                            }
-                            continue;
-                        }
-                        if (var3.length != 5) continue;
-                        adsdzhecwnzmbs var4 = new adsdzhecwnzmbs();
-                        var4.moved = true;
-                        var4.right = var3[1].equals("R");
-                        var4.centerX = var3[1].equals("C");
-                        var4.bottom = var3[2].equals("B");
-                        var4.centerY = var3[2].equals("M");
-                        var4.ox = Float.parseFloat(var3[3]);
-                        var4.oy = Float.parseFloat(var3[4]);
-                        this.places.put(HudSection.valueOf(var3[0]), var4);
-                    }
+                    this.apply(Files.readString(this.file, StandardCharsets.UTF_8));
                 }
             }
             catch (Throwable throwable) {
                 // empty catch block
             }
+            this.lastSaved = this.serialize();
         }
     }
 
+    /** Replaces the whole layout (our elements + vanilla parts) with a saved one. */
+    private void apply(String layout) {
+        this.places.clear();
+        this.scales.clear();
+        this.hiddenSections.clear();
+        VanillaHud.reset();
+        for (String var2 : layout.split("\n")) {
+            String[] var3 = var2.trim().split(",");
+            try {
+                if (VanillaHud.parse(var3)) continue;
+                if (var3.length == 2 && var3[0].equals("HIDE")) {
+                    this.hiddenSections.add(HudSection.valueOf(var3[1]));
+                    continue;
+                }
+                if (var3.length == 3 && var3[0].equals("SCALE")) {
+                    this.scales.put(HudSection.valueOf(var3[1]), Float.parseFloat(var3[2]));
+                    continue;
+                }
+                if (var3.length != 5) continue;
+                adsdzhecwnzmbs var4 = new adsdzhecwnzmbs();
+                var4.moved = true;
+                var4.right = var3[1].equals("R");
+                var4.centerX = var3[1].equals("C");
+                var4.bottom = var3[2].equals("B");
+                var4.centerY = var3[2].equals("M");
+                var4.ox = Float.parseFloat(var3[3]);
+                var4.oy = Float.parseFloat(var3[4]);
+                this.places.put(HudSection.valueOf(var3[0]), var4);
+            } catch (IllegalArgumentException ignored) {
+                // unknown element or broken line: skip it
+            }
+        }
+    }
+
+    /** Earlier layouts, newest first: "Undo" in the editor steps back through them. */
+    private final java.util.ArrayDeque<String> undo = new java.util.ArrayDeque<>();
+    private String lastSaved;
+
+    /** Self-test: the layout as it would be saved. */
+    String layoutText() {
+        return this.serialize();
+    }
+
+    boolean canUndo() {
+        return !this.undo.isEmpty();
+    }
+
+    /** "Undo": back to the layout before the last change (move, resize, hide, ...). */
+    public void undoLast() {
+        String prev = this.undo.pollFirst();
+        if (prev == null) return;
+        this.apply(prev);
+        this.lastSaved = prev;
+        this.write(prev);
+    }
+
     private void save() {
+        String now = this.serialize();
+        if (this.lastSaved != null && !now.equals(this.lastSaved)) {
+            this.undo.addFirst(this.lastSaved);
+            while (this.undo.size() > 50) this.undo.removeLast();
+        }
+        this.lastSaved = now;
+        this.write(now);
+    }
+
+    private void write(String text) {
         try {
             if (this.file != null) {
+                Files.createDirectories(this.file.getParent(), new FileAttribute[0]);
+                Files.writeString(this.file, (CharSequence)text, StandardCharsets.UTF_8, new OpenOption[0]);
+            }
+        }
+        catch (Throwable throwable) {
+            // empty catch block
+        }
+    }
+
+    private String serialize() {
+        {
+            {
                 StringBuilder var1 = new StringBuilder();
                 for (Map.Entry<HudSection, adsdzhecwnzmbs> var3 : this.places.entrySet()) {
                     adsdzhecwnzmbs var4 = var3.getValue();
@@ -1151,12 +1224,8 @@ public final class HudLayoutEditor {
                 }
                 for (HudSection hs : this.hiddenSections) var1.append("HIDE,").append(hs.name()).append('\n');
                 var1.append(VanillaHud.serialize());
-                Files.createDirectories(this.file.getParent(), new FileAttribute[0]);
-                Files.writeString(this.file, (CharSequence)var1.toString(), StandardCharsets.UTF_8, new OpenOption[0]);
+                return var1.toString();
             }
-        }
-        catch (Throwable throwable) {
-            // empty catch block
         }
     }
 
