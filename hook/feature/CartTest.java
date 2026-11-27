@@ -57,6 +57,7 @@ final class CartTest {
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if ("character".equals(ONLY)) { character(mc, p); return; }
+        if ("autominer".equals(ONLY)) { autominer(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
         if ("sky".equals(ONLY)) { sky(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
@@ -393,6 +394,62 @@ final class CartTest {
         if (clock == 255) shot(mc, "fog_lava_on");
         if (clock == 260) System.out.println("CARTTEST FOG medium=" + mc.field_1773.method_19418().method_19334() + " enabled=" + nf.isEnabled());
         if (clock == 270) { System.out.println("CARTTEST DONE ok=1/1"); mc.method_1592(); phase = 99; }
+    }
+
+    /**
+     * -Dhook.carttest.only=autominer: Auto Miner in survival. Stone with Efficiency V netherite + Haste II breaks in one
+     * hit (should reach ~25 cycles a second, never more); cobblestone needs a few ticks per block.
+     */
+    private static void autominer(class_310 mc, net.minecraft.class_746 p) {
+        AutoMinerModule am = (AutoMinerModule) hook.Hook.INSTANCE.getModuleManager().getModuleByClass(AutoMinerModule.class);
+        int k = clock - 100;
+        if (k == 0) {
+            hook.module.Module sbm = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(SchematicBuilderModule.class);
+            if (sbm != null && sbm.isEnabled()) sbm.setEnabled(false);
+            cmd("gamemode survival");
+            cmd("time set noon");
+            cmd("fill -4 150 -4 4 156 6 air");
+            cmd("fill -4 150 -4 4 150 6 stone");
+            cmd("tp @s 0.5 151 0.5 0 38.7");
+            cmd("clear @s");
+            cmd("item replace entity @s weapon.mainhand with netherite_pickaxe[enchantments={efficiency:5}]");
+            cmd("item replace entity @s weapon.offhand with stone 64");
+            cmd("give @s stone 640");
+            cmd("give @s cobblestone 640");
+            cmd("effect give @s haste infinite 1 true");
+            cmd("scoreboard objectives add amstone minecraft.mined:minecraft.stone");
+            cmd("scoreboard objectives add amcobble minecraft.mined:minecraft.cobblestone");
+            cmd("scoreboard players set @s amstone 0");
+            cmd("scoreboard players set @s amcobble 0");
+        }
+        if (k == 20) {
+            am.testBlock(net.minecraft.class_1802.field_20391);
+            if (!am.isEnabled()) am.setEnabled(true);
+            am.cycles = 0;
+        }
+        if (k == 120) {
+            System.out.println("CARTTEST AM stone cycles=" + am.cycles + " in 5s (" + am.cycles / 5.0 + "/s)");
+            cmd("scoreboard players get @s amstone");
+            shot(mc, "am_stone");
+            am.setEnabled(false);
+        }
+        if (k == 130) {
+            cmd("setblock 0 151 2 air");
+            cmd("item replace entity @s weapon.offhand with cobblestone 64");
+            am.testBlock(net.minecraft.class_1802.field_20412);
+            am.setEnabled(true);
+            am.cycles = 0;
+        }
+        if (k == 230) {
+            System.out.println("CARTTEST AM cobble cycles=" + am.cycles + " in 5s (" + am.cycles / 5.0 + "/s)");
+            cmd("scoreboard players get @s amcobble");
+            am.setEnabled(false);
+        }
+        if (k == 240) {
+            System.out.println("CARTTEST DONE ok=1/1");
+            mc.method_1592();
+            phase = 99;
+        }
     }
 
     /** -Dhook.carttest.only=character: 3D Character, each built-in character from the front, side and back (F5). */

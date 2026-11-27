@@ -38,7 +38,7 @@ public final class ModuleLayout {
         tab(Category.DONUT, "Seed", "Seed Cracker");
 
         tab(Category.MISC, "Movement", "Fly", "Creative");
-        tab(Category.MISC, "Mining", "Auto Mine", "Auto Miner", "Auto Tool", "Anti Break", "Fast Use");
+        tab(Category.MISC, "Mining", "Auto Miner", "Auto Tool", "Anti Break", "Fast Use");
         tab(Category.MISC, "Survival", "Auto Eat");
         tab(Category.MISC, "Privacy", "Name Protect", "Skin Protect", "Anti Screenshare", "Resource Blocker");
         tab(Category.MISC, "Tools", "Quick Utilities");

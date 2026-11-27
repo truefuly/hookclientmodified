@@ -16,7 +16,6 @@ import hook.feature.ShieldBreakerModule;
 import hook.feature.SpearMacroModule;
 import hook.feature.AutoCrystalModule;
 import hook.feature.AutoEatModule;
-import hook.feature.AutoMineModule;
 import hook.feature.SwordcoreModuleSupport;
 import hook.feature.MovementSyncModule;
 import hook.feature.TrueJumpResetModule;
@@ -126,7 +125,6 @@ public final class ModuleManager {
         this.in(Category.MISC, new AutoToolModule());
         this.in(Category.MISC, new SwingSpeedModule());
         this.in(Category.MISC, new AutoEatModule());
-        this.in(Category.MISC, new AutoMineModule());
         this.in(Category.MISC, new NameProtectModule());
         this.in(Category.MISC, new SkinProtectModule());
         this.in(Category.MISC, new ResourceBlockerModule());
