@@ -16,9 +16,11 @@ public enum UiPalette {
     Amber(16763786, 16754002, 1.3f, 0x211A11, 4599834, 656898, 0xFFFFFF, 16756318),
     Crimson(0xFF8A8A, 0xFF5A5A, 1.3f, 2233108, 4659483, 656131, 0xFFFFFF, 0xFF6464),
     Halloween(15964750, 9725680, 1.25f, 1708568, 2757680, 656389, 16761470, 10706687),
-    Hook(5231013, 5231013, 0.6f, 1316379, 1777188, 723983, 0xFFFFFF, 10134450);
+    Hook(5231013, 5231013, 0.6f, 1316379, 1777188, 723983, 0xFFFFFF, 10134450),
+    // dark mode: plain matte black background (no gradient, lights or particles), soft grey accent
+    MatteBlack(0xD9D9DC, 0xFFFFFF, 0.0f, 0x141415, 0x0B0B0C, 0x0B0B0C, 0xFFFFFF, 0x8C8C90);
 
-    private static final int SIZE = 23;
+    private static final int SIZE = 24;
     private static final long BLEND_NS = 700000000L;
     private static UiPalette target;
     private static float[] from;
@@ -46,7 +48,7 @@ public enum UiPalette {
     }
 
     private float[] vector() {
-        float[] var1 = new float[23];
+        float[] var1 = new float[24];
         UiPalette.put(var1, 0, this.accent);
         UiPalette.put(var1, 3, this.light);
         UiPalette.put(var1, 6, this.glass);
@@ -56,6 +58,7 @@ public enum UiPalette {
         UiPalette.put(var1, 18, this.logoBottom);
         var1[21] = this.lightAmount;
         var1[22] = this == Halloween ? 1.0f : 0.0f;
+        var1[23] = this == MatteBlack ? 1.0f : 0.0f;
         return var1;
     }
 
@@ -94,8 +97,8 @@ public enum UiPalette {
         float var3 = Math.min(1.0f, (float)(var0 - changedAt) / 7.0E8f);
         float var4 = var3 * var3 * (3.0f - 2.0f * var3);
         float[] var5 = target.vector();
-        float[] var6 = new float[23];
-        for (int var7 = 0; var7 < 23; ++var7) {
+        float[] var6 = new float[24];
+        for (int var7 = 0; var7 < 24; ++var7) {
             var6[var7] = from[var7] + (var5[var7] - from[var7]) * var4;
         }
         cached = var6;
@@ -138,6 +141,16 @@ public enum UiPalette {
 
     public static float halloween() {
         return UiPalette.now()[22];
+    }
+
+    /** 1 while the Matte Black theme is selected (blends during theme switches): solid black backdrop, no lights. */
+    public static float matte() {
+        return UiPalette.now()[23];
+    }
+
+    /** Name shown on the theme tile. */
+    public String label() {
+        return this == MatteBlack ? "Matte Black" : this.name();
     }
 
     public static float lightAmount() {

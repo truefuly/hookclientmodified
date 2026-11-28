@@ -26,7 +26,7 @@ public final class ModuleLayout {
         tab(Category.COMBAT, "Pearl", "Pearl Catch");
 
         tab(Category.RENDER, "Entities", "Player ESP", "Mob ESP", "Item ESP", "Clean Hitboxes", "Hit Glow");
-        tab(Category.RENDER, "Info", "Nametags", "Target HUD", "Trajectories", "Effect Timer");
+        tab(Category.RENDER, "Info", "Nametags", "Target HUD", "Trajectories", "Effect Timer", "Armor HUD");
         tab(Category.RENDER, "Blocks", "Block ESP", "Block Notifier", "Spawner Notify");
         tab(Category.RENDER, "Cleanup", "No Fog", "No Particles", "No Render", "Force Render");
         tab(Category.RENDER, "Camera", "Freecam");
@@ -39,13 +39,13 @@ public final class ModuleLayout {
 
         tab(Category.MISC, "Movement", "Fly", "Creative");
         tab(Category.MISC, "Mining", "Auto Miner", "Auto Tool", "Anti Break", "Fast Use");
-        tab(Category.MISC, "Survival", "Auto Eat");
+        tab(Category.MISC, "Survival", "Auto Eat", "Auto Respawn");
         tab(Category.MISC, "Privacy", "Name Protect", "Skin Protect", "Anti Screenshare", "Resource Blocker");
         tab(Category.MISC, "Tools", "Quick Utilities");
 
         tab(Category.AUTOMATION, "Building", "Schematic Builder");
         tab(Category.AUTOMATION, "Farming", "Auto Breed");
-        tab(Category.AUTOMATION, "Server", "Auto Tpa", "XP Shop", "Crate Opener");
+        tab(Category.AUTOMATION, "Server", "Auto Tpa", "XP Shop", "Crate Opener", "Auto Reconnect");
 
         tab(Category.VISUALS, "Camera", "Freelook", "Fullbright");
         tab(Category.VISUALS, "World", "Custom Skys", "custom-skys", "Block Overlay", "block-overlay");

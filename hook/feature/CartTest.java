@@ -57,6 +57,8 @@ final class CartTest {
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
         if ("armor".equals(ONLY)) { armor(mc, p); return; }
+        if ("matte".equals(ONLY)) { matte(mc, p); return; }
+        if ("extras".equals(ONLY)) { extras(mc, p); return; }
         if ("character".equals(ONLY)) { character(mc, p); return; }
         if ("autominer".equals(ONLY)) { autominer(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
@@ -498,6 +500,74 @@ final class CartTest {
     }
 
     /** -Dhook.carttest.only=hud: HUD editor with grid, every vanilla part framed, window resize keeps anchors. */
+    /** -Dhook.carttest.only=extras: Auto Respawn after /kill, the music bar despite an old HIDE entry, Auto Reconnect countdown. */
+    private static void extras(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode survival");
+            cmd("time set noon");
+            cmd("tp @s 0 200 0");
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            hook.module.Module ar = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(AutoRespawnModule.class);
+            if (ar != null && !ar.isEnabled()) ar.setEnabled(true);
+            hook.module.Module rc = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(AutoReconnectModule.class);
+            if (rc != null && !rc.isEnabled()) rc.setEnabled(true);
+            com.spotifyclient.ModSettings.enableHudLyrics = true;
+        }
+        if (clock == 110) cmd("kill @s");
+        if (clock >= 111 && clock <= 160 && (clock % 10 == 0)) System.out.println("CARTTEST RESPAWN t=" + clock + " dead=" + p.method_29504() + " screen=" + (mc.field_1755 == null ? "none" : mc.field_1755.getClass().getSimpleName()) + " hp=" + p.method_6032());
+        if (clock == 170) {
+            System.out.println("CARTTEST MUSIC bounds " + java.util.Arrays.toString(HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.MUSIC_BAR)));
+            shot(mc, "extras_music");
+        }
+        if (clock == 180) {
+            AutoReconnectModule.testServer("Unreachable Test", "127.0.0.1:1");
+            phase = 99; // the world may pause behind the screen: report by wall clock from here on
+            Thread t = new Thread(() -> {
+                try {
+                    mc.execute(() -> { mc.method_72099(); mc.method_1507(new net.minecraft.class_419(new net.minecraft.class_442(), net.minecraft.class_2561.method_43470("Test"), net.minecraft.class_2561.method_43470("Kicked for the test"))); }); // from this thread: queued, so it runs outside the world tick
+                    for (int i = 1; i <= 18; i++) {
+                        Thread.sleep(1000L);
+                        final int sec = i;
+                        mc.execute(() -> {
+                            System.out.println("CARTTEST RECONNECT s=" + sec + " screen=" + (mc.field_1755 == null ? "none" : mc.field_1755.getClass().getSimpleName()) + " tries=" + AutoReconnectModule.testTries());
+                            if (sec == 2) shot(mc, "extras_reconnect");
+                        });
+                    }
+                    mc.execute(() -> {
+                        AutoReconnectModule.testCancel();
+                        System.out.println("CARTTEST DONE extras");
+                        mc.method_1592();
+                    });
+                } catch (InterruptedException ignored) {
+                }
+            }, "carttest-reconnect");
+            t.setDaemon(true);
+            t.start();
+        }
+    }
+
+    private static Enum<UiPalette> matteBefore;
+
+    /** -Dhook.carttest.only=matte: the client menu and its settings page with the Matte Black theme. */
+    private static void matte(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            matteBefore = hook.module.modules.client.Hook.theme.getValue();
+            hook.module.modules.client.Hook.theme.setMode(UiPalette.MatteBlack);
+            mc.method_1507(new HookClickGuiScreen());
+        }
+        if (clock == 130) shot(mc, "matte_menu");
+        if (clock == 132 && mc.field_1755 instanceof HookClickGuiScreen gui) gui.testPage(hook.Hook.INSTANCE.getModuleManager().getModuleByClass(hook.module.modules.client.Hook.class));
+        if (clock == 160) shot(mc, "matte_settings");
+        if (clock == 165) {
+            if (matteBefore != null) hook.module.modules.client.Hook.theme.setMode(matteBefore);
+            mc.method_1507(null);
+            System.out.println("CARTTEST DONE matte");
+            mc.method_1592();
+            phase = 99;
+        }
+    }
+
     /** -Dhook.carttest.only=armor: Armor HUD next to the hotbar, horizontal and vertical with held items. */
     private static void armor(class_310 mc, net.minecraft.class_746 p) {
         if (clock == 100) {

@@ -31,7 +31,9 @@ final class UiTheme {
         ui.gradient(-pad, -pad, sw + 2 * pad, sh + 2 * pad, UiPalette.bgTop(0.2f), UiPalette.bgBottom(0.5f));
         float big = Math.max(sw, sh);
         float light = UiPalette.lightAmount();
-        float k = UiPalette.selected() == UiPalette.Hook ? 0.35f : 1.0f;
+        float mt = UiPalette.matte();
+        if (mt > 0.001f) ui.rect(-pad, -pad, sw + 2 * pad, sh + 2 * pad, UiRenderer.argb(mt, 11, 11, 12));
+        float k = (UiPalette.selected() == UiPalette.Hook ? 0.35f : 1.0f) * (1.0f - mt);
         ui.glow(sw * (0.28f + 0.16f * (float) Math.sin(t * 0.031)), sh * (0.3f + 0.14f * (float) Math.cos(t * 0.026)), big * 0.62f, UiPalette.light(0.05f * light * k));
         ui.glow(sw * (0.74f + 0.14f * (float) Math.cos(t * 0.022 + 1.7)), sh * (0.66f + 0.16f * (float) Math.sin(t * 0.028 + 0.6)), big * 0.58f,
             UiEasing.mix(UiRenderer.argb(0.06f * k, 190, 195, 205), UiPalette.light(0.06f * light * k), 0.75f));

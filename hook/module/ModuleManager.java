@@ -125,6 +125,8 @@ public final class ModuleManager {
         this.in(Category.MISC, new AutoToolModule());
         this.in(Category.MISC, new SwingSpeedModule());
         this.in(Category.MISC, new AutoEatModule());
+        this.in(Category.MISC, new hook.feature.AutoRespawnModule());
+        this.in(Category.AUTOMATION, new hook.feature.AutoReconnectModule());
         this.in(Category.MISC, new NameProtectModule());
         this.in(Category.MISC, new SkinProtectModule());
         this.in(Category.MISC, new ResourceBlockerModule());

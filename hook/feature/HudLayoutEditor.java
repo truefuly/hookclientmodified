@@ -373,6 +373,7 @@ public final class HudLayoutEditor {
         for (int i = sections.length - 1; i >= 0; --i) {
             float[] b = this.bounds.get(sections[i]);
             if (b == null || mx < b[0] || mx >= b[0] + b[2] || my < b[1] || my >= b[1] + b[3]) continue;
+            if (sections[i] == HudSection.MUSIC_BAR) return false; // on/off is the HUD Lyrics module
             if (!this.hiddenSections.remove(sections[i])) this.hiddenSections.add(sections[i]);
             this.save();
             return true;
@@ -811,13 +812,6 @@ public final class HudLayoutEditor {
         float s = this.scaleOf(HudSection.MUSIC_BAR);
         VerseFallHudAnchors.musicBarScale = s;
         boolean show = bar.interactive() && bar.width() > 0.0f;
-        if (!editor && this.hiddenSections.contains(HudSection.MUSIC_BAR)) {
-            // hidden: VerseFall still draws it, so park it far off screen
-            this.bounds.remove(HudSection.MUSIC_BAR);
-            bar.drag().setTarget(-100000.0f, -100000.0f);
-            bar.drag().syncToTarget();
-            return;
-        }
         this.element(ui, HudSection.MUSIC_BAR, show, sw, sh, 0.0f, editor, mx, my,
                 () -> new float[]{bar.width() * s * k, bar.height() * s * k},
                 (ex, ey) -> {
@@ -1241,7 +1235,8 @@ public final class HudLayoutEditor {
             try {
                 if (VanillaHud.parse(var3)) continue;
                 if (var3.length == 2 && var3[0].equals("HIDE")) {
-                    this.hiddenSections.add(HudSection.valueOf(var3[1]));
+                    // the music bar is switched with its own module (HUD Lyrics); an old editor "hide" made it vanish for good
+                    if (!var3[1].equals("MUSIC_BAR")) this.hiddenSections.add(HudSection.valueOf(var3[1]));
                     continue;
                 }
                 if (var3.length == 3 && var3[0].equals("SCALE")) {

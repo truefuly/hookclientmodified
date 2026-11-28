@@ -269,7 +269,9 @@ public final class HookUiController {
         float var4 = Math.max(this.sw, this.sh);
         float var5 = UiPalette.lightAmount();
         float var6 = this.time;
-        float var7 = UiPalette.selected() == UiPalette.Hook ? 0.35f : 1.0f;
+        float mt = UiPalette.matte();
+        if (mt > 0.001f) var1.rect(-var3, -var3, (float)this.sw + 2.0f * var3, (float)this.sh + 2.0f * var3, UiRenderer.argb(mt, 11, 11, 12));
+        float var7 = (UiPalette.selected() == UiPalette.Hook ? 0.35f : 1.0f) * (1.0f - mt);
         var1.glow((float)this.sw * (0.28f + 0.16f * (float)Math.sin((double)var6 * 0.031)), (float)this.sh * (0.3f + 0.14f * (float)Math.cos((double)var6 * 0.026)), var4 * 0.62f, UiPalette.light(0.05f * var5 * var7));
         var1.glow((float)this.sw * (0.74f + 0.14f * (float)Math.cos((double)var6 * 0.022 + 1.7)), (float)this.sh * (0.66f + 0.16f * (float)Math.sin((double)var6 * 0.028 + 0.6)), var4 * 0.58f, UiEasing.mix(UiRenderer.argb(0.06f * var7, 190, 195, 205), UiPalette.light(0.06f * var5 * var7), 0.75f));
         var1.glow((float)this.sw * (0.5f + 0.3f * (float)Math.sin((double)var6 * 0.017 + 3.1)), (float)this.sh * (0.5f + 0.24f * (float)Math.sin((double)var6 * 0.021 + 2.2)), var4 * 0.4f, UiRenderer.white(0.025f * var7));
@@ -292,7 +294,7 @@ public final class HookUiController {
                 this.particles.add(var4);
             }
         }
-        var1.pushAlpha(var2);
+        var1.pushAlpha(var2 * (1.0f - UiPalette.matte()));
         float var17 = this.hw;
         for (UiParticleState var5 : this.particles) {
             var5.y -= var5.speed * this.dt * (1.0f + 0.5f * var17);
@@ -1024,7 +1026,7 @@ public final class HookUiController {
             var1.round(var29, var30, var27, var28, var28 / 2.0f, var13.previewAccent() & 0xFFFFFF | 0xED000000);
             float var31 = var28 - this.d(4.0f);
             var1.round(var29 + var27 - this.d(2.0f) - var31, var30 + this.d(2.0f), var31, var31, var31 / 2.0f, INK);
-            var1.text(var13.name(), var14 + this.d(14.0f), var15 + var11 - this.d(31.0f), this.d(13.0f), 1, UiEasing.mix(UiRenderer.white(0.78f), TEXT, Math.max(var19, var18)));
+            var1.text(var13.label(), var14 + this.d(14.0f), var15 + var11 - this.d(31.0f), this.d(13.0f), 1, UiEasing.mix(UiRenderer.white(0.78f), TEXT, Math.max(var19, var18)));
             if (var19 > 0.01f) {
                 float var32 = this.d(9.0f) * (0.7f + 0.3f * var19);
                 float var33 = var14 + var10 - this.d(22.0f);
