@@ -89,6 +89,8 @@ public final class HudLayoutEditor {
         this.drawModules(var1, var5.modules, var2, var3, var4, var7, var8, var10);
         List<EffectRow> fx = this.effectRows(var4, var7);
         this.element(var1, HudSection.EFFECT_TIMER, var5.effectTimer && !fx.isEmpty() && var4.inWorld(), var2, var3, 0.0f, var7, var8, var10, () -> this.effectsSize(var1, fx, var5), (ex, ey) -> this.drawEffects(var1, ex, ey, fx, var5));
+        List<ArmorRow> armor = var5.armorHud && var4.inWorld() ? this.armorRows(var4, var7, var5) : List.of();
+        this.element(var1, HudSection.ARMOR, !armor.isEmpty(), var2, var3, 0.0f, var7, var8, var10, () -> this.armorSize(var1, armor, var5), (ax, ay) -> this.drawArmor(var1, ax, ay, armor, var5));
         this.musicBar(var1, var2, var3, var7, var8, var10);
         SchematicBuilderModule.Progress bp = SchematicBuilderModule.progress();
         if (bp == null && var7) bp = new SchematicBuilderModule.Progress("Pumpkin Farm", 1384, 2210, 62.6, "~4m 10s left \u00B7 done at 19:42", "Building", false);
@@ -848,6 +850,95 @@ public final class HudLayoutEditor {
         return this.d(o.effectBars ? 30.0f : 26.0f);
     }
 
+    // ------------------------------------------------------------------ armor hud
+
+    /** Armor HUD sizes follow the GUI scale (slots as big as the hotbar's, like Uku's Armor HUD), times the HUD scale. */
+    private float q(float v) {
+        return v * guiScale() * (this.lastOptions == null ? 1.0f : this.lastOptions.scale);
+    }
+
+    private List<ArmorRow> armorRows(HudDataSource src, boolean editor, adhvjlahyjurfh o) {
+        List<ArmorRow> rows = src.armor(o.armorHands, false);
+        boolean any = false;
+        for (ArmorRow r : rows) any |= !r.empty();
+        if (!any) rows = editor ? src.armor(o.armorHands, true) : List.of();
+        if (!o.armorEmpty) {
+            java.util.ArrayList<ArmorRow> f = new java.util.ArrayList<>();
+            for (ArmorRow r : rows) if (!r.empty()) f.add(r);
+            rows = f;
+        }
+        return rows;
+    }
+
+    private static String armorText(ArmorRow r, int mode) {
+        if (r.empty()) return "";
+        if (r.max() <= 0) return r.count() > 1 ? String.valueOf(r.count()) : "";
+        if (mode == 0) return Math.round(r.left() * 100.0f) + "%";
+        if (mode == 1) return String.valueOf(r.max() - r.damage());
+        return "";
+    }
+
+    /** Green when fresh, yellow at half, red when almost broken. */
+    private static int durabilityColor(float left, float alpha) {
+        float hue = Math.max(0.0f, Math.min(1.0f, left)) / 3.0f;
+        int rgb = java.awt.Color.HSBtoRGB(hue, 0.62f, 1.0f) & 0xFFFFFF;
+        return (Math.round(Math.max(0.0f, Math.min(1.0f, alpha)) * 255.0f) << 24) | rgb;
+    }
+
+    private float armorTextW(UiRenderer ui, List<ArmorRow> rows, adhvjlahyjurfh o) {
+        float w = 0.0f;
+        for (ArmorRow r : rows) w = Math.max(w, this.textW(ui, armorText(r, o.armorDurability), this.q(7.0f), 1));
+        return w;
+    }
+
+    private float[] armorSize(UiRenderer ui, List<ArmorRow> rows, adhvjlahyjurfh o) {
+        float pad = this.q(2.0f), slot = this.q(20.0f), gap = this.q(2.0f);
+        float tw = this.armorTextW(ui, rows, o);
+        int n = Math.max(1, rows.size());
+        if (o.armorVertical) {
+            float w = pad * 2.0f + slot + (tw > 0.0f ? this.q(5.0f) + tw : 0.0f);
+            return new float[]{w, pad * 2.0f + n * slot + (n - 1) * gap};
+        }
+        float cell = Math.max(slot, tw + this.q(2.0f));
+        float h = pad * 2.0f + slot + (tw > 0.0f ? this.q(9.0f) : 0.0f);
+        return new float[]{pad * 2.0f + n * cell + (n - 1) * gap, h};
+    }
+
+    private void drawArmor(UiRenderer ui, float x, float y, List<ArmorRow> rows, adhvjlahyjurfh o) {
+        float[] size = this.armorSize(ui, rows, o);
+        this.glass(ui, x, y, size[0], size[1], this.q(4.0f), o);
+        float pad = this.q(2.0f), slot = this.q(20.0f), gap = this.q(2.0f), icon = this.q(16.0f);
+        float tw = this.armorTextW(ui, rows, o);
+        float cell = o.armorVertical ? slot : Math.max(slot, tw + this.q(2.0f));
+        float cx = x + pad, cy = y + pad;
+        for (ArmorRow r : rows) {
+            float sx = o.armorVertical ? cx : cx + (cell - slot) / 2.0f;
+            ui.round(sx, cy, slot, slot, this.q(3.0f), UiRenderer.white(0.07f));
+            if (!r.empty()) {
+                float left = r.left();
+                boolean low = r.max() > 0 && o.armorWarn && left <= 0.1f;
+                float blink = low ? 0.45f + 0.55f * (float)Math.abs(Math.cos(this.time * 4.0f)) : 1.0f;
+                if (low) ui.round(sx, cy, slot, slot, this.q(3.0f), UiRenderer.argb(0.28f * blink, 255, 70, 60));
+                ui.item(r.stack(), sx + (slot - icon) / 2.0f, cy + (slot - icon) / 2.0f, icon);
+                if (r.max() > 0 && o.armorDurability != 3) {
+                    // vanilla-style durability bar along the bottom of the slot
+                    float bw = slot - this.q(6.0f), bh = Math.max(1.0f, this.q(2.0f));
+                    float bx = sx + this.q(3.0f), by = cy + slot - this.q(2.0f) - bh;
+                    ui.round(bx, by, bw, bh, bh / 2.0f, UiRenderer.argb(0.8f, 0, 0, 0));
+                    ui.round(bx, by, Math.max(bh, bw * left), bh, bh / 2.0f, durabilityColor(left, 0.95f));
+                }
+                String t = armorText(r, o.armorDurability);
+                if (!t.isEmpty()) {
+                    int col = r.max() > 0 ? durabilityColor(left, 0.95f * blink) : UiRenderer.white(0.9f);
+                    if (o.armorVertical) ui.text(t, sx + slot + this.q(5.0f), cy + slot / 2.0f - this.q(7.0f) / 2.0f - this.q(1.0f), this.q(7.0f), 1, col);
+                    else ui.text(t, cx + (cell - this.textW(ui, t, this.q(7.0f), 1)) / 2.0f, cy + slot + this.q(1.5f), this.q(7.0f), 1, col);
+                }
+            }
+            if (o.armorVertical) cy += slot + gap;
+            else cx += cell + gap;
+        }
+    }
+
     // ------------------------------------------------------------------ schematic builder progress card
 
     private float[] builderSize(UiRenderer ui, SchematicBuilderModule.Progress p) {
@@ -960,6 +1051,13 @@ public final class HudLayoutEditor {
             }
             case 7: {
                 fArray = new float[]{(float)var4 / 2.0f - var2 / 2.0f, this.d(64.0f)};
+                break;
+            }
+            case 8: {
+                // like Uku's Armor HUD: right next to the hotbar, bottom aligned with it (the right side is free, the
+                // offhand slot and the coordinates sit on the left)
+                float g = guiScale();
+                fArray = new float[]{Math.min((float)var4 - this.d(4.0f) - var2, (float)var4 / 2.0f + 91.0f * g + 6.0f * g), (float)var5 - g - var3};
                 break;
             }
             case 4: {
@@ -1237,7 +1335,8 @@ public final class HudLayoutEditor {
         MODULES("Modules"),
         EFFECT_TIMER("Effect Timer"),
         MUSIC_BAR("Music Bar"),
-        BUILDER("Schematic Builder");
+        BUILDER("Schematic Builder"),
+        ARMOR("Armor HUD");
 
         final String label;
 
@@ -1262,6 +1361,13 @@ public final class HudLayoutEditor {
         public boolean effectTimer;
         public boolean effectIcons = true;
         public boolean effectBars = true;
+        public boolean armorHud;
+        public boolean armorVertical;
+        /** 0 = percent, 1 = number, 2 = bar only, 3 = off */
+        public int armorDurability;
+        public boolean armorHands;
+        public boolean armorEmpty = true;
+        public boolean armorWarn = true;
     }
 
     private static final class adsdzhecwnzmbs {
@@ -1315,6 +1421,22 @@ public final class HudLayoutEditor {
 
         default List<EffectRow> effects() {
             return List.of();
+        }
+
+        /** Helmet, chestplate, leggings, boots (then main hand and offhand when asked); preview = sample set for the editor. */
+        default List<ArmorRow> armor(boolean hands, boolean preview) {
+            return List.of();
+        }
+    }
+
+    /** One armor / hand slot of the Armor HUD (stack = ItemStack, null when empty; max 0 = no durability). */
+    public record ArmorRow(Object stack, int damage, int max, int count) {
+        boolean empty() {
+            return this.stack == null;
+        }
+
+        float left() {
+            return this.max <= 0 ? 1.0f : Math.max(0.0f, Math.min(1.0f, (this.max - this.damage) / (float)this.max));
         }
     }
 

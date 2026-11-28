@@ -56,6 +56,7 @@ final class CartTest {
         if ("basefinder".equals(ONLY)) { basefinder(mc, p); return; }
         if ("fog".equals(ONLY)) { fog(mc, p); return; }
         if ("hud".equals(ONLY)) { hud(mc, p); return; }
+        if ("armor".equals(ONLY)) { armor(mc, p); return; }
         if ("character".equals(ONLY)) { character(mc, p); return; }
         if ("autominer".equals(ONLY)) { autominer(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
@@ -497,6 +498,40 @@ final class CartTest {
     }
 
     /** -Dhook.carttest.only=hud: HUD editor with grid, every vanilla part framed, window resize keeps anchors. */
+    /** -Dhook.carttest.only=armor: Armor HUD next to the hotbar, horizontal and vertical with held items. */
+    private static void armor(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode survival");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("tp @s 0 200 0");
+            cmd("effect give @s slow_falling infinite 0");
+            cmd("item replace entity @s armor.head with netherite_helmet[damage=20]");
+            cmd("item replace entity @s armor.chest with diamond_chestplate[damage=300]");
+            cmd("item replace entity @s armor.legs with iron_leggings[damage=210]");
+            cmd("item replace entity @s armor.feet with diamond_boots[damage=410]");
+            cmd("item replace entity @s weapon.mainhand with netherite_sword[damage=700]");
+            cmd("item replace entity @s weapon.offhand with totem_of_undying");
+            hook.module.Module hud = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(HudModule.class);
+            if (hud != null && !hud.isEnabled()) hud.setEnabled(true);
+            hook.module.Module am = hook.Hook.INSTANCE.getModuleManager().getModuleByClass(ArmorHudModule.class);
+            if (am != null && !am.isEnabled()) am.setEnabled(true);
+            ArmorHudModule.testSet(false, false);
+        }
+        if (clock == 115) mc.field_1705.method_1743().method_1808(false);
+        if (clock == 120) { System.out.println("CARTTEST ARMOR bounds " + java.util.Arrays.toString(HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.ARMOR))); shot(mc, "armor_row"); }
+        if (clock == 125) ArmorHudModule.testSet(true, true);
+        if (clock == 140) { System.out.println("CARTTEST ARMOR bounds2 " + java.util.Arrays.toString(HudModule.instance.editor().boundsOf(HudLayoutEditor.HudSection.ARMOR))); shot(mc, "armor_vertical"); }
+        if (clock == 145) { ArmorHudModule.testSet(false, true); cmd("item replace entity @s armor.head with air"); }
+        if (clock == 160) shot(mc, "armor_hands");
+        if (clock == 170) {
+            ArmorHudModule.testSet(false, false);
+            System.out.println("CARTTEST DONE armor");
+            mc.method_1592();
+            phase = 99;
+        }
+    }
+
     private static void hud(class_310 mc, net.minecraft.class_746 p) {
         if (clock == 100) {
             cmd("gamemode survival");

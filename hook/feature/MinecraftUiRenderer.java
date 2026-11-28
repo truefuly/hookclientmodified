@@ -266,9 +266,8 @@ extends UiRenderer {
     public void item(Object var1, float var2, float var3, float var4) {
         this.barrier();
         this.state.method_71059();
-        if (var1 instanceof class_1792) {
-            class_1792 var5 = (class_1792)var1;
-            class_1799 var6 = STACKS.computeIfAbsent(var5, class_1799::new);
+        if (var1 instanceof class_1792 || var1 instanceof class_1799) {
+            class_1799 var6 = var1 instanceof class_1799 st ? st : STACKS.computeIfAbsent((class_1792)var1, class_1799::new);
             Matrix3x2fStack var7 = this.ctx.method_51448();
             var7.pushMatrix();
             var7.translate(var2, var3);

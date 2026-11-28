@@ -122,6 +122,12 @@ extends Module {
                 this.options.effectTimer = EffectTimerModule.active();
                 this.options.effectIcons = EffectTimerModule.icons();
                 this.options.effectBars = EffectTimerModule.bars();
+                this.options.armorHud = ArmorHudModule.active();
+                this.options.armorVertical = ArmorHudModule.vertical();
+                this.options.armorDurability = ArmorHudModule.durabilityMode();
+                this.options.armorHands = ArmorHudModule.hands();
+                this.options.armorEmpty = ArmorHudModule.emptySlots();
+                this.options.armorWarn = ArmorHudModule.warn();
                 if (effectsOnly) {
                     this.options.watermark = this.options.time = this.options.info = this.options.player = false;
                     this.options.coords = this.options.netherCoords = this.options.modules = false;
@@ -259,6 +265,11 @@ extends Module {
         }
 
         @Override
+        public List<HudLayoutEditor.ArmorRow> armor(boolean hands, boolean preview) {
+            return HudModule.armorRows(HudModule.this.mc.field_1724, hands, preview);
+        }
+
+        @Override
         public List<HudLayoutEditor.EffectRow> effects() {
             net.minecraft.class_746 p = HudModule.this.mc.field_1724;
             if (p == null) return List.of();
@@ -287,6 +298,38 @@ extends Module {
             out.sort((a, b) -> a.infinite() != b.infinite() ? (a.infinite() ? 1 : -1) : Integer.compare(a.ticks(), b.ticks()));
             return out;
         }
+    }
+
+    private static final net.minecraft.class_1304[] ARMOR_SLOTS = {net.minecraft.class_1304.field_6169, net.minecraft.class_1304.field_6174, net.minecraft.class_1304.field_6172, net.minecraft.class_1304.field_6166};
+    private static final net.minecraft.class_1304[] HAND_SLOTS = {net.minecraft.class_1304.field_6173, net.minecraft.class_1304.field_6171};
+
+    static HudLayoutEditor.ArmorRow armorRow(net.minecraft.class_1799 st) {
+        if (st == null || st.method_7960()) return new HudLayoutEditor.ArmorRow(null, 0, 0, 0);
+        boolean dmg = st.method_7963();
+        return new HudLayoutEditor.ArmorRow(st, dmg ? st.method_7919() : 0, dmg ? st.method_7936() : 0, st.method_7947());
+    }
+
+    static java.util.List<HudLayoutEditor.ArmorRow> armorRows(net.minecraft.class_1309 p, boolean hands, boolean preview) {
+        java.util.ArrayList<HudLayoutEditor.ArmorRow> out = new java.util.ArrayList<>();
+        if (preview) {
+            net.minecraft.class_1792[] items = {net.minecraft.class_1802.field_22027, net.minecraft.class_1802.field_22028, net.minecraft.class_1802.field_22029, net.minecraft.class_1802.field_22030};
+            int[] used = {40, 210, 330, 470};
+            for (int i = 0; i < items.length; i++) {
+                net.minecraft.class_1799 st = new net.minecraft.class_1799(items[i]);
+                int max = st.method_7936();
+                out.add(new HudLayoutEditor.ArmorRow(st, Math.min(max - 1, used[i]), max, 1));
+            }
+            if (hands) {
+                net.minecraft.class_1799 sw = new net.minecraft.class_1799(net.minecraft.class_1802.field_22022);
+                out.add(new HudLayoutEditor.ArmorRow(sw, sw.method_7936() / 3, sw.method_7936(), 1));
+                out.add(new HudLayoutEditor.ArmorRow(new net.minecraft.class_1799(net.minecraft.class_1802.field_8288), 0, 0, 1));
+            }
+            return out;
+        }
+        if (p == null) return out;
+        for (net.minecraft.class_1304 s : ARMOR_SLOTS) out.add(armorRow(p.method_6118(s)));
+        if (hands) for (net.minecraft.class_1304 s : HAND_SLOTS) out.add(armorRow(p.method_6118(s)));
+        return out;
     }
 
     private static String roman(int n) {
