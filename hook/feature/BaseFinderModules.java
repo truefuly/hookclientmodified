@@ -206,7 +206,7 @@ public final class BaseFinderModules {
 
         @EventListener
         public void onRender3D(Render3DEvent event) {
-            BaseFinder.Draw d = new BaseFinder.Draw();
+            BaseFinder.Draw d = new BaseFinder.Draw().soft();
             hook.module.setting.StorageBlocksSetting.Entry chestEntry = this.types.get("chest");
             Color c = chestEntry != null ? new Color(chestEntry.color().getRed(), chestEntry.color().getGreen(), chestEntry.color().getBlue(), 230) : BaseFinder.col(this.color.getArgb(), 230);
             int n = 0;

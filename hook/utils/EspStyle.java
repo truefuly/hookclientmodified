@@ -21,7 +21,10 @@ import java.util.List;
  * {@link #begin}, {@link #box} for every target and {@link #render}.
  */
 public final class EspStyle {
-    public enum Shape { Both, Fill, Outline, Corners }
+    /** Appended only: configs store the index. Merged ones join touching blocks into one shape (block ESPs). */
+    public enum Shape { Both, Fill, Outline, Corners, Merged, MergedEdges, SoftFill }
+
+    private static final List<EspStyle> NEW_LOOK = new ArrayList<>();
     public enum ColorMode { Default, Static, Theme, Rainbow }
 
     public final ModeSetting<Shape> shape;
@@ -42,6 +45,10 @@ public final class EspStyle {
     private final List<RenderUtils.ColoredBox> fills = new ArrayList<>();
     private final List<RenderUtils.ColoredLine> lines = new ArrayList<>();
     private final List<Target> targets = new ArrayList<>();
+    private final List<RenderUtils.ColoredQuad> quads = new ArrayList<>();
+    private final java.util.Map<Integer, MergedShape> shapes = new java.util.LinkedHashMap<>();
+    private final Shape defaultShape;
+    private double cellInset;
     private static final int MAX_OUTLINED = 1500;
     private static final int MAX_GLOW = 200;
     private static final int MAX_TRACERS = 1000;
@@ -52,7 +59,8 @@ public final class EspStyle {
     private long now;
 
     public EspStyle(Shape defaultShape, int defaultFill, int defaultColor) {
-        this.shape = new ModeSetting<Shape>(EncryptedString.of("Shape"), defaultShape, Shape.class).setDescription(EncryptedString.of("Filled box, outline, both, or only the corners"));
+        this.defaultShape = defaultShape;
+        this.shape = new ModeSetting<Shape>(EncryptedString.of("Shape"), defaultShape, Shape.class).setDescription(EncryptedString.of("Box, outline, corners, or for blocks: Merged (touching blocks become one shape), Merged Edges (only its outline) and Soft Fill (shaded, no lines)"));
         this.colorMode = new ModeSetting<ColorMode>(EncryptedString.of("Color Mode"), ColorMode.Default, ColorMode.class).setDescription(EncryptedString.of("Default: the module's own colours. Static: one colour. Theme: client accent. Rainbow: animated"));
         this.color = new RgbSetting(EncryptedString.of("Color"), defaultColor);
         this.fillOpacity = new NumberSetting(EncryptedString.of("Fill Opacity"), 0.0, 255.0, defaultFill, 1.0).getValue(EncryptedString.of("How see-through the filled box is"));
@@ -68,12 +76,48 @@ public final class EspStyle {
         this.tracerOpacity = new NumberSetting(EncryptedString.of("Tracer Opacity"), 20.0, 255.0, 200.0, 5.0).getValue(EncryptedString.of("How strong the tracer lines are"));
 
         SettingVisibility.set(this.color, () -> this.colorMode.getValue() == ColorMode.Static);
-        SettingVisibility.set(this.fillOpacity, () -> this.shape.getValue() == Shape.Both || this.shape.getValue() == Shape.Fill);
-        SettingVisibility.set(this.outlineOpacity, () -> this.shape.getValue() != Shape.Fill);
-        SettingVisibility.set(this.outlineWidth, () -> this.shape.getValue() != Shape.Fill);
+        SettingVisibility.set(this.fillOpacity, () -> this.shape.getValue() != Shape.Outline && this.shape.getValue() != Shape.Corners && this.shape.getValue() != Shape.MergedEdges);
+        SettingVisibility.set(this.outlineOpacity, () -> this.shape.getValue() != Shape.Fill && this.shape.getValue() != Shape.SoftFill);
+        SettingVisibility.set(this.outlineWidth, () -> this.shape.getValue() != Shape.Fill && this.shape.getValue() != Shape.SoftFill);
         SettingVisibility.set(this.glowStrength, this.glow::getValue);
         SettingVisibility.set(this.tracerWidth, this.tracers::getValue);
         SettingVisibility.set(this.tracerOpacity, this.tracers::getValue);
+    }
+
+    /** This style switches once to its default shape for existing configs (the new block looks). */
+    public EspStyle newLook() {
+        NEW_LOOK.add(this);
+        return this;
+    }
+
+    /** One-time switch of existing configs to the new looks. */
+    public static void applyNewLooks() {
+        for (EspStyle s : NEW_LOOK) s.shape.setMode(s.defaultShape);
+    }
+
+    private boolean merging() {
+        Shape s = (Shape) this.shape.getValue();
+        return s == Shape.Merged || s == Shape.MergedEdges || s == Shape.SoftFill;
+    }
+
+    /**
+     * Adds one whole block. With a merged shape touching blocks of the same colour become one shape; otherwise it is
+     * a normal box shrunk by {@code inset}.
+     */
+    public void block(int x, int y, int z, double inset, Color base, int index) {
+        if (!this.merging()) {
+            this.box(x + inset, y + inset, z + inset, x + 1 - inset, y + 1 - inset, z + 1 - inset, base, index);
+            return;
+        }
+        double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
+        if (!this.inRange(cx, cy, cz)) return;
+        Color rgb = this.resolve(base, 0, cx, cy, cz);
+        if (this.tracers.getValue() && this.tracerCount < MAX_TRACERS) {
+            this.tracerCount++;
+            this.lines.add(new RenderUtils.ColoredLine(this.tracerStart, new class_243(cx, cy, cz), withAlpha(rgb, this.tracerOpacity.getValue() * this.fade(cx, cy, cz) * this.pulseFactor), this.tracerWidth.getFloatValue()));
+        }
+        this.cellInset = inset;
+        this.shapes.computeIfAbsent(rgb.getRGB() & 0xFFFFFF, k -> new MergedShape()).add(x, y, z);
     }
 
     public Setting[] settings() {
@@ -86,6 +130,8 @@ public final class EspStyle {
         this.fills.clear();
         this.lines.clear();
         this.targets.clear();
+        this.quads.clear();
+        this.shapes.clear();
         this.tracerCount = 0;
         if (cam == null) return false;
         this.camera = cam.method_71156();
@@ -122,12 +168,39 @@ public final class EspStyle {
         if (onScreen) this.targets.add(new Target(x1, y1, z1, x2, y2, z2, rgb, fade, this.camera.method_1028(cx, cy, cz)));
     }
 
+    /** Only a tracer to this point (for targets the module shows another way, e.g. glow or a 2D frame). */
+    public void tracer(double x, double y, double z, Color base, int index) {
+        if (!this.tracers.getValue() || this.tracerCount >= MAX_TRACERS || !this.inRange(x, y, z)) return;
+        this.tracerCount++;
+        Color rgb = this.resolve(base, index, x, y, z);
+        this.lines.add(new RenderUtils.ColoredLine(this.tracerStart, new class_243(x, y, z), withAlpha(rgb, this.tracerOpacity.getValue() * this.fade(x, y, z) * this.pulseFactor), this.tracerWidth.getFloatValue()));
+    }
+
+    /** The colour for a target in the selected colour mode (for 2D drawing outside a 3D frame). */
+    public Color colorFor(Color base, int index, double x, double y, double z) {
+        this.now = System.currentTimeMillis();
+        return this.resolve(base, index, x, y, z);
+    }
+
+    /** Distance fade (0.35 - 1) for a target this far from the camera, and whether it is inside Max Distance. */
+    public double fadeAt(double dist) {
+        if (!this.distanceFade.getValue()) return 1.0;
+        return Math.max(0.35, 1.0 - Math.max(0.0, dist - 16.0) / 220.0);
+    }
+
+    public boolean inRangeDist(double dist) {
+        double max = this.maxDistance.getValue();
+        return max <= 0.0 || dist <= max;
+    }
+
     /** Draws everything added since {@link #begin}. The caller has applied the camera transform. */
     public void render(class_4587 matrices) {
         // Outlines and glow are many lines per box; with thousands of targets (e.g. Tunnel ESP) only the closest get
         // them, so the frame never floods the vertex buffer. Fills are cheap and stay on every target.
         if (this.targets.size() > MAX_GLOW) this.targets.sort((a, b) -> Double.compare(a.dist, b.dist));
-        Shape s = (Shape) this.shape.getValue();
+        Shape sel = (Shape) this.shape.getValue();
+        // single boxes (entities, chunk marks) with a merged shape picked are drawn as the closest plain box style
+        Shape s = sel == Shape.MergedEdges ? Shape.Outline : sel == Shape.SoftFill ? Shape.Fill : sel == Shape.Merged ? Shape.Both : sel;
         float width = this.outlineWidth.getFloatValue();
         double g = this.glowStrength.getValue() / 100.0;
         for (int i = 0; i < this.targets.size(); i++) {
@@ -153,7 +226,17 @@ public final class EspStyle {
             double e = size * 0.04;
             this.fills.add(new RenderUtils.ColoredBox(t.x1 - e, t.y1 - e, t.z1 - e, t.x2 + e, t.y2 + e, t.z2 + e, withAlpha(t.rgb, 22.0 * g * t.fade)));
         }
+        if (!this.shapes.isEmpty()) {
+            MergedShape.Style ms = sel == Shape.MergedEdges ? MergedShape.Style.EDGES : sel == Shape.SoftFill ? MergedShape.Style.SOFT : MergedShape.Style.SHAPE;
+            double fill = this.fillOpacity.getValue() * this.pulseFactor, line = this.outlineOpacity.getValue() * this.pulseFactor;
+            double glow = this.glow.getValue() ? this.glowStrength.getValue() / 45.0 : 0.0;
+            if (ms == MergedShape.Style.EDGES) glow = Math.max(glow, 0.8);
+            for (java.util.Map.Entry<Integer, MergedShape> e : this.shapes.entrySet()) {
+                e.getValue().build(ms, new Color(e.getKey()), fill, line, width, glow, this.cellInset, this.quads, this.lines);
+            }
+        }
         RenderUtils.renderFilledBoxes(matrices, this.fills);
+        if (!this.quads.isEmpty()) RenderUtils.renderQuads(matrices, this.quads);
         RenderUtils.renderLines(matrices, this.lines);
     }
 

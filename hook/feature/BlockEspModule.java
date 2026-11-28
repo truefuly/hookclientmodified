@@ -54,7 +54,7 @@ import net.minecraft.class_7923;
 public class BlockEspModule
 extends Module {
     private static final int MAX_RENDERED_BLOCKS = 4096;
-    private final hook.utils.EspStyle style = new hook.utils.EspStyle(hook.utils.EspStyle.Shape.Both, 45, 0xFF5AC8FF);
+    private final hook.utils.EspStyle style = new hook.utils.EspStyle(this instanceof DeepslateRotationEspModule ? hook.utils.EspStyle.Shape.MergedEdges : hook.utils.EspStyle.Shape.Merged, 45, 0xFF5AC8FF).newLook();
     private final NumberSetting boxSize = new NumberSetting(EncryptedString.of("Box Size"), 50.0, 100.0, 96.0, 1.0).getValue(EncryptedString.of("Size of the box in percent of a full block"));
     private final StorageBlocksSetting blocks = BlockEspModule.createBlockPalette();
     private final boolean rotatedOnly;
@@ -282,8 +282,7 @@ extends Module {
                 if (entry == null) continue;
                 if (!this.style.inRange(pos.method_10263() + 0.5, pos.method_10264() + 0.5, pos.method_10260() + 0.5)) continue;
                 if (!this.style.wantsTracers() && !RenderVisibility.box(pos.method_10263(), pos.method_10264(), pos.method_10260(), pos.method_10263() + 1, pos.method_10264() + 1, pos.method_10260() + 1)) continue;
-                this.style.box(pos.method_10263() + inset, pos.method_10264() + inset, pos.method_10260() + inset,
-                        pos.method_10263() + 1 - inset, pos.method_10264() + 1 - inset, pos.method_10260() + 1 - inset, entry.color(), index++);
+                this.style.block(pos.method_10263(), pos.method_10264(), pos.method_10260(), inset, entry.color(), index++);
                 if (++rendered < 4096) continue;
                 break block0;
             }

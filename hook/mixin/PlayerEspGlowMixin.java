@@ -18,6 +18,7 @@ public abstract class PlayerEspGlowMixin {
     @Inject(method = "method_62354(Lnet/minecraft/class_1297;Lnet/minecraft/class_10017;F)V", at = @At("TAIL"), remap = false)
     private void hook$playerEspGlow(class_1297 entity, class_10017 state, float tickDelta, CallbackInfo ci) {
         int rgb = PlayerEspModule.glowColor(entity);
+        if (rgb == 0) rgb = hook.feature.MobEspModule.glowColor(entity);
         if (rgb != 0) state.field_61821 = 0xFF000000 | rgb;
     }
 }

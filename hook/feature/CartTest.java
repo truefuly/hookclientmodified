@@ -62,6 +62,7 @@ final class CartTest {
         if ("character".equals(ONLY)) { character(mc, p); return; }
         if ("autominer".equals(ONLY)) { autominer(mc, p); return; }
         if ("esp".equals(ONLY)) { esp(mc, p); return; }
+        if ("esplook".equals(ONLY)) { espLook(mc, p); return; }
         if ("sky".equals(ONLY)) { sky(mc, p); return; }
         if ("newchunks".equals(ONLY)) { newChunks(mc, p); return; }
         if ("builder".equals(ONLY)) { builder(mc, p); return; }
@@ -741,6 +742,51 @@ final class CartTest {
     }
 
     /** -Dhook.carttest.only=esp:Player ESP / Mob ESP on a mob zoo, then every click GUI tab with its sections. */
+    /** -Dhook.carttest.only=esplook: the new ESP looks (glow players + mobs, item frames, soft storage, merged blocks). */
+    private static void espLook(class_310 mc, net.minecraft.class_746 p) {
+        if (clock == 100) {
+            cmd("gamemode creative");
+            cmd("time set noon");
+            cmd("weather clear");
+            cmd("fill -12 150 -4 12 150 24 grass_block");
+            cmd("fill -12 151 -4 12 162 24 air");
+            cmd("fill -3 151 6 3 152 6 stone");
+            cmd("fill 4 151 9 6 151 9 stone");
+            cmd("setblock 5 152 9 stone");
+            cmd("setblock -5 151 5 chest[facing=south,type=right]");
+            cmd("setblock -4 151 5 chest[facing=south,type=left]");
+            cmd("setblock -7 151 7 barrel");
+            cmd("summon zombie -1 151 10 {NoAI:1b,PersistenceRequired:1b}");
+            cmd("summon cow 2 151 12 {NoAI:1b,PersistenceRequired:1b}");
+            cmd("summon item 1 151 3 {Item:{id:\"minecraft:diamond\",count:3},PickupDelay:32767}");
+            cmd("summon item -2 151 4 {Item:{id:\"minecraft:gold_ingot\",count:12},PickupDelay:32767}");
+            cmd("summon item 3 151 5 {Item:{id:\"minecraft:emerald\",count:1},PickupDelay:32767}");
+            for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) {
+                boolean on = m instanceof PlayerEspModule || m instanceof MobEspModule || m instanceof ItemEspModule || m instanceof TunnelEspModule || m instanceof BaseFinderModules.Storage;
+                if (on && !m.isEnabled()) m.setEnabled(true);
+                if (m instanceof SchematicBuilderModule && m.isEnabled()) m.setEnabled(false);
+                // the test world's chests count as "natural" (weak finds); show them anyway
+                if (m instanceof BaseFinderModules.Storage) for (hook.module.setting.Setting st : m.getSettings()) if (st instanceof hook.module.setting.BooleanSetting b && "Show Structure Loot".contentEquals(st.getName())) b.setValue(true);
+            }
+        }
+        if (clock == 120) {
+            PlayerEspModule.testBots = true;
+            net.minecraft.class_745 fake = new net.minecraft.class_745(mc.field_1687, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "EspTest"));
+            fake.method_5808(0.5, 151.0, 8.0, 180.0f, 0.0f);
+            mc.field_1687.method_53875(fake);
+        }
+        if (clock == 130) cmd("tp @s 0.5 152.5 -2 0 25");
+        if (clock == 199 || clock == 330) {
+            BaseFinder.ChunkData cd = BaseFinder.get(-1, 0);
+            System.out.println("CARTTEST STORAGE t=" + clock + " cd=" + (cd != null) + (cd == null ? "" : " hits=" + cd.hits[BaseFinder.STORAGE].size() + "/" + cd.hits[BaseFinder.STORAGE_W].size() + " settled=" + BaseFinder.settled(cd)));
+        }
+        if (clock == 200) shot(mc, "look_all");
+        if (clock == 201) for (hook.module.Module m : hook.Hook.INSTANCE.getModuleManager().c()) if (m instanceof TunnelEspModule && m.isEnabled()) m.setEnabled(false);
+        if (clock == 210) shot(mc, "look_ents");
+        if (clock == 335) shot(mc, "look_late");
+        if (clock == 340) { System.out.println("CARTTEST DONE esplook"); mc.method_1592(); phase = 99; }
+    }
+
     private static void esp(class_310 mc, net.minecraft.class_746 p) {
         if (clock == 100) {
             cmd("gamemode creative");

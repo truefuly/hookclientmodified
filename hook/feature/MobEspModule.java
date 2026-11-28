@@ -26,6 +26,11 @@ import net.minecraft.class_7923;
 public final class MobEspModule extends EntityEspBase {
     public enum Filter { Groups, Selected }
     public enum Colors { Group, Health, Distance }
+    public enum Look { Glow, Boxes }
+
+    private static MobEspModule instance;
+    private final ModeSetting<Look> look = new ModeSetting<Look>(EncryptedString.of("Look"), Look.Glow, Look.class)
+            .setDescription(EncryptedString.of("Glow: a glowing outline around the mob itself, through walls. Boxes: drawn boxes with the style settings below"));
 
     enum Group {
         BOSS(0xB45AFF), HOSTILE(0xFF7A3C), NEUTRAL(0xFFD24D), PET(0xFF8FD8), VILLAGER(0x5AA8FF), WATER(0x4DE3E3), PASSIVE(0x6EE38B), OTHER(0xC8C8D2);
@@ -56,14 +61,31 @@ public final class MobEspModule extends EntityEspBase {
 
     public MobEspModule() {
         super("Mob ESP", "Shows mobs through walls by group - hostile, neutral, passive, pets, bosses... - or only the ones you pick", Category.RENDER, 35, 0xFFFF9A3C, false);
+        instance = this;
         this.list.setDescription(EncryptedString.of("Mobs shown in Selected mode"));
+        SettingVisibility.advanced(() -> this.look.getValue() == Look.Boxes, this.style.shape, this.style.fillOpacity, this.style.outlineOpacity,
+                this.style.outlineWidth, this.style.glow, this.style.glowStrength, this.style.pulse, this.expand);
         for (BooleanSetting s : new BooleanSetting[]{this.hostile, this.neutral, this.passive, this.water, this.villagers, this.pets, this.bosses, this.others})
             SettingVisibility.set(s, () -> this.filter.getValue() == Filter.Groups);
         SettingVisibility.set(this.list, () -> this.filter.getValue() == Filter.Selected);
-        this.addSettings(this.filter, this.hostile, this.neutral, this.passive, this.water, this.villagers, this.pets, this.bosses, this.others, this.list);
+        this.addSettings(this.look, this.filter, this.hostile, this.neutral, this.passive, this.water, this.villagers, this.pets, this.bosses, this.others, this.list);
         this.addSettings(this.aggro, this.onlyAggro, this.colors, this.healthBar, this.invisible, this.expand);
         this.addSettings(this.style.settings());
         this.moreSettings(this.onlyAggro, this.colors, this.healthBar, this.invisible, this.expand);
+    }
+
+    @Override
+    protected boolean drawBoxes() {
+        return this.look.getValue() == Look.Boxes;
+    }
+
+    /** For the glow mixin: the outline colour (RGB) for this mob, or 0 to leave vanilla alone. */
+    public static int glowColor(class_1297 e) {
+        MobEspModule m = instance;
+        if (m == null || !m.isEnabled() || m.look.getValue() != Look.Glow || m.mc.field_1724 == null || e instanceof class_1657) return 0;
+        if (!m.shown(e)) return 0;
+        int rgb = m.color(e, e.method_30950(1.0f)).getRGB() & 0xFFFFFF;
+        return rgb == 0 ? 0x010101 : rgb;
     }
 
     private static BooleanSetting group(String name, boolean on, String desc) {

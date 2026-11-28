@@ -42,6 +42,11 @@ public final class PlayerEspModule extends EntityEspBase {
         this.addSettings(this.mode, this.colors, this.custom, this.tracers);
     }
 
+    /** One-time switch of existing configs to the new look (glowing outline). */
+    public static void applyNewLook() {
+        if (instance != null) instance.mode.setMode(Mode.Glow);
+    }
+
     void testMode(Mode m) {
         this.mode.setMode(m);
     }

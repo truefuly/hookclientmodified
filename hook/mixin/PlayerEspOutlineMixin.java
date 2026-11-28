@@ -16,6 +16,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PlayerEspOutlineMixin {
     @Inject(method = "method_27022(Lnet/minecraft/class_1297;)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void hook$playerEspOutline(class_1297 entity, CallbackInfoReturnable<Boolean> cir) {
-        if (PlayerEspModule.glowColor(entity) != 0) cir.setReturnValue(true);
+        if (PlayerEspModule.glowColor(entity) != 0 || hook.feature.MobEspModule.glowColor(entity) != 0) cir.setReturnValue(true);
     }
 }

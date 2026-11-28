@@ -409,6 +409,14 @@ public final class SettingsManager {
                 }
                 if (stale) this.writeCurrent();
             }
+            // one time: existing configs switch to the new ESP looks (merged block shapes, glow, item frames)
+            java.nio.file.Path looks = this.settingsPath.resolveSibling("hook-esp-looks-v1");
+            if (!Files.exists(looks)) {
+                hook.utils.EspStyle.applyNewLooks();
+                hook.feature.PlayerEspModule.applyNewLook();
+                this.writeCurrent();
+                Files.writeString(looks, "1");
+            }
         }
         catch (Exception var2) {
             System.err.println("Hook: couldn't load settings: " + var2.getMessage());

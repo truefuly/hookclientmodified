@@ -683,11 +683,26 @@ public final class BaseFinder {
     static final class Draw {
         final List<RenderUtils.ColoredBox> boxes = new ArrayList<>();
         final List<RenderUtils.ColoredLine> lines = new ArrayList<>();
+        /** Blocks of the same colour that touch are drawn as one shape. */
+        final java.util.Map<Long, hook.utils.MergedShape> shapes = new java.util.LinkedHashMap<>();
+        hook.utils.MergedShape.Style style = hook.utils.MergedShape.Style.SHAPE;
+        double inset = 0.02;
+
+        /** Storage ESP: soft shaded containers, no lines. */
+        Draw soft() {
+            this.style = hook.utils.MergedShape.Style.SOFT;
+            this.inset = 0.0625;
+            return this;
+        }
 
         void block(class_2338 p, Color c, int fillAlpha) {
-            double x = p.method_10263(), y = p.method_10264(), z = p.method_10260();
-            this.box(x + 0.02, y + 0.02, z + 0.02, x + 0.98, y + 0.98, z + 0.98, c, fillAlpha);
+            long key = ((long) (c.getRGB()) << 16) ^ ((long) fillAlpha << 8);
+            hook.utils.MergedShape shape = this.shapes.computeIfAbsent(key, k -> new hook.utils.MergedShape());
+            if (shape.isEmpty()) this.shapeInfo.put(key, new int[]{c.getRGB(), fillAlpha});
+            shape.add(p.method_10263(), p.method_10264(), p.method_10260());
         }
+
+        private final java.util.Map<Long, int[]> shapeInfo = new java.util.HashMap<>();
 
         void box(double x1, double y1, double z1, double x2, double y2, double z2, Color c, int fillAlpha) {
             if (fillAlpha > 0) this.boxes.add(new RenderUtils.ColoredBox(x1, y1, z1, x2, y2, z2, new Color(c.getRed(), c.getGreen(), c.getBlue(), fillAlpha)));
@@ -726,13 +741,21 @@ public final class BaseFinder {
         }
 
         void render(hook.event.events.Render3DEvent event, boolean throughWalls) {
-            if (this.boxes.isEmpty() && this.lines.isEmpty()) return;
+            List<RenderUtils.ColoredQuad> quads = new ArrayList<>();
+            for (java.util.Map.Entry<Long, hook.utils.MergedShape> e : this.shapes.entrySet()) {
+                int[] info = this.shapeInfo.get(e.getKey());
+                Color c = new Color(info[0], true);
+                double fill = this.style == hook.utils.MergedShape.Style.SOFT ? Math.max(info[1], 30) : info[1];
+                e.getValue().build(this.style, c, fill, c.getAlpha(), 1.6f, 0.8, this.inset, quads, this.lines);
+            }
+            if (this.boxes.isEmpty() && this.lines.isEmpty() && quads.isEmpty()) return;
             class_4184 camera = RenderUtils.getCamera();
             if (camera == null || !camera.method_19332()) return;
             class_4587 m = event.matrixStack;
             m.method_22903();
             RenderUtils.applyCameraTransform(m, camera);
             RenderUtils.renderFilledBoxes(m, this.boxes);
+            if (!quads.isEmpty()) RenderUtils.renderQuads(m, quads);
             RenderUtils.renderLines(m, this.lines, throughWalls);
             m.method_22909();
         }

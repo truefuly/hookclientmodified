@@ -79,8 +79,9 @@ abstract class EntityEspBase extends Module {
             if (!this.style.inRange(pos.field_1352, pos.field_1351, pos.field_1350)) continue;
             double half = e.method_17681() * 0.5 + grow;
             double h = e.method_17682();
-            if (boxes || this.style.wantsTracers()) this.style.box(pos.field_1352 - half, pos.field_1351 - grow, pos.field_1350 - half,
+            if (boxes) this.style.box(pos.field_1352 - half, pos.field_1351 - grow, pos.field_1350 - half,
                     pos.field_1352 + half, pos.field_1351 + h + grow, pos.field_1350 + half, this.color(e, pos), index++);
+            else if (this.style.wantsTracers()) this.style.tracer(pos.field_1352, pos.field_1351 + h * 0.5, pos.field_1350, this.color(e, pos), index++);
             if (this.healthBar.getValue() && e instanceof class_1309 living) this.bar(living, pos, half, h + grow * 2, cam);
         }
         class_4587 matrices = event.matrixStack;

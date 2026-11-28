@@ -58,7 +58,7 @@ extends Module {
     private static final List<Integer> OVERWORLD_LEVELS = List.of(Integer.valueOf(-64), Integer.valueOf(-63), Integer.valueOf(-62), Integer.valueOf(-61), Integer.valueOf(-60));
     private static final List<Integer> NETHER_LEVELS = List.of(Integer.valueOf(0), Integer.valueOf(1), Integer.valueOf(2), Integer.valueOf(3), Integer.valueOf(4), Integer.valueOf(123), Integer.valueOf(124), Integer.valueOf(125), Integer.valueOf(126), Integer.valueOf(127));
     private final NumberSetting minimumSize = new NumberSetting(EncryptedString.of("Minimum Void Size"), 1.0, 50.0, 2.0, 1.0);
-    private final hook.utils.EspStyle style = new hook.utils.EspStyle(hook.utils.EspStyle.Shape.Both, 70, 0xFFF05550);
+    private final hook.utils.EspStyle style = new hook.utils.EspStyle(hook.utils.EspStyle.Shape.Merged, 70, 0xFFF05550).newLook();
     private final StorageBlocksSetting color = new StorageBlocksSetting(EncryptedString.of("Color")).add("void", "Void", class_1802.field_8542, true, new Color(240, 85, 80)).colorOnly();
     private final BooleanSetting chatFeedback = new BooleanSetting(EncryptedString.of("Chat Feedback"), true);
     private final Set<class_2338> voidBlocks = new HashSet<class_2338>();
@@ -284,13 +284,7 @@ extends Module {
         }
         int index = 0;
         for (class_2338 pos : this.voidBlocks) {
-            double x0 = (double)pos.method_10263() + 0.03;
-            double y0 = (double)pos.method_10264() + 0.03;
-            double z0 = (double)pos.method_10260() + 0.03;
-            double x1 = (double)pos.method_10263() + 0.97;
-            double y1 = (double)pos.method_10264() + 0.97;
-            double z1 = (double)pos.method_10260() + 0.97;
-            this.style.box(x0, y0, z0, x1, y1, z1, base, index++);
+            this.style.block(pos.method_10263(), pos.method_10264(), pos.method_10260(), 0.03, base, index++);
         }
         this.style.render(matrices);
         matrices.method_22909();

@@ -340,6 +340,34 @@ public final class RenderUtils {
         }
     }
 
+    /** Quads with one colour per corner (soft gradients), drawn through walls like the ESP boxes. */
+    public static void renderQuads(class_4587 matrices, Iterable<ColoredQuad> quads) {
+        if (matrices == null || quads == null) return;
+        class_1921 layer = EspRenderLayers.FILLED;
+        class_287 buf = null;
+        Matrix4f m = matrices.method_23760().method_23761();
+        class_243 o = RenderUtils.worldRenderOrigin;
+        for (ColoredQuad q : quads) {
+            if (q == null || (q.c0() >>> 24 == 0 && q.c1() >>> 24 == 0 && q.c2() >>> 24 == 0 && q.c3() >>> 24 == 0)) continue;
+            double[] p = q.p();
+            double minX = Math.min(Math.min(p[0], p[3]), Math.min(p[6], p[9])), maxX = Math.max(Math.max(p[0], p[3]), Math.max(p[6], p[9]));
+            double minY = Math.min(Math.min(p[1], p[4]), Math.min(p[7], p[10])), maxY = Math.max(Math.max(p[1], p[4]), Math.max(p[7], p[10]));
+            double minZ = Math.min(Math.min(p[2], p[5]), Math.min(p[8], p[11])), maxZ = Math.max(Math.max(p[2], p[5]), Math.max(p[8], p[11]));
+            if (!RenderVisibility.box(minX, minY, minZ, maxX, maxY, maxZ)) continue;
+            if (buf == null) buf = class_289.method_1348().method_60827(layer.method_23033(), layer.method_23031());
+            int[] c = {q.c0(), q.c1(), q.c2(), q.c3()};
+            for (int i = 0; i < 4; i++) {
+                buf.method_22918((Matrix4fc) m, (float) (p[i * 3] - o.field_1352), (float) (p[i * 3 + 1] - o.field_1351), (float) (p[i * 3 + 2] - o.field_1350)).method_39415(c[i]);
+            }
+        }
+        class_9801 built = buf == null ? null : buf.method_60794();
+        if (built != null) layer.method_60895(built);
+    }
+
+    /** Four corners (x,y,z each, in order around the quad) and an ARGB colour per corner. */
+    public record ColoredQuad(double[] p, int c0, int c1, int c2, int c3) {
+    }
+
     public static void renderLine(class_4587 var0, Color var1, class_243 var2, class_243 var3) {
         RenderUtils.renderLines(var0, List.of(new ColoredLine(var2, var3, var1)));
     }
